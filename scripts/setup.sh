@@ -20,28 +20,27 @@ if [ -z "$SESSION_SECRET" ]; then
   exit 1
 fi
 
-# ── First-time setup ───────────────────────────────────────────────────────
-if [ ! -f .setup_done ]; then
-  echo "=== [1/3] Installing dependencies (first run only) ==="
+# ── Install dependencies (skip if node_modules already exists) ─────────────
+if [ ! -d node_modules ]; then
+  echo "=== [1/3] Installing dependencies ==="
   pnpm install
-
-  echo "=== [2/3] Pushing database schema ==="
-  pnpm --filter @workspace/db run push
-
-  echo "=== [3/3] Seeding database ==="
-  pnpm --filter @workspace/db run seed
-
-  touch .setup_done
-  echo "=== First-time setup complete! ==="
-  echo ""
 else
-  echo "=== Setup already done, starting services directly ==="
+  echo "=== [1/3] Skipping install — node_modules already exists ==="
 fi
 
-# ── Start API server (background) ─────────────────────────────────────────
-echo "=== Starting API server on :8080 ==="
-PORT=8080 pnpm --filter @workspace/api-server run dev &
+# ── Push database schema ───────────────────────────────────────────────────
+echo "=== [2/3] Pushing database schema ==="
+pnpm --filter @workspace/db run push
 
-# ── Start Admin Dashboard (foreground — Replit preview) ───────────────────
-echo "=== Starting Admin Dashboard on :5000 ==="
-exec env PORT=5000 pnpm --filter @workspace/admin-dashboard run dev
+# ── Seed database (skip if already seeded) ────────────────────────────────
+if [ ! -f .seed_done ]; then
+  echo "=== [3/3] Seeding database ==="
+  pnpm --filter @workspace/db run seed
+  touch .seed_done
+  echo "=== Seeding complete ==="
+else
+  echo "=== [3/3] Skipping seed — already seeded ==="
+fi
+
+echo ""
+echo "=== Setup complete. Services are managed by Replit workflows. ==="
