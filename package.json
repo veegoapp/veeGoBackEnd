@@ -1,0 +1,14 @@
+{
+  "name": "shuttleops-backend",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
+    "db:push": "pnpm --filter @workspace/db run push",
+    "db:seed": "pnpm --filter @workspace/db run seed",
+    "typecheck:libs": "tsc --build"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

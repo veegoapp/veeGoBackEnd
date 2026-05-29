@@ -1,0 +1,35 @@
+{
+  "name": "@workspace/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts"
+  },
+  "scripts": {
+    "push": "drizzle-kit push --config ./drizzle.config.ts",
+    "push-force": "drizzle-kit push --force --config ./drizzle.config.ts",
+    "seed": "tsx scripts/seed.ts",
+    "seed:admin": "tsx scripts/seed-admin.ts",
+    "seed:routes": "tsx scripts/seed-routes.ts",
+    "seed:buses": "tsx scripts/seed-buses.ts",
+    "seed:trips": "tsx scripts/seed-trips.ts",
+    "verify:db": "tsx scripts/verify-db.ts",
+    "reset:db": "tsx scripts/reset-db.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "catalog:",
+    "drizzle-zod": "^0.8.3",
+    "pg": "^8.20.0",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "catalog:",
+    "@types/pg": "^8.20.0",
+    "bcryptjs": "^2.4.3",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.4"
+  }
+}

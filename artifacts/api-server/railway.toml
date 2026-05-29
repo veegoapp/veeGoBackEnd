@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @workspace/db run build --if-present ; pnpm --filter @workspace/api-zod run build --if-present ; pnpm --filter @workspace/api-server run build"
+
+[deploy]
+startCommand = "pnpm --filter @workspace/api-server run start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
