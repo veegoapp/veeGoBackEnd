@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+.output/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+/tmp/
+
+# Uploads (user-generated files, not source)
+artifacts/api-server/uploads/
+
+# Cache & tooling
+.cache/
+.turbo/
+.vite/
+*.tsbuildinfo
+
+# Replit internals
+.config/
+.upm/
+.setup_done
+zipFile.zip
+
+# OS
+.DS_Store
+Thumbs.db
