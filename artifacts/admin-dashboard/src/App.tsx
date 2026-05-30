@@ -96,8 +96,31 @@ function Router() {
     <AppLayout>
       <Switch>
         <Route path="/login" component={Login} />
-        <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
         <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
+        <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
+        <Route path="/users" component={() => <ProtectedRoute component={Users} />} />
+        <Route path="/users/:id" component={() => <ProtectedRoute component={UserDetail} />} />
+        <Route path="/routes" component={() => <ProtectedRoute component={RoutesList} />} />
+        <Route path="/routes/:id" component={() => <ProtectedRoute component={RouteDetail} />} />
+        <Route path="/trips" component={() => <ProtectedRoute component={Trips} />} />
+        <Route path="/trips/:id" component={() => <ProtectedRoute component={TripDetail} />} />
+        <Route path="/drivers" component={() => <ProtectedRoute component={Drivers} />} />
+        <Route path="/drivers/:id" component={() => <ProtectedRoute component={DriverDetail} />} />
+        <Route path="/driver-verification" component={() => <ProtectedRoute component={DriverVerification} />} />
+        <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
+        <Route path="/bookings" component={() => <ProtectedRoute component={Bookings} />} />
+        <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />
+        <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
+        <Route path="/promo" component={() => <ProtectedRoute component={Promo} />} />
+        <Route path="/pricing" component={() => <ProtectedRoute component={Pricing} />} />
+        <Route path="/zones" component={() => <ProtectedRoute component={Zones} />} />
+        <Route path="/services" component={() => <ProtectedRoute component={Services} />} />
+        <Route path="/live-tracking" component={() => <ProtectedRoute component={LiveTracking} />} />
+        <Route path="/support" component={() => <ProtectedRoute component={Support} />} />
+        <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
+        <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
+        <Route path="/staff" component={() => <ProtectedRoute component={Staff} />} />
+        <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>
