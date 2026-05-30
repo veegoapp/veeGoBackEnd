@@ -1,52 +1,170 @@
-# ShuttleOps / VeeGo — Backend + Admin Dashboard
+# ShuttleOps — Backend API + Admin Dashboard
 
-This project runs two services:
-- **API Server** — Express REST API + Socket.IO on port **8080**
-- **Admin Dashboard** — React + Vite on port **5000** (shown in Replit preview)
+A full-stack shuttle management platform consisting of:
 
----
+- **API Server** — Express.js REST API + Socket.IO, running on port `8080`
+- **Admin Dashboard** — React + Vite SPA, running on port `5000`
 
-## Secrets to add before pressing Run
-
-Go to **Tools → Secrets** and add these two:
-
-| Secret | Required | Example value |
-|--------|----------|---------------|
-| `NEON_DATABASE_URL` | ✅ Yes | `postgres://user:pass@ep-xxx.neon.tech/neondb?sslmode=require` |
-| `SESSION_SECRET` | ✅ Yes | `change-me-to-any-long-random-string-32chars+` |
-
-> **Get a free Postgres DB:** https://neon.tech → create project → copy connection string
+Designed to serve three clients: admin dashboard, driver mobile app, and passenger mobile app — all consuming the same REST API.
 
 ---
 
-## How to run
+## Project Structure
 
-1. Add the two secrets above
-2. Press the **Run** button
-
-**What happens on first run (automatic):**
-1. `pnpm install` — installs all dependencies
-2. `drizzle-kit push` — creates all database tables
-3. Seed script — creates default admin, driver, routes, buses, trips
-4. Both services start
-
-Subsequent runs skip steps 1–3 and go straight to starting services.
+```
+├── artifacts/
+│   ├── api-server/          # Express API server (TypeScript)
+│   └── admin-dashboard/     # React admin panel (Vite + Tailwind)
+├── lib/
+│   ├── db/                  # Drizzle ORM schema + migrations
+│   ├── api-spec/            # OpenAPI specification
+│   ├── api-zod/             # Shared Zod validation schemas
+│   └── api-client-react/    # Generated React Query hooks
+├── scripts/
+│   └── seed.ts              # Optional DB seed script
+├── .env.example             # Environment variable template
+└── pnpm-workspace.yaml      # pnpm monorepo config
+```
 
 ---
 
-## Seed credentials
+## Prerequisites
 
-| Role   | Email                  | Password    |
-|--------|------------------------|-------------|
-| Admin  | admin@shuttleops.com   | password123 |
-| Driver | driver@shuttleops.com  | password123 |
-| User   | alice@example.com      | password123 |
+- **Node.js** v20+
+- **pnpm** v9+ (`npm install -g pnpm`)
+- **PostgreSQL** database — [Neon](https://neon.tech) (free tier works)
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEON_DATABASE_URL` | ✅ Yes | Neon PostgreSQL connection string |
+| `DATABASE_URL` | ✅ Yes (fallback) | Standard PostgreSQL URL (used if Neon URL not set) |
+| `SESSION_SECRET` | ✅ Yes | Long random string for signing JWT tokens (32+ chars) |
+| `SMS_PROVIDER` | No | `twilio` or `console` (default: `console`) |
+| `TWILIO_ACCOUNT_SID` | If Twilio | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | If Twilio | Twilio auth token |
+| `TWILIO_FROM_NUMBER` | If Twilio | Twilio sender number (e.g. `+1234567890`) |
+| `NODE_ENV` | No | `development` or `production` (default: `development`) |
+| `LOG_LEVEL` | No | `info`, `debug`, `warn` (default: `info`) |
+| `PORT` | No | API server port (default: `8080`) |
+
+> **Get a free Neon DB:** https://neon.tech → New Project → copy the connection string
+
+---
+
+## Install Dependencies
+
+```bash
+pnpm install
+```
+
+---
+
+## Database Setup
+
+Push the schema to your database (creates all tables):
+
+```bash
+pnpm --filter @workspace/db run push
+```
+
+**Optional — seed with demo data:**
+
+```bash
+./lib/db/node_modules/.bin/tsx --tsconfig tsconfig.json scripts/seed.ts
+```
+
+Seed credentials:
+
+| Role | Email | Password |
+|---|---|---|
+| Admin | admin@shuttleops.com | Admin@123 |
+| Dispatcher | dispatch@shuttleops.com | Staff@123 |
+| Driver | emeka.driver@shuttleops.com | Driver@123 |
+| Passenger | alice@example.com | Alice@123 |
+
+---
+
+## Running Locally
+
+### API Server (port 8080)
+
+```bash
+pnpm --filter @workspace/api-server run dev
+```
+
+### Admin Dashboard (port 5000)
+
+```bash
+pnpm --filter @workspace/admin-dashboard run dev
+```
+
+The dashboard proxies `/api` requests to `http://localhost:8080` automatically via Vite config — no extra configuration needed.
+
+### Run Both Together (Replit)
+
+Press **Run** — both services start automatically via the configured workflows.
+
+---
+
+## API
+
+- **Base URL (local):** `http://localhost:8080/api`
+- **Swagger docs:** `http://localhost:8080/api/docs`
+- **OpenAPI JSON:** `http://localhost:8080/api/openapi.json`
+
+Authentication uses **JWT Bearer tokens**. Obtain a token via:
+
+```
+POST /api/auth/login
+{ "credential": "phone_or_email", "password": "..." }
+```
+
+Include the returned `accessToken` in all subsequent requests:
+
+```
+Authorization: Bearer <accessToken>
+```
+
+---
+
+## Connecting Mobile Apps (Driver / Passenger)
+
+Set the API base URL in the mobile app to your deployed server URL:
+
+```
+https://your-deployed-api.com/api
+```
+
+- CORS is pre-configured to accept `*.replit.dev`, `*.expo.dev`, and `localhost` origins.
+- Socket.IO path: `/api/socket.io`
+
+---
+
+## Building for Production
+
+```bash
+# Build API server
+pnpm --filter @workspace/api-server run build
+
+# Build admin dashboard
+pnpm --filter @workspace/admin-dashboard run build
+```
 
 ---
 
 ## Notes
 
-- Admin Dashboard talks to the API via Vite's `/api` proxy (→ localhost:8080)
-- CORS accepts `*.replit.dev`, `*.kirk.replit.dev`, `*.expo.dev` automatically
-- Socket.IO path: `/api/socket.io`
-- After this project is deployed, use its `.replit.app` URL as `BACKEND_URL` in the passenger/driver apps
+- The system starts **empty** — no data is inserted automatically on startup.
+- Run the seed script manually if you need demo data.
+- Secrets are never committed — see `.gitignore` and `.env.example`.
+- `uploads/` (driver documents) is git-ignored and must be persisted separately in production (object storage recommended).
