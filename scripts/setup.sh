@@ -32,6 +32,21 @@ fi
 echo "=== Starting API server ==="
 (pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start) &
 
+# ── Print public API URL ───────────────────────────────────────────────────
+if [ -n "$REPLIT_DEV_DOMAIN" ]; then
+  FULL_API_URL="https://${REPLIT_DEV_DOMAIN}/api"
+else
+  FULL_API_URL="(REPLIT_DEV_DOMAIN not available)"
+fi
+
+echo ""
+echo "=============================="
+echo "PUBLIC API BASE URL:"
+echo "/api"
+echo "FULL URL: ${FULL_API_URL}"
+echo "=============================="
+echo ""
+
 # ── Start admin dashboard in foreground ───────────────────────────────────
 echo "=== Starting admin dashboard ==="
 pnpm --filter @workspace/admin-dashboard run dev
