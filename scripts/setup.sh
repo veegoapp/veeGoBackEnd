@@ -30,7 +30,7 @@ fi
 
 # ── Start API server in background (build then start) ─────────────────────
 echo "=== Starting API server ==="
-(pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start) &
+(pnpm --filter @workspace/api-server run build && PORT=8080 pnpm --filter @workspace/api-server run start) &
 
 # ── Print public API URL ───────────────────────────────────────────────────
 if [ -n "$REPLIT_DEV_DOMAIN" ]; then

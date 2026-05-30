@@ -30,6 +30,8 @@ if (!_dbUrl) {
 async function verifyDatabaseConnection(retries = 5, delayMs = 2000): Promise<void> {
   const connectionString = process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
   const provider = connectionString.includes("neon.tech") ? "Neon PostgreSQL" : "PostgreSQL";
+  const maskedUrl = connectionString.replace(/:\/\/[^@]+@/, "://***:***@");
+  logger.info({ provider, maskedUrl }, "Active database connection");
 
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
