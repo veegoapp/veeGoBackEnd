@@ -8,7 +8,8 @@ import {
 import {
   Navigation, DollarSign, Users, Wifi, RefreshCw,
   TrendingUp, TrendingDown, Minus, MapPin, Clock,
-  Circle, MessageSquare, ArrowRight, Bus,
+  Circle, MessageSquare, ArrowRight, Bus, ListTodo,
+  AlertTriangle, BarChart3, CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +59,22 @@ interface Activity {
   activeTrips: Array<{ id: number; routeName: string | null; fromLocation: string | null; toLocation: string | null; driverName: string | null; status: string; departureTime: string; availableSeats: number; totalSeats: number }>;
   recentBookings: Array<{ id: number; status: string; totalPrice: string; seatCount: number; createdAt: string; userName: string | null; userEmail: string | null }>;
   upcomingDepartures: Array<{ id: number; routeName: string | null; fromLocation: string | null; toLocation: string | null; departureTime: string; status: string }>;
+}
+
+interface QueueStatus {
+  pendingCount: number;
+  deadLetterCount: number;
+  failuresByType: Record<string, number>;
+  recentDeadLetters: Array<{
+    jobId: string;
+    type: string;
+    attempt: number;
+    maxAttempts: number;
+    lastError: string;
+    failedAt: string;
+    createdAt: string;
+  }>;
+  asOf: string;
 }
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
@@ -500,6 +517,154 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
   );
 }
 
+/* ─────────────────────────── Queue Monitor ─────────────────────────── */
+
+function QueueMonitor() {
+  const { t } = useTranslation();
+  const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<QueueStatus>({
+    queryKey: ["admin-queue-status"],
+    queryFn: () => adminFetch<QueueStatus>("/admin/queue/status"),
+    refetchInterval: 30_000,
+  });
+
+  const hasFailures = (data?.deadLetterCount ?? 0) > 0;
+  const hasPending = (data?.pendingCount ?? 0) > 0;
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <ListTodo className="h-4 w-4 text-violet-500" />
+            Queue Monitor
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {dataUpdatedAt > 0 && (
+              <span className="text-xs text-muted-foreground hidden sm:inline">
+                Updated {format(new Date(dataUpdatedAt), "HH:mm:ss")}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 h-7 text-xs"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              <RefreshCw className={`h-3 w-3 ${isFetching ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Summary counters */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Clock className="h-3.5 w-3.5 text-amber-500" />
+              Pending Jobs
+            </div>
+            {isLoading ? (
+              <Skeleton className="h-7 w-16" />
+            ) : (
+              <span className={`text-2xl font-bold ${hasPending ? "text-amber-500" : "text-foreground"}`}>
+                {data?.pendingCount ?? 0}
+              </span>
+            )}
+          </div>
+
+          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+              Dead-Letter Queue
+            </div>
+            {isLoading ? (
+              <Skeleton className="h-7 w-16" />
+            ) : (
+              <span className={`text-2xl font-bold ${hasFailures ? "text-red-500" : "text-foreground"}`}>
+                {data?.deadLetterCount ?? 0}
+              </span>
+            )}
+          </div>
+
+          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-1 col-span-2 sm:col-span-1">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <BarChart3 className="h-3.5 w-3.5 text-blue-500" />
+              Job Types Affected
+            </div>
+            {isLoading ? (
+              <Skeleton className="h-7 w-16" />
+            ) : (
+              <span className="text-2xl font-bold">
+                {Object.keys(data?.failuresByType ?? {}).length}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Per-type failure stats */}
+        {!isLoading && Object.keys(data?.failuresByType ?? {}).length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+              <BarChart3 className="h-3 w-3" /> Failures by Job Type
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {Object.entries(data!.failuresByType).map(([type, count]) => (
+                <Badge
+                  key={type}
+                  variant="outline"
+                  className="gap-1.5 border-red-500/30 text-red-600 dark:text-red-400 bg-red-500/5"
+                >
+                  <span className="font-mono text-[10px]">{type}</span>
+                  <span className="font-bold">{count}</span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent dead-letter entries */}
+        {!isLoading && (data?.recentDeadLetters ?? []).length > 0 ? (
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-red-500" /> Recent Failed Jobs (last 20)
+            </p>
+            <div className="rounded-md border divide-y max-h-56 overflow-y-auto">
+              {data!.recentDeadLetters.map((entry) => (
+                <div key={entry.jobId} className="px-3 py-2 text-xs flex flex-col gap-0.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                        {entry.type}
+                      </Badge>
+                      <span className="text-muted-foreground font-mono text-[10px]">{entry.jobId}</span>
+                    </div>
+                    <span className="text-muted-foreground shrink-0">
+                      {relativeTime(entry.failedAt)}
+                    </span>
+                  </div>
+                  <p className="text-red-500 dark:text-red-400 truncate">
+                    {entry.lastError}
+                  </p>
+                  <p className="text-muted-foreground">
+                    Attempt {entry.attempt}/{entry.maxAttempts}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : !isLoading && (
+          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <CheckCircle2 className="h-4 w-4" />
+            <span>No failed jobs — queue is healthy</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ─────────────────────────── Dashboard ─────────────────────────── */
 
 export default function Dashboard() {
@@ -632,6 +797,9 @@ export default function Dashboard() {
 
       {/* Live Map */}
       <LiveMap drivers={drivers} loading={liveLoading} />
+
+      {/* Queue Monitor */}
+      <QueueMonitor />
 
       {/* Activity */}
       <ActivitySection activity={activity} loading={activityLoading} />

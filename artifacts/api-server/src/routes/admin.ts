@@ -4,6 +4,7 @@ import { loadSetting, saveSetting } from "../lib/settings";
 import { eq, sql, and, or, ilike, desc, asc, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { z } from "zod";
+import { jobQueue, type JobType } from "../lib/jobQueue";
 import {
   ListAdminUsersQueryParams,
   GetAdminUserParams,
@@ -132,6 +133,38 @@ function safeUser(user: Record<string, unknown>) {
   const { password, refreshToken, ...rest } = user;
   return { ...rest, walletBalance: typeof rest.walletBalance === "string" ? parseFloat(rest.walletBalance as string) : rest.walletBalance };
 }
+
+// ─── Queue status ─────────────────────────────────────────────────────────────
+router.get("/admin/queue/status", authenticate, requireRole("admin"), (_req, res): void => {
+  const dlq = jobQueue.deadLetterQueue;
+
+  const failuresByType = dlq.reduce<Record<string, number>>((acc, entry) => {
+    const t = entry.job.type as string;
+    acc[t] = (acc[t] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const recentDeadLetters = dlq
+    .slice(-20)
+    .reverse()
+    .map((entry) => ({
+      jobId: entry.job.id,
+      type: entry.job.type,
+      attempt: entry.job.attempt,
+      maxAttempts: entry.job.maxAttempts,
+      lastError: entry.lastError,
+      failedAt: new Date(entry.failedAt).toISOString(),
+      createdAt: new Date(entry.job.createdAt).toISOString(),
+    }));
+
+  res.json({
+    pendingCount: jobQueue.pendingCount,
+    deadLetterCount: dlq.length,
+    failuresByType,
+    recentDeadLetters,
+    asOf: new Date().toISOString(),
+  });
+});
 
 // Analytics
 router.get("/admin/analytics", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
