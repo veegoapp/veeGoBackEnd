@@ -1706,7 +1706,7 @@ Service controls toggle/configure the availability of platform services: `shuttl
 
 ### `PATCH /admin/services/:type/control`
 **Auth:** Admin  
-**Description:** Update one or more settings for a service. Broadcasts `service_control_changed` via Socket.IO.  
+**Description:** Update one or more settings for a service. Broadcasts `service:control:changed` via Socket.IO.  
 **Body (all optional):**
 ```json
 {
@@ -2249,48 +2249,173 @@ Shuttle endpoints are primarily public (no auth required unless noted).
 
 ---
 
+## Admin — Zones
+
+### `GET /zones`
+**Auth:** Admin  
+**Description:** Paginated list of all geographic zones.  
+**Query:** `page` (default 1), `limit` (default 100, max 200)  
+**Response:**
+```json
+{
+  "data": [
+    { "id": 1, "name": "Downtown", "description": "City centre zone", "centerLat": 30.05, "centerLng": 31.23, "radiusKm": 5.0, "services": ["car", "shuttle"], "isActive": true, "createdAt": "..." }
+  ],
+  "total": 0, "page": 1, "limit": 100
+}
+```
+
+---
+
+### `POST /zones`
+**Auth:** Admin  
+**Description:** Create a new zone.  
+**Body:**
+```json
+{
+  "name": "string",
+  "description": "string (optional)",
+  "centerLat": 30.05,
+  "centerLng": 31.23,
+  "radiusKm": 5.0,
+  "services": ["car", "shuttle", "bike"],
+  "isActive": true
+}
+```
+**Response (201):** Created zone object. Writes audit log.
+
+---
+
+### `GET /zones/locate`
+**Auth:** Admin  
+**Description:** Find the zone that contains a given GPS coordinate. Returns the matching zone ID (and full zone record) for the supplied latitude/longitude point.  
+**Query:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `lat` | float | Yes | Latitude (−90 to 90) |
+| `lng` | float | Yes | Longitude (−180 to 180) |
+
+**Response (200):**
+```json
+{ "zoneId": 3, "zone": { "id": 3, "name": "Airport", "centerLat": 30.12, "centerLng": 31.40, "radiusKm": 8.0, "services": ["car", "shuttle"], "isActive": true } }
+```
+**Response (404):** No zone matched the coordinates.
+```json
+{ "error": "No zone found for the given coordinates" }
+```
+
+---
+
+### `GET /zones/:id`
+**Auth:** Admin  
+**Description:** Get a zone by ID.  
+**Errors:** `404`
+
+---
+
+### `PATCH /zones/:id`
+**Auth:** Admin  
+**Description:** Update a zone's fields.  
+**Body:** Partial of create body.  
+**Response:** Updated zone object. Writes audit log.  
+**Errors:** `404`
+
+---
+
+### `DELETE /zones/:id`
+**Auth:** Admin  
+**Description:** Delete a zone.  
+**Response:** `204 No Content`. Writes audit log.
+
+---
+
 ## 30. Chat
 
-### `GET /chat/rooms`
+Chat is scoped to trips. All messages are stored against a `tripId`.
+
+### `GET /trips/:id/chat`
 **Auth:** User  
-**Description:** List chat rooms accessible to the authenticated user.  
+**Description:** Get full chat history for a trip, ordered chronologically.  
+**Path param:** `id` — trip ID  
 **Response:**
 ```json
-{ "data": [...], "total": 0 }
+{ "data": [ { "id": 1, "tripId": 1, "senderId": 2, "senderType": "passenger", "message": "...", "isRead": false, "createdAt": "..." } ], "total": 5 }
 ```
 
 ---
 
-### `POST /chat/rooms`
+### `POST /trips/:id/chat`
 **Auth:** User  
-**Description:** Create or find an existing chat room.  
+**Description:** Send a chat message in a trip. Emits `trip:chat:message` to the trip room and `admin:chat:new` to the admin room.  
+**Path param:** `id` — trip ID  
 **Body:**
 ```json
-{ "participantId": 2, "context": "ride | trip | support" }
+{ "message": "string (max 2000 chars)" }
 ```
-**Response:** Chat room object.
+**Response (201):** Created message object. `senderType` is derived from the JWT role (`passenger`, `driver`, or `admin`).  
+**Errors:** `404` trip not found.
 
 ---
 
-### `GET /chat/rooms/:id/messages`
-**Auth:** User  
-**Description:** Paginated message history for a chat room.  
-**Query:** `page`, `limit`  
+### `GET /admin/chat`
+**Auth:** Admin  
+**Description:** List all trip conversations grouped by trip, newest message first.  
+**Query:** `page` (default 1), `limit` (default 20, max 50)  
 **Response:**
 ```json
-{ "data": [ { "id": 1, "senderId": 1, "text": "...", "createdAt": "..." } ], "total": 0 }
+{
+  "data": [
+    {
+      "trip_id": 1, "trip_status": "active",
+      "user_name": "...", "user_email": "...",
+      "driver_name": "...", "driver_phone": "...",
+      "last_message": "Are you close?", "last_sender_type": "passenger",
+      "last_message_at": "...", "unread_count": 2, "total_messages": 8
+    }
+  ],
+  "total": 0, "page": 1, "limit": 20
+}
 ```
 
 ---
 
-### `POST /chat/rooms/:id/messages`
-**Auth:** User  
-**Description:** Send a message to a chat room. Emits real-time socket event.  
+### `GET /admin/chat/stats`
+**Auth:** Admin  
+**Description:** Aggregate chat stats: total messages, unread count, number of trip conversations.  
+**Response:**
+```json
+{ "totalMessages": 0, "unreadMessages": 0, "tripConversations": 0 }
+```
+
+---
+
+### `GET /admin/chat/trip/:id`
+**Auth:** Admin  
+**Description:** All messages for a specific trip. Also marks all unread messages in the trip as read.  
+**Response:**
+```json
+{ "tripId": 1, "tripStatus": "active", "messages": [...], "total": 8 }
+```
+
+---
+
+### `POST /admin/chat/trip/:id`
+**Auth:** Admin  
+**Description:** Admin sends a message into a trip chat. Emits `trip:chat:message` to the trip socket room.  
 **Body:**
 ```json
-{ "text": "string" }
+{ "message": "string (max 2000 chars)" }
 ```
-**Response (201):** Created message object.
+**Response (201):** Created message object with `senderType: "admin"`.
+
+---
+
+### `PATCH /admin/chat/messages/:id/read`
+**Auth:** Admin  
+**Description:** Mark a single chat message as read.  
+**Response:** Updated message object.  
+**Errors:** `404` message not found.
 
 ---
 
@@ -2367,7 +2492,7 @@ The server exposes Socket.IO at the root URL. The following events are emitted s
 | Event | Room | Payload Description |
 |-------|------|---------------------|
 | `notification:new` | `passenger:<userId>` | New notification object |
-| `service_control_changed` | `admin` + broadcast | Service control update payload |
+| `service:control:changed` | `admin` + broadcast | Service control update payload |
 | `message:new` | Chat room | New chat message |
 | `ride:updated` | Ride room | Ride status change |
 | `driver:location` | Trip/ride room | Driver GPS update |
