@@ -4,6 +4,7 @@ import { initSocket } from "./socket";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
+import { registerDefaultHandlers } from "./lib/jobQueue";
 
 const rawPort = process.env["PORT"];
 
@@ -80,6 +81,7 @@ async function verifyCoreTables(): Promise<void> {
 async function main() {
   await verifyDatabaseConnection();
   await verifyCoreTables();
+  await registerDefaultHandlers();
 
   const httpServer = http.createServer(app);
   initSocket(httpServer);

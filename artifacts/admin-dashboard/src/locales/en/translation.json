@@ -51,7 +51,8 @@
     "groupOperations": "OPERATIONS",
     "groupSystem": "SYSTEM",
     "auditLogs": "Audit Logs",
-    "ratings": "Ratings"
+    "ratings": "Ratings",
+    "chatInbox": "Chat Inbox"
   },
   "common": {
     "save": "Save",

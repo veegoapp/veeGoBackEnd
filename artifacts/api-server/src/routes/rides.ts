@@ -14,6 +14,7 @@ import {
   paymentsTable,
   ratingsTable,
 } from "@workspace/db";
+import { jobQueue } from "../lib/jobQueue";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
@@ -1125,7 +1126,7 @@ router.post("/rides/:id/rate-driver", authenticate, requireRole("user"), async (
       metadata: { driverId: ride.driverId, riderId: userId, rating, comment: comment ?? null },
     });
 
-    void db.insert(ratingsTable).values({
+    jobQueue.enqueue("rating", {
       raterId:  userId,
       driverId: ride.driverId,
       rideId:   rideId,

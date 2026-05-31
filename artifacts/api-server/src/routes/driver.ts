@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable } from "@workspace/db";
+import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable, ratingsTable } from "@workspace/db";
+import { jobQueue } from "../lib/jobQueue";
 import { eq, and, or, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { signAccessToken, signRefreshToken } from "../lib/jwt";
@@ -257,21 +258,43 @@ router.post("/driver/me/documents", authenticate, requireRole("driver"), async (
 });
 
 // ─── GET /driver/me/ratings ────────────────────────────────────────────────────
+// SOURCE OF TRUTH: reads individual ratings from ratingsTable (not rideEventsTable)
 
 router.get("/driver/me/ratings", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
   const [driver] = await db.select({ id: driversTable.id, rating: driversTable.rating })
     .from(driversTable).where(eq(driversTable.userId, req.user!.id));
   if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
 
-  const [stats] = await db.select({
-    tripCount: sql<number>`count(*)::int`,
-    totalEarned: sql<string>`COALESCE(SUM(amount), '0')`,
-  }).from(driverEarningsTable).where(eq(driverEarningsTable.driverId, driver.id));
+  const [stats, ratingRows] = await Promise.all([
+    db.select({
+      tripCount: sql<number>`count(*)::int`,
+      totalEarned: sql<string>`COALESCE(SUM(amount), '0')`,
+    }).from(driverEarningsTable).where(eq(driverEarningsTable.driverId, driver.id)),
+    db.select({
+      id: ratingsTable.id,
+      raterId: ratingsTable.raterId,
+      rideId: ratingsTable.rideId,
+      tripId: ratingsTable.tripId,
+      context: ratingsTable.context,
+      score: ratingsTable.score,
+      comment: ratingsTable.comment,
+      createdAt: ratingsTable.createdAt,
+    })
+    .from(ratingsTable)
+    .where(eq(ratingsTable.driverId, driver.id))
+    .orderBy(desc(ratingsTable.createdAt))
+    .limit(50),
+  ]);
 
   res.json({
     rating: parseFloat(driver.rating),
-    tripCount: stats?.tripCount ?? 0,
-    totalEarned: parseFloat(stats?.totalEarned ?? "0"),
+    tripCount: stats[0]?.tripCount ?? 0,
+    totalEarned: parseFloat(stats[0]?.totalEarned ?? "0"),
+    ratingsCount: ratingRows.length,
+    ratings: ratingRows.map((r) => ({
+      ...r,
+      score: parseFloat(r.score as string),
+    })),
   });
 });
 
@@ -389,7 +412,7 @@ router.patch("/driver/location", authenticate, requireRole("driver"), async (req
     currentHeading: parsed.data.heading,
   }).where(eq(driversTable.id, driver.id)).returning();
 
-  void db.insert(driverLocationsTable).values({
+  jobQueue.enqueue("driver_location", {
     driverId: driver.id,
     latitude: parsed.data.latitude,
     longitude: parsed.data.longitude,

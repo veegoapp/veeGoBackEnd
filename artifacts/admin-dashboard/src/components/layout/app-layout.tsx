@@ -285,6 +285,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     {
       label: t("nav.groupSystem"),
       items: [
+        { title: t("nav.chatInbox"), href: "/chat-inbox", icon: MessageSquare },
         { title: t("nav.ratings"), href: "/ratings", icon: Star },
         { title: t("nav.auditLogs"), href: "/audit-logs", icon: Shield },
         { title: t("nav.settings"), href: "/settings", icon: Settings },

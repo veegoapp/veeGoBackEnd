@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, numeric, pgEnum, index, check } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, numeric, pgEnum, index, check, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { sql } from "drizzle-orm";
@@ -24,6 +24,7 @@ export const ratingsTable = pgTable("ratings", {
   index("idx_ratings_rater_id").on(table.raterId),
   index("idx_ratings_context").on(table.context),
   check("score_range", sql`${table.score} >= 1 AND ${table.score} <= 5`),
+  uniqueIndex("uq_rating_rater_ride").on(table.raterId, table.rideId),
 ]);
 
 export const insertRatingSchema = createInsertSchema(ratingsTable).omit({ id: true, createdAt: true });

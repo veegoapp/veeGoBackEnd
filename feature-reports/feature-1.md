@@ -499,3 +499,198 @@ ratings (
 5. Eye icon → detail dialog shows all fields correctly
 6. Delete → confirmation → rating removed → total count drops
 7. Audit Logs page → DELETE entry for the rating appears
+
+---
+
+## Step 5: Production Hardening + Chat Completion
+
+### 1. FILES MODIFIED
+
+**Backend:**
+- `artifacts/api-server/src/lib/jobQueue.ts` — NEW: in-memory job queue with enqueue, retry (max 3 attempts), exponential backoff (1s → 5s → 15s), dead-letter storage (last 500)
+- `artifacts/api-server/src/lib/auditLog.ts` — UPDATED: `writeAuditLog()` now enqueues via `jobQueue.enqueue("audit_log", entry)` instead of direct DB insert
+- `artifacts/api-server/src/lib/trace.ts` — NEW: `generateTraceId()` (UUID v4), `traceMiddleware` that assigns `req.traceId` on every request
+- `artifacts/api-server/src/app.ts` — added `traceMiddleware` to middleware chain + import
+- `artifacts/api-server/src/index.ts` — added `registerDefaultHandlers()` call on startup (registers audit_log, driver_location, rating, payment queue handlers)
+- `artifacts/api-server/src/routes/driver.ts` — UPDATED: `void db.insert(driverLocationsTable)` → `jobQueue.enqueue("driver_location", payload)` · fixed `GET /driver/me/ratings` to read from `ratingsTable` (not `rideEventsTable`)
+- `artifacts/api-server/src/routes/rides.ts` — UPDATED: `void db.insert(ratingsTable)` → `jobQueue.enqueue("rating", payload)`
+- `lib/db/src/schema/ratings.ts` — UPDATED: added `uniqueIndex("uq_rating_rater_ride").on(table.raterId, table.rideId)` DB constraint
+- `artifacts/api-server/vitest.config.ts` — NEW: vitest configuration (node environment, setup file, coverage)
+- `artifacts/api-server/package.json` — added `"test"`, `"test:watch"`, `"test:coverage"` scripts
+- `artifacts/api-server/tests/setup.ts` — NEW: vitest global setup (vi.clearAllMocks)
+- `artifacts/api-server/tests/auditLogs.test.ts` — NEW: audit log tests
+- `artifacts/api-server/tests/payments.test.ts` — NEW: payment job queue tests
+- `artifacts/api-server/tests/ratings.test.ts` — NEW: ratings job queue + dedup tests
+
+**Frontend:**
+- `artifacts/admin-dashboard/src/pages/chat-inbox.tsx` — NEW: full admin chat inbox page
+- `artifacts/admin-dashboard/src/App.tsx` — added `/chat-inbox` route + `ChatInbox` import
+- `artifacts/admin-dashboard/src/components/layout/app-layout.tsx` — added "Chat Inbox" item to SYSTEM nav group with MessageSquare icon
+- `artifacts/admin-dashboard/src/locales/en/translation.json` — added `nav.chatInbox: "Chat Inbox"`
+- `artifacts/admin-dashboard/src/locales/ar/translation.json` — added `nav.chatInbox: "صندوق المحادثات"`
+
+---
+
+### 2. JOB QUEUE SYSTEM
+
+**File:** `artifacts/api-server/src/lib/jobQueue.ts`
+
+**Architecture:**
+- In-memory queue (array) with a single async worker loop per process
+- Worker uses `setImmediate` to avoid blocking the event loop on startup
+- Jobs that are not yet due (scheduledAt > now) are re-queued with a short sleep
+
+**Retry / backoff:**
+| Attempt | Delay before retry |
+|---|---|
+| 1st failure | 1 second |
+| 2nd failure | 5 seconds |
+| 3rd failure (final) | Moved to dead letter queue |
+
+**Dead letter queue:**
+- Capped at 500 entries (oldest evicted first)
+- Accessible via `jobQueue.deadLetterQueue` for monitoring
+- Errors logged at `logger.error` level with job ID, type, and error message
+
+**Job types registered:**
+| Type | Handler action |
+|---|---|
+| `audit_log` | Insert into `audit_logs` table |
+| `driver_location` | Insert into `driver_locations` table |
+| `rating` | Insert into `ratings` table |
+| `payment` | Insert into `payments` table (for non-transactional use) |
+
+**Handlers are registered lazily** via `registerDefaultHandlers()` called once on server startup, after DB connection is verified.
+
+---
+
+### 3. RATINGS DATA CONSISTENCY FIX
+
+**Problem:** `GET /driver/me/ratings` read rating counts from `rideEventsTable` (event log) instead of `ratingsTable` (source of truth).
+
+**Fix:**
+- `GET /driver/me/ratings` now queries `ratingsTable WHERE driver_id = ?` (up to 50 most recent, ordered newest first)
+- Response now includes `ratingsCount` (integer) and full `ratings[]` array with id, score, comment, context, rideId, tripId, createdAt
+- Average rating is still sourced from `drivers.rating` (pre-computed on each ride rating event)
+
+**DB constraint added:**
+```sql
+CREATE UNIQUE INDEX uq_rating_rater_ride ON ratings(rater_id, ride_id);
+```
+- Prevents duplicate ratings at the DB level
+- Postgres allows multiple NULL `ride_id` values under this constraint (correct behaviour for trip ratings where `ride_id IS NULL`)
+
+---
+
+### 4. OBSERVABILITY TRACE SYSTEM
+
+**File:** `artifacts/api-server/src/lib/trace.ts`
+
+**Features:**
+- `generateTraceId()` — returns a UUID v4 (`crypto.randomUUID()`)
+- `traceMiddleware` — Express middleware that:
+  - Reads `x-trace-id` request header if provided by the caller
+  - Otherwise generates a new UUID
+  - Attaches to `req.traceId` (TypeScript global augmentation)
+- Registered in `app.ts` after body-parser middleware
+- All handlers that log errors can include `req.traceId` in log context
+
+---
+
+### 5. TEST AUTOMATION
+
+**Test runner:** vitest (v4, ESM-compatible)
+**Run tests:** `pnpm --filter @workspace/api-server run test`
+
+**Test files:**
+
+| File | Covers |
+|---|---|
+| `tests/auditLogs.test.ts` | `writeAuditLog` enqueues correct job type and payload; does not throw on queue failure; vehicle CREATE triggers audit_log enqueue |
+| `tests/payments.test.ts` | Payment job enqueued with `completed` status on ride completion; `refunded` status on booking cancellation; booking complete creates correct job |
+| `tests/ratings.test.ts` | Rating job enqueued with correct rater/driver IDs; score stored as string for DB precision; duplicate detection note; jobQueue has `enqueue` method |
+
+**Approach:** Unit tests with `vi.mock` to isolate the job queue. DB is fully mocked — tests run without a live DB connection.
+
+---
+
+### 6. CHAT SYSTEM COMPLETION
+
+**Backend (already existed, no changes needed):**
+All required endpoints were already implemented in `artifacts/api-server/src/routes/chat.ts`:
+- `POST /trips/:id/chat` — passenger/driver/admin sends a message
+- `GET /trips/:id/chat` — trip chat history
+- `GET /admin/chat` — grouped conversations list (paginated)
+- `GET /admin/chat/stats` — unread counts
+- `GET /admin/chat/trip/:id` — thread view + marks as read
+- `POST /admin/chat/trip/:id` — admin sends into a trip
+- `PATCH /admin/chat/messages/:id/read` — mark single message read
+- Socket events: `trip:chat-message`, `admin:new-chat-message` broadcast on every send
+
+**Frontend — New page `/chat-inbox`:**
+
+**Layout:** Split-pane — conversation list (left, 320px) + message thread (right, fills remaining space)
+
+**Conversation list:**
+- Shows all trip conversations sorted by latest message descending
+- Each row: Trip #N, trip status badge, passenger name + driver name, last message preview with sender prefix, time-ago timestamp, total message count
+- Unread count badge (blue) shown when `unread_count > 0`
+- Selected conversation has left border highlight
+
+**Message thread:**
+- Loads on conversation click via `GET /admin/chat/trip/:id`
+- Messages displayed as chat bubbles: admin messages aligned right (primary color), passenger (blue tones) + driver (green tones) aligned left
+- Each bubble shows sender type badge + icon + timestamp
+- Auto-scrolls to bottom on new messages
+- Admin reply input at the bottom (Enter to send, Shift+Enter for newline)
+- Refresh button for manual re-fetch
+
+**Real-time updates:**
+- Socket.io connection established on mount with access token
+- Listens for `admin:new-chat-message` and `trip:chat-message`
+- On event: invalidates conversation list + stats + current thread (if event matches selected trip)
+- Live indicator (pinging green dot) in page header
+
+**Stats bar:**
+- Total Messages, Unread count (highlighted in primary color), Trip Conversations
+- Sourced from `GET /admin/chat/stats`, refreshed every 30 seconds
+
+---
+
+### 7. API ENDPOINTS (new/changed)
+
+| Method | Endpoint | Auth | Change |
+|---|---|---|---|
+| GET | `/api/driver/me/ratings` | driver | FIXED: now reads from `ratingsTable` instead of `rideEventsTable`; returns `ratings[]` array |
+
+All chat endpoints were already registered. No new backend routes added in this step.
+
+---
+
+### 8. MANUAL TESTING STEPS
+
+**Job Queue:**
+1. Start the API server — verify log line `"Job queue handlers registered"` appears
+2. Create a vehicle in admin → verify audit log appears in Audit Logs page (job processed asynchronously)
+3. Call `PATCH /driver/location` as a driver → verify a row appears in `driver_locations` table
+4. Rate a driver via `POST /rides/:id/rate-driver` → verify row appears in `ratings` table
+
+**Ratings dedup:**
+1. Rate the same driver for the same ride twice → second attempt returns 409 from `rideEventsTable` check (before hitting DB constraint)
+2. Verify `GET /driver/me/ratings` returns individual rating rows in the `ratings` array
+
+**Trace system:**
+1. Make any API request → check server logs for `traceId` field
+2. Pass `x-trace-id: my-custom-trace` header → verify same ID echoed in server logs
+
+**Tests:**
+1. Run `pnpm --filter @workspace/api-server run test`
+2. All 3 test files should pass
+
+**Chat Inbox:**
+1. Sidebar → SYSTEM → **Chat Inbox** → page loads with stats bar
+2. Send a message in a trip (via `POST /trips/:id/chat`) → conversation appears in list
+3. Click conversation → message thread opens, message visible
+4. Type a reply as admin → hit Enter → message sent, thread updates
+5. Send another message from trip → thread auto-refreshes (real-time via socket)
+6. Unread badge disappears after opening conversation (marked read server-side)

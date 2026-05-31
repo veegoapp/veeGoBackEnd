@@ -1,4 +1,4 @@
-import { db, auditLogsTable } from "@workspace/db";
+import { jobQueue } from "./jobQueue";
 import { logger } from "./logger";
 
 export interface AuditLogEntry {
@@ -10,22 +10,14 @@ export interface AuditLogEntry {
   newData?: Record<string, unknown> | null;
   ipAddress?: string | null;
   userAgent?: string | null;
+  traceId?: string | null;
 }
 
-export async function writeAuditLog(entry: AuditLogEntry): Promise<void> {
+export function writeAuditLog(entry: AuditLogEntry): void {
   try {
-    await db.insert(auditLogsTable).values({
-      userId: entry.userId ?? null,
-      action: entry.action,
-      entityType: entry.entityType,
-      entityId: entry.entityId ?? null,
-      oldData: entry.oldData ?? null,
-      newData: entry.newData ?? null,
-      ipAddress: entry.ipAddress ?? null,
-      userAgent: entry.userAgent ?? null,
-    });
+    jobQueue.enqueue("audit_log", entry);
   } catch (err) {
-    logger.error({ err, entry }, "Failed to write audit log");
+    logger.error({ err, entry }, "Failed to enqueue audit log");
   }
 }
 

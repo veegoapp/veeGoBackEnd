@@ -51,7 +51,8 @@
     "groupOperations": "العمليات",
     "groupSystem": "النظام",
     "auditLogs": "سجلات التدقيق",
-    "ratings": "التقييمات"
+    "ratings": "التقييمات",
+    "chatInbox": "صندوق المحادثات"
   },
   "common": {
     "save": "حفظ",
