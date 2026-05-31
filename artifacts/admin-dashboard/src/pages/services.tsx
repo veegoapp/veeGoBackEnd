@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { io, Socket } from "socket.io-client";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useListDrivers, useListBuses, useListTrips } from "@workspace/api-client-react";
@@ -981,34 +982,108 @@ const LANDING_CARDS = [
   },
 ] as const;
 
+type ServiceControlSnapshot = {
+  serviceType: string;
+  isEnabled: boolean;
+  displayMode: string;
+  unavailableMessage?: string | null;
+  unavailableAction?: string;
+};
+
 function ServicesLanding() {
   const allControlsQuery = useQuery({
     queryKey: ["service-controls-all"],
-    queryFn: () => adminFetch<{ data: Array<{ serviceType: string; isEnabled: boolean; displayMode: string }> }>("/services/control"),
+    queryFn: () => adminFetch<{ data: ServiceControlSnapshot[] }>("/services/control"),
   });
 
-  const controlMap = Object.fromEntries(
+  const [liveMap, setLiveMap] = useState<Record<string, ServiceControlSnapshot>>({});
+  const [flashSet, setFlashSet] = useState<Set<string>>(new Set());
+  const socketRef = useRef<Socket | null>(null);
+  const flashTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  const triggerFlash = useCallback((serviceType: string) => {
+    if (flashTimers.current[serviceType]) {
+      clearTimeout(flashTimers.current[serviceType]);
+    }
+    setFlashSet((prev) => new Set(prev).add(serviceType));
+    flashTimers.current[serviceType] = setTimeout(() => {
+      setFlashSet((prev) => {
+        const next = new Set(prev);
+        next.delete(serviceType);
+        return next;
+      });
+    }, 1200);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+
+    const socket = io(window.location.origin, {
+      path: "/api/socket.io",
+      auth: { token },
+      transports: ["websocket", "polling"],
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+    });
+
+    socketRef.current = socket;
+
+    socket.on("service:control:changed", (payload: ServiceControlSnapshot) => {
+      setLiveMap((prev) => ({ ...prev, [payload.serviceType]: payload }));
+      triggerFlash(payload.serviceType);
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+      Object.values(flashTimers.current).forEach(clearTimeout);
+    };
+  }, [triggerFlash]);
+
+  const baseMap: Record<string, ServiceControlSnapshot> = Object.fromEntries(
     (allControlsQuery.data?.data ?? []).map((c) => [c.serviceType, c])
   );
+  const controlMap = { ...baseMap, ...liveMap };
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Services</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Manage availability, display mode, and service controls for each transport type
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Services</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage availability, display mode, and service controls for each transport type
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+          </span>
+          Live
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {LANDING_CARDS.map(({ type, icon: Icon, label, desc, color, bg, border, href }) => {
           const control = controlMap[type];
+          const isFlashing = flashSet.has(type);
+          const isDisabled = control && !control.isEnabled;
+
           return (
             <Link key={type} href={href}>
-              <Card className={`cursor-pointer hover:shadow-md transition-all ${border} h-full`}>
+              <Card
+                className={[
+                  "cursor-pointer hover:shadow-md transition-all h-full",
+                  border,
+                  isFlashing ? "ring-2 ring-primary/40 shadow-md" : "",
+                  isDisabled ? "opacity-70" : "",
+                ].filter(Boolean).join(" ")}
+                style={isFlashing ? { animation: "serviceFlash 1.2s ease-out" } : undefined}
+              >
                 <CardContent className="pt-5 pb-5">
                   <div className="flex items-start gap-4">
-                    <div className={`p-3 rounded-xl ${bg} shrink-0`}>
+                    <div className={`p-3 rounded-xl ${bg} shrink-0 transition-transform duration-300 ${isFlashing ? "scale-110" : ""}`}>
                       <Icon className={`h-6 w-6 ${color}`} />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -1017,10 +1092,15 @@ function ServicesLanding() {
                         {control ? (
                           <DisplayModeBadge mode={control.displayMode} />
                         ) : null}
-                        {control && !control.isEnabled && (
+                        {isDisabled && (
                           <Badge variant="outline" className="text-xs text-red-500 border-red-300 bg-red-50 dark:bg-red-950">
                             Disabled
                           </Badge>
+                        )}
+                        {isFlashing && (
+                          <span className="text-xs text-primary font-medium animate-pulse">
+                            Updated
+                          </span>
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">{desc}</p>
@@ -1035,6 +1115,14 @@ function ServicesLanding() {
           );
         })}
       </div>
+
+      <style>{`
+        @keyframes serviceFlash {
+          0%   { background-color: hsl(var(--primary) / 0.08); }
+          60%  { background-color: hsl(var(--primary) / 0.04); }
+          100% { background-color: transparent; }
+        }
+      `}</style>
     </div>
   );
 }
