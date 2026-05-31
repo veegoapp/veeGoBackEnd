@@ -27,7 +27,6 @@ import LiveTracking from "@/pages/live-tracking";
 import Support from "@/pages/support";
 import DriverVerification from "@/pages/driver-verification";
 import Staff from "@/pages/staff";
-import Buses from "@/pages/buses";
 import Vehicles from "@/pages/vehicles";
 import Services from "@/pages/services";
 import Pricing from "@/pages/pricing";
@@ -108,7 +107,6 @@ function Router() {
         <Route path="/drivers" component={() => <ProtectedRoute component={Drivers} />} />
         <Route path="/drivers/:id" component={() => <ProtectedRoute component={DriverDetail} />} />
         <Route path="/driver-verification" component={() => <ProtectedRoute component={DriverVerification} />} />
-        <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
         <Route path="/vehicles" component={() => <ProtectedRoute component={Vehicles} />} />
         <Route path="/bookings" component={() => <ProtectedRoute component={Bookings} />} />
         <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />

@@ -453,7 +453,7 @@ function ShuttleView() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           { label: "Manage Routes",    desc: "Create and edit shuttle routes and stations",  href: "/routes",  icon: Map,        color: "bg-amber-500/10 text-amber-600" },
-          { label: "Fleet Management", desc: "Register and manage the bus fleet",             href: "/buses",   icon: Bus,        color: "bg-blue-500/10 text-blue-600" },
+          { label: "Fleet Management", desc: "Register and manage the bus fleet",             href: "/vehicles", icon: Bus,        color: "bg-blue-500/10 text-blue-600" },
           { label: "Driver Roster",    desc: "Assign and manage shuttle drivers",             href: "/drivers", icon: UserCircle, color: "bg-green-500/10 text-green-600" },
         ].map((item) => (
           <Link key={item.href} href={item.href}>
