@@ -53,8 +53,6 @@ export interface User {
   isBlocked: boolean;
   createdAt: string;
   updatedAt?: string;
-  staffRoleId?: number | null;
-  permissions?: string[];
 }
 
 export interface AuthResponse {
@@ -259,6 +257,111 @@ export interface BusUpdate {
 
 export interface BusesPage {
   data: Bus[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type VehicleVehicleType = typeof VehicleVehicleType[keyof typeof VehicleVehicleType];
+
+
+export const VehicleVehicleType = {
+  car: 'car',
+  motorcycle: 'motorcycle',
+  van: 'van',
+  minibus: 'minibus',
+} as const;
+
+export type VehicleStatus = typeof VehicleStatus[keyof typeof VehicleStatus];
+
+
+export const VehicleStatus = {
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected',
+  suspended: 'suspended',
+} as const;
+
+export interface Vehicle {
+  id: number;
+  driverId: number;
+  plateNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  color: string;
+  vehicleType: VehicleVehicleType;
+  status: VehicleStatus;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type VehicleInputVehicleType = typeof VehicleInputVehicleType[keyof typeof VehicleInputVehicleType];
+
+
+export const VehicleInputVehicleType = {
+  car: 'car',
+  motorcycle: 'motorcycle',
+  van: 'van',
+  minibus: 'minibus',
+} as const;
+
+export type VehicleInputStatus = typeof VehicleInputStatus[keyof typeof VehicleInputStatus];
+
+
+export const VehicleInputStatus = {
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected',
+  suspended: 'suspended',
+} as const;
+
+export interface VehicleInput {
+  driverId: number;
+  plateNumber: string;
+  make: string;
+  model: string;
+  year: number;
+  color: string;
+  vehicleType: VehicleInputVehicleType;
+  status?: VehicleInputStatus;
+  isActive?: boolean;
+}
+
+export type VehicleUpdateVehicleType = typeof VehicleUpdateVehicleType[keyof typeof VehicleUpdateVehicleType];
+
+
+export const VehicleUpdateVehicleType = {
+  car: 'car',
+  motorcycle: 'motorcycle',
+  van: 'van',
+  minibus: 'minibus',
+} as const;
+
+export type VehicleUpdateStatus = typeof VehicleUpdateStatus[keyof typeof VehicleUpdateStatus];
+
+
+export const VehicleUpdateStatus = {
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected',
+  suspended: 'suspended',
+} as const;
+
+export interface VehicleUpdate {
+  plateNumber?: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  color?: string;
+  vehicleType?: VehicleUpdateVehicleType;
+  status?: VehicleUpdateStatus;
+  isActive?: boolean;
+}
+
+export interface VehiclesPage {
+  data: Vehicle[];
   total: number;
   page: number;
   limit: number;
@@ -494,15 +597,6 @@ export interface DriverLoginInput {
   password: string;
 }
 
-export interface DriverRegisterInput {
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-  licenseNumber?: string;
-  nationalId?: string;
-}
-
 export type DriverProfileStatus = typeof DriverProfileStatus[keyof typeof DriverProfileStatus];
 
 
@@ -703,6 +797,34 @@ export type ListBusesParams = {
 page?: number;
 limit?: number;
 };
+
+export type ListVehiclesParams = {
+page?: number;
+limit?: number;
+search?: string;
+status?: ListVehiclesStatus;
+vehicleType?: ListVehiclesVehicleType;
+};
+
+export type ListVehiclesStatus = typeof ListVehiclesStatus[keyof typeof ListVehiclesStatus];
+
+
+export const ListVehiclesStatus = {
+  pending: 'pending',
+  verified: 'verified',
+  rejected: 'rejected',
+  suspended: 'suspended',
+} as const;
+
+export type ListVehiclesVehicleType = typeof ListVehiclesVehicleType[keyof typeof ListVehiclesVehicleType];
+
+
+export const ListVehiclesVehicleType = {
+  car: 'car',
+  motorcycle: 'motorcycle',
+  van: 'van',
+  minibus: 'minibus',
+} as const;
 
 export type ListDriversParams = {
 page?: number;

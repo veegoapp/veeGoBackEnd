@@ -586,6 +586,122 @@ paths:
         "204":
           description: Deleted
 
+  # ─── VEHICLES ────────────────────────────────────────────────────────────────
+  /vehicles:
+    get:
+      operationId: listVehicles
+      summary: List vehicles (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, verified, rejected, suspended]
+        - name: vehicleType
+          in: query
+          schema:
+            type: string
+            enum: [car, motorcycle, van, minibus]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehiclesPage"
+    post:
+      operationId: createVehicle
+      summary: Create a vehicle (admin)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      summary: Get a vehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    patch:
+      operationId: updateVehicle
+      summary: Update a vehicle (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VehicleUpdate"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    delete:
+      operationId: deleteVehicle
+      summary: Delete a vehicle (admin)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   # ─── DRIVERS ─────────────────────────────────────────────────────────────────
   /drivers:
     get:
@@ -2042,6 +2158,103 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Bus"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    # ─── VEHICLE ─────────────────────────────────────────────────────────────
+    Vehicle:
+      type: object
+      required: [id, driverId, plateNumber, make, model, year, color, vehicleType, status, isActive, createdAt]
+      properties:
+        id:
+          type: integer
+        driverId:
+          type: integer
+        plateNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+        color:
+          type: string
+        vehicleType:
+          type: string
+          enum: [car, motorcycle, van, minibus]
+        status:
+          type: string
+          enum: [pending, verified, rejected, suspended]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    VehicleInput:
+      type: object
+      required: [driverId, plateNumber, make, model, year, color, vehicleType]
+      properties:
+        driverId:
+          type: integer
+        plateNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+        color:
+          type: string
+        vehicleType:
+          type: string
+          enum: [car, motorcycle, van, minibus]
+        status:
+          type: string
+          enum: [pending, verified, rejected, suspended]
+        isActive:
+          type: boolean
+          default: true
+
+    VehicleUpdate:
+      type: object
+      properties:
+        plateNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        year:
+          type: integer
+        color:
+          type: string
+        vehicleType:
+          type: string
+          enum: [car, motorcycle, van, minibus]
+        status:
+          type: string
+          enum: [pending, verified, rejected, suspended]
+        isActive:
+          type: boolean
+
+    VehiclesPage:
+      type: object
+      required: [data, total, page, limit]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vehicle"
         total:
           type: integer
         page:

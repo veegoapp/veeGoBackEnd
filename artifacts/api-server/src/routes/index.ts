@@ -22,6 +22,7 @@ import zonesRouter from "./zones";
 import zonePricingRouter from "./zonePricing";
 import shuttleRouter from "./shuttle";
 import earningsRouter from "./earnings";
+import vehiclesRouter from "./vehicles";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(zonesRouter);
 router.use(zonePricingRouter);
 router.use(shuttleRouter);
 router.use(earningsRouter);
+router.use(vehiclesRouter);
 
 export default router;

@@ -10,7 +10,4 @@ userId?: number;
 type?: string;
 page?: number;
 limit?: number;
-dateFrom?: string;
-dateTo?: string;
-search?: string;
 };

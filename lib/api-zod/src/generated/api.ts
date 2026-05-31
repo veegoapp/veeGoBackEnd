@@ -54,9 +54,7 @@ export const LoginResponse = zod.object({
   "isVerified": zod.boolean(),
   "isBlocked": zod.boolean(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date().optional(),
-  "staffRoleId": zod.number().nullish(),
-  "permissions": zod.array(zod.string()).optional()
+  "updatedAt": zod.coerce.date().optional()
 })
 })
 
@@ -82,9 +80,7 @@ export const RefreshTokenResponse = zod.object({
   "isVerified": zod.boolean(),
   "isBlocked": zod.boolean(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date().optional(),
-  "staffRoleId": zod.number().nullish(),
-  "permissions": zod.array(zod.string()).optional()
+  "updatedAt": zod.coerce.date().optional()
 })
 })
 
@@ -103,9 +99,7 @@ export const GetMeResponse = zod.object({
   "isVerified": zod.boolean(),
   "isBlocked": zod.boolean(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date().optional(),
-  "staffRoleId": zod.number().nullish(),
-  "permissions": zod.array(zod.string()).optional()
+  "updatedAt": zod.coerce.date().optional()
 })
 
 
@@ -160,7 +154,7 @@ export const GetMyBookingsResponseItem = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -186,7 +180,7 @@ export const GetMyBookingsResponseItem = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -241,7 +235,7 @@ export const GetMyBookingsResponse = zod.array(GetMyBookingsResponseItem)
  * @summary List shuttle routes
  */
 export const listRoutesQueryPageDefault = 1;
-export const listRoutesQueryLimitDefault = 100;
+export const listRoutesQueryLimitDefault = 20;
 
 export const ListRoutesQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
@@ -428,7 +422,7 @@ export const ListTripsResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -499,7 +493,7 @@ export const GetTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -549,7 +543,7 @@ export const UpdateTripBody = zod.object({
   "departureTime": zod.coerce.date().optional(),
   "arrivalTime": zod.coerce.date().optional(),
   "price": zod.number().optional(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']).optional()
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']).optional()
 })
 
 export const UpdateTripResponse = zod.object({
@@ -562,7 +556,7 @@ export const UpdateTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -616,7 +610,7 @@ export const CancelTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -743,6 +737,124 @@ export const UpdateBusResponse = zod.object({
  * @summary Delete a bus (admin)
  */
 export const DeleteBusParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List vehicles (admin)
+ */
+export const listVehiclesQueryPageDefault = 1;
+export const listVehiclesQueryLimitDefault = 20;
+
+export const ListVehiclesQueryParams = zod.object({
+  "page": zod.coerce.number().default(listVehiclesQueryPageDefault),
+  "limit": zod.coerce.number().default(listVehiclesQueryLimitDefault),
+  "search": zod.coerce.string().optional(),
+  "status": zod.enum(['pending', 'verified', 'rejected', 'suspended']).optional(),
+  "vehicleType": zod.enum(['car', 'motorcycle', 'van', 'minibus']).optional()
+})
+
+export const ListVehiclesResponse = zod.object({
+  "data": zod.array(zod.object({
+  "id": zod.number(),
+  "driverId": zod.number(),
+  "plateNumber": zod.string(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "color": zod.string(),
+  "vehicleType": zod.enum(['car', 'motorcycle', 'van', 'minibus']),
+  "status": zod.enum(['pending', 'verified', 'rejected', 'suspended']),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Create a vehicle (admin)
+ */
+export const createVehicleBodyIsActiveDefault = true;
+
+export const CreateVehicleBody = zod.object({
+  "driverId": zod.number(),
+  "plateNumber": zod.string(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "color": zod.string(),
+  "vehicleType": zod.enum(['car', 'motorcycle', 'van', 'minibus']),
+  "status": zod.enum(['pending', 'verified', 'rejected', 'suspended']).optional(),
+  "isActive": zod.boolean().default(createVehicleBodyIsActiveDefault)
+})
+
+
+/**
+ * @summary Get a vehicle
+ */
+export const GetVehicleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetVehicleResponse = zod.object({
+  "id": zod.number(),
+  "driverId": zod.number(),
+  "plateNumber": zod.string(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "color": zod.string(),
+  "vehicleType": zod.enum(['car', 'motorcycle', 'van', 'minibus']),
+  "status": zod.enum(['pending', 'verified', 'rejected', 'suspended']),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Update a vehicle (admin)
+ */
+export const UpdateVehicleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateVehicleBody = zod.object({
+  "plateNumber": zod.string().optional(),
+  "make": zod.string().optional(),
+  "model": zod.string().optional(),
+  "year": zod.number().optional(),
+  "color": zod.string().optional(),
+  "vehicleType": zod.enum(['car', 'motorcycle', 'van', 'minibus']).optional(),
+  "status": zod.enum(['pending', 'verified', 'rejected', 'suspended']).optional(),
+  "isActive": zod.boolean().optional()
+})
+
+export const UpdateVehicleResponse = zod.object({
+  "id": zod.number(),
+  "driverId": zod.number(),
+  "plateNumber": zod.string(),
+  "make": zod.string(),
+  "model": zod.string(),
+  "year": zod.number(),
+  "color": zod.string(),
+  "vehicleType": zod.enum(['car', 'motorcycle', 'van', 'minibus']),
+  "status": zod.enum(['pending', 'verified', 'rejected', 'suspended']),
+  "isActive": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Delete a vehicle (admin)
+ */
+export const DeleteVehicleParams = zod.object({
   "id": zod.coerce.number()
 })
 
@@ -918,7 +1030,7 @@ export const ListBookingsResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -944,7 +1056,7 @@ export const ListBookingsResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1024,7 +1136,7 @@ export const GetBookingResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -1050,7 +1162,7 @@ export const GetBookingResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1113,7 +1225,7 @@ export const CancelBookingResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -1139,7 +1251,7 @@ export const CancelBookingResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1406,7 +1518,7 @@ export const GetAnalyticsResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -1432,7 +1544,7 @@ export const GetAnalyticsResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1806,7 +1918,7 @@ export const ListDriverTripsResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1862,7 +1974,7 @@ export const GetDriverTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1903,7 +2015,7 @@ export const GetDriverTripResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -1929,7 +2041,7 @@ export const GetDriverTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -1997,7 +2109,7 @@ export const AcceptTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -2051,7 +2163,7 @@ export const RejectTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -2105,7 +2217,7 @@ export const StartTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -2159,7 +2271,7 @@ export const CompleteTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -2217,7 +2329,7 @@ export const CancelDriverTripResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -2332,7 +2444,7 @@ export const BoardPassengerResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -2358,7 +2470,7 @@ export const BoardPassengerResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -2421,7 +2533,7 @@ export const MarkPassengerAbsentResponse = zod.object({
   "tripId": zod.number(),
   "seatCount": zod.number(),
   "totalPrice": zod.number(),
-  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed', 'boarded']),
+  "status": zod.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   "paymentStatus": zod.enum(['pending', 'paid', 'refunded']),
   "promoCodeId": zod.number().nullish(),
   "user": zod.object({
@@ -2447,7 +2559,7 @@ export const MarkPassengerAbsentResponse = zod.object({
   "availableSeats": zod.number(),
   "totalSeats": zod.number(),
   "price": zod.number(),
-  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled', 'waiting_driver', 'driver_assigned', 'boarding']),
+  "status": zod.enum(['scheduled', 'active', 'completed', 'cancelled']),
   "route": zod.object({
   "id": zod.number(),
   "name": zod.string(),

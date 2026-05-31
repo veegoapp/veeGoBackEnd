@@ -1,0 +1,99 @@
+You are working on an existing production monorepo (API Server + Admin Dashboard + PostgreSQL DB).
+
+You must strictly follow the current codebase structure. Do NOT break anything.
+
+========================
+TASK
+========================
+
+Implement the following features safely and in production-ready way.
+
+------------------------
+1. DATABASE
+------------------------
+
+Add these new tables:
+
+- payments
+- vehicles
+- ratings
+- driver_locations
+- user_locations
+- audit_logs
+- chat_messages
+
+Requirements:
+- Use existing PostgreSQL setup and current ORM (Drizzle or existing implementation)
+- Properly connect new tables with existing entities (users, drivers, trips, bookings, rides)
+- Do not remove or modify existing tables
+- Do not duplicate existing logic
+- All data must be real and stored in PostgreSQL
+
+------------------------
+2. VEHICLES (IMPORTANT)
+------------------------
+
+- Vehicles must be real database entities
+- Structure must follow existing system design (drivers, buses, trips)
+- No artificial or unrelated categorization
+- Keep schema consistent with current database style
+
+------------------------
+3. ADMIN DASHBOARD
+------------------------
+
+- Modify existing sidebar item "Buses" and rename it to "Vehicles"
+- Update the existing Buses page to become Vehicles page
+
+Vehicles page must:
+- Fetch real data from API only
+- Support search functionality
+- Support filtering based on real database fields
+- Support pagination
+- Display only real backend data
+
+No mock data allowed.
+
+------------------------
+4. API SERVER
+------------------------
+
+- Extend existing API server only
+- Do not change architecture or rewrite structure
+- Do not break existing endpoints
+- Only add endpoints required for new tables
+- Do not guess or invent endpoints blindly; follow existing backend patterns
+
+All endpoints must:
+- Connect to PostgreSQL
+- Return real production data
+- Be used directly by Admin Dashboard
+
+------------------------
+5. DATA FLOW RULE
+------------------------
+
+- Admin Dashboard must ONLY consume API server
+- API server must ONLY interact with PostgreSQL database
+- No mock data anywhere in the system
+- No fake fields or placeholder logic allowed
+
+------------------------
+6. SAFETY RULE
+------------------------
+
+If anything is unclear or missing:
+STOP immediately and ask before implementing.
+
+Do not assume schema, logic, or behavior.
+
+------------------------
+7. FINAL OUTPUT REQUIRED
+------------------------
+
+At the end, provide:
+
+- List of created tables
+- List of added/modified API endpoints
+- Summary of changes
+- Confirmation that nothing was broken

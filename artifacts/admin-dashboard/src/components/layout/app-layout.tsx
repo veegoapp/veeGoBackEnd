@@ -206,7 +206,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.pendingVerification"), href: "/driver-verification", icon: Clock },
           ],
         },
-        { title: t("nav.buses"), href: "/buses", icon: Bus },
+        { title: t("nav.vehicles"), href: "/vehicles", icon: Car },
         {
           title: t("nav.trips"), href: "/trips", icon: Navigation,
           subItems: [
