@@ -25,6 +25,10 @@ export const SOCKET_EVENTS = {
 
   // ── Server → Trip subscribers ────────────────────────────────────────────────
   PASSENGER_TRIP_TRACKING: "passenger:trip:tracking",
+  TRIP_CHAT_MESSAGE:       "trip:chat:message",
+
+  // ── Server → Admin room ──────────────────────────────────────────────────────
+  ADMIN_NEW_CHAT_MESSAGE:  "admin:chat:new",
 
   // ── Server → Socket direct ───────────────────────────────────────────────────
   DRIVER_LOCATION_ACK:   "driver:location:ack",

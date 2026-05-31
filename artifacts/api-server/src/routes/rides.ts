@@ -11,6 +11,8 @@ import {
   zonesTable,
   zonePricingTable,
   settingsTable,
+  paymentsTable,
+  ratingsTable,
 } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
@@ -849,6 +851,15 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
         description: `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
       });
 
+      await tx.insert(paymentsTable).values({
+        userId:  ride.passengerId,
+        rideId:  rideId,
+        amount:  finalPrice.toFixed(2),
+        method:  "wallet",
+        status:  "completed",
+        notes:   `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
+      });
+
       await tx.insert(driverEarningsTable).values({
         driverId: driver.id,
         amount: driverCut.toFixed(2),
@@ -955,6 +966,14 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
         amount: finalPrice.toFixed(2),
         type: "payment",
         description: `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
+      });
+      await tx.insert(paymentsTable).values({
+        userId:  ride.passengerId,
+        rideId:  rideId,
+        amount:  finalPrice.toFixed(2),
+        method:  "wallet",
+        status:  "completed",
+        notes:   `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
       });
       await tx.insert(driverEarningsTable).values({ driverId: driver.id, amount: driverCut.toFixed(2), status: "confirmed" });
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));
@@ -1104,6 +1123,15 @@ router.post("/rides/:id/rate-driver", authenticate, requireRole("user"), async (
       rideId,
       type:     "DRIVER_RATED",
       metadata: { driverId: ride.driverId, riderId: userId, rating, comment: comment ?? null },
+    });
+
+    void db.insert(ratingsTable).values({
+      raterId:  userId,
+      driverId: ride.driverId,
+      rideId:   rideId,
+      context:  "ride",
+      score:    String(rating),
+      comment:  comment ?? null,
     });
 
     // FIXED: recalculate and update drivers.rating as the average of all DRIVER_RATED events

@@ -1,0 +1,209 @@
+You are working on an existing production monorepo (API Server + Admin Dashboard + PostgreSQL DB).
+
+You must strictly follow the current architecture. Do NOT break existing features.
+
+====================================================
+GENERAL RULES
+====================================================
+
+- Do NOT create mock or fake data
+- Do NOT modify unrelated modules
+- Do NOT break existing endpoints
+- Extend existing API server only
+- Admin Dashboard must consume API server only
+- API server must use PostgreSQL only
+- Do NOT assume schema or business logic
+- If anything is unclear, STOP and ask before implementing
+- Preserve backward compatibility at all times
+
+====================================================
+CURRENT STATE
+====================================================
+
+- Vehicles feature is fully implemented
+- Remaining database tables exist but are NOT integrated:
+
+  audit_logs
+  driver_locations
+  user_locations
+  payments
+  ratings
+  chat_messages
+
+These must be implemented step-by-step in strict order.
+
+====================================================
+IMPLEMENTATION ORDER (STRICT)
+====================================================
+
+----------------------------------------------------
+STEP 1: AUDIT LOGS
+----------------------------------------------------
+- Track all admin actions (create/update/delete)
+- Store logs in audit_logs table
+- Add API endpoints for:
+  - writing logs automatically
+  - fetching logs in admin dashboard
+- Integrate logging middleware into admin actions
+
+----------------------------------------------------
+STEP 2: DRIVER + USER LOCATIONS
+----------------------------------------------------
+- driver_locations MUST be real-time tracking (mandatory system component)
+- user_locations MUST store latest known user location (NOT optional)
+- Add APIs:
+  - update location
+  - fetch latest location
+- Integrate with Live Tracking in Admin Dashboard
+
+----------------------------------------------------
+STEP 3: PAYMENTS INTEGRATION (STRICT CONTROL FLOW)
+
+This step MUST be executed in 2 phases:
+
+PHASE 1: ANALYSIS (MANDATORY BEFORE ANY CODE)
+
+Before writing or modifying code you MUST:
+
+1. Inspect existing Payments page in Admin Dashboard
+2. Inspect all existing payment-related API endpoints
+3. Identify current data sources:
+   - wallet_transactions
+   - driver_earnings
+   - payouts
+   - analytics systems
+
+You MUST provide BEFORE ANY IMPLEMENTATION:
+
+- Current Payments page data sources
+- Current API endpoints used
+- Internal logic explanation
+- Comparison between:
+  - existing system (wallet_transactions / earnings / payouts)
+  - new payments table
+- Schema gap analysis
+- Exact migration plan
+
+⚠️ DO NOT write or modify any code in Phase 1
+
+----------------------------------------------------
+
+PHASE 2: IMPLEMENTATION (ONLY AFTER ANALYSIS)
+
+After analysis is complete:
+
+- Integrate payments table into system
+- Add ONLY required API endpoints
+- Ensure Admin Dashboard uses ONLY real PostgreSQL data via API server
+- Reuse existing logic wherever possible
+
+DO NOT:
+- duplicate wallet_transactions logic
+- break earnings or payout system
+- change architecture
+
+Must remain compatible with:
+- wallet_transactions
+- driver_earnings
+- payouts
+- analytics
+
+----------------------------------------------------
+
+STEP 4: RATINGS SYSTEM
+----------------------------------------------------
+- Implement ratings between users and drivers
+- Must link with trips/rides
+- Add APIs:
+  - create rating
+  - fetch ratings by driver/user/trip
+
+----------------------------------------------------
+STEP 5: CHAT MESSAGES
+----------------------------------------------------
+- Implement chat_messages system
+- Support ride-based or support-based messaging
+- Add APIs for send/retrieve messages
+- Integrate with existing support system if applicable
+
+====================================================
+FRONTEND RULES
+====================================================
+
+- Every backend feature MUST be reflected in Admin Dashboard
+- No backend-only features allowed
+- No mock data anywhere
+- All UI data must come from API server only
+
+====================================================
+FINAL BEHAVIOR RULE
+====================================================
+
+- Do NOT ask what to do next
+- Do NOT ask for confirmation after finishing steps
+- Only stop if:
+  - schema is missing
+  - system conflict exists
+  - breaking change risk is detected
+
+====================================================
+FINAL REPORT (MANDATORY AFTER EACH STEP)
+====================================================
+
+After EACH step, generate a full structured report:
+
+1. FILES MODIFIED
+- backend files
+- frontend files
+- migrations/schema changes
+
+2. DATABASE CHANGES
+- created tables
+- modified tables
+- relationships
+
+3. DISPATCH / BUSINESS LOGIC (IF ANY)
+- driver selection logic
+- radius rules
+- batching logic
+- timeout logic
+- fallback behavior
+
+4. API ENDPOINTS
+- new endpoints
+- modified endpoints
+- request/response summary
+
+5. SOCKET / REALTIME EVENTS (IF ANY)
+- events added/modified
+- payload structure
+- emit/consume locations
+
+6. FRONTEND IMPACT
+- rider app
+- driver app
+- admin dashboard changes
+
+7. MANUAL TESTING STEPS
+- step-by-step verification process
+
+====================================================
+REPORT STORAGE RULE
+====================================================
+
+After completing EACH step:
+
+- Save report inside project:
+  /feature-reports/feature-1.md
+
+- Append new steps (do NOT overwrite)
+- Format:
+  Step 1, Step 2, Step 3...
+
+====================================================
+EXECUTION SAFETY RULE
+====================================================
+
+- Each step must be completed fully before moving to next
+- Analysis is required before any implementation in Payments step
+- No step is considered complete without saved report file

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable } from "@workspace/db";
+import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable, paymentsTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
@@ -165,6 +165,15 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       description: `Booking #${booking.id} — trip #${tripId} (${seatCount} seat${seatCount > 1 ? "s" : ""})`,
     });
 
+    await tx.insert(paymentsTable).values({
+      userId:    req.user!.id,
+      bookingId: booking.id,
+      amount:    String(totalPrice),
+      method:    "wallet",
+      status:    "completed",
+      notes:     `Booking #${booking.id} — trip #${tripId} (${seatCount} seat${seatCount > 1 ? "s" : ""})`,
+    });
+
     return { booking };
   });
 
@@ -218,6 +227,15 @@ router.patch("/bookings/:id/cancel", authenticate, async (req, res): Promise<voi
         amount:      booking.totalPrice,
         type:        "refund",
         description: `Refund for booking #${booking.id} (trip #${booking.tripId})`,
+      });
+
+      await tx.insert(paymentsTable).values({
+        userId:    booking.userId,
+        bookingId: booking.id,
+        amount:    booking.totalPrice,
+        method:    "wallet",
+        status:    "refunded",
+        notes:     `Refund for booking #${booking.id} (trip #${booking.tripId})`,
       });
     }
 

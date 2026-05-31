@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, vehiclesTable, driversTable } from "@workspace/db";
 import { eq, sql, ilike, and, type SQL } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { writeAuditLog, getClientIp } from "../lib/auditLog";
 import { z } from "zod";
 
 const router = Router();
@@ -93,6 +94,15 @@ router.post("/vehicles", authenticate, requireRole("admin"), async (req, res): P
   const parsed = CreateVehicleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [vehicle] = await db.insert(vehiclesTable).values(parsed.data).returning();
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "CREATE",
+    entityType: "vehicle",
+    entityId: vehicle.id,
+    newData: vehicle as unknown as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.status(201).json(vehicle);
 });
 
@@ -128,12 +138,23 @@ router.patch("/vehicles/:id", authenticate, requireRole("admin"), async (req, re
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateVehicleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [existing] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, params.data.id));
+  if (!existing) { res.status(404).json({ error: "Vehicle not found" }); return; }
   const [updated] = await db
     .update(vehiclesTable)
     .set(parsed.data)
     .where(eq(vehiclesTable.id, params.data.id))
     .returning();
-  if (!updated) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "UPDATE",
+    entityType: "vehicle",
+    entityId: updated.id,
+    oldData: existing as unknown as Record<string, unknown>,
+    newData: updated as unknown as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.json(updated);
 });
 
@@ -145,6 +166,15 @@ router.delete("/vehicles/:id", authenticate, requireRole("admin"), async (req, r
     .where(eq(vehiclesTable.id, params.data.id))
     .returning();
   if (!deleted) { res.status(404).json({ error: "Vehicle not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "DELETE",
+    entityType: "vehicle",
+    entityId: deleted.id,
+    oldData: deleted as unknown as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.sendStatus(204);
 });
 

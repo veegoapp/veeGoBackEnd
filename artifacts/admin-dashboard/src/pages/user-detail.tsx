@@ -21,7 +21,7 @@ import { format } from "date-fns";
 import { formatEGP } from "@/lib/currency";
 import {
   ArrowLeft, Edit2, Save, User as UserIcon, Wallet, ShieldX, ShieldCheck,
-  Bell, Plus, MessageSquare, Ticket, CreditCard, AlertCircle, X, Tag, Copy, Check, Trash2,
+  Bell, Plus, MessageSquare, Ticket, CreditCard, AlertCircle, X, Tag, Copy, Check, Trash2, MapPin, Home, Briefcase,
 } from "lucide-react";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useTranslation } from "react-i18next";
@@ -360,6 +360,7 @@ export default function UserDetail() {
           <TabsTrigger value="trips">{t("driverDetail.tabTrips")}</TabsTrigger>
           <TabsTrigger value="payments">{t("userDetail.tabPayments")}</TabsTrigger>
           <TabsTrigger value="complaints">{t("userDetail.tabComplaints")}</TabsTrigger>
+          <TabsTrigger value="locations">{t("locations.tabSavedLocations", "Saved Locations")}</TabsTrigger>
         </TabsList>
 
         {/* Overview */}
@@ -571,6 +572,11 @@ export default function UserDetail() {
             )}
           </Card>
         </TabsContent>
+
+        {/* Saved Locations */}
+        <TabsContent value="locations">
+          <UserSavedLocationsTab userId={Number(userId)} />
+        </TabsContent>
       </Tabs>
 
       {/* ── Edit Dialog ─────────────────────────────────────────────────── */}
@@ -767,5 +773,105 @@ export default function UserDetail() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── User Saved Locations Tab ─────────────────────────────────────────────────
+
+type UserLocation = {
+  id: number;
+  userId: number;
+  label: "home" | "work" | "other";
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const LOCATION_LABEL_ICONS: Record<string, React.ReactNode> = {
+  home: <Home className="h-3.5 w-3.5" />,
+  work: <Briefcase className="h-3.5 w-3.5" />,
+  other: <MapPin className="h-3.5 w-3.5" />,
+};
+
+function UserSavedLocationsTab({ userId }: { userId: number }) {
+  const { t } = useTranslation();
+
+  const { data, isLoading } = useQuery<{ data: UserLocation[]; total: number }>({
+    queryKey: ["user-saved-locations", userId],
+    queryFn: () => adminFetch(`/admin/user-locations?userId=${userId}`),
+    enabled: !!userId,
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <MapPin className="h-4 w-4" />
+          {t("locations.tabSavedLocations", "Saved Locations")}
+        </CardTitle>
+        <span className="text-xs text-muted-foreground">{data?.total ?? 0} {t("auditLogs.records", "records")}</span>
+      </CardHeader>
+      <CardContent className="p-0">
+        {!data?.data.length ? (
+          <div className="py-12 text-center text-muted-foreground text-sm">
+            {t("locations.noSavedLocations", "No saved locations yet")}
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("common.type")}</TableHead>
+                <TableHead>{t("locations.locationName", "Name")}</TableHead>
+                <TableHead>{t("locations.address", "Address")}</TableHead>
+                <TableHead>{t("locations.coordinates", "Coordinates")}</TableHead>
+                <TableHead>{t("locations.default", "Default")}</TableHead>
+                <TableHead>{t("common.date")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.data.map((loc) => (
+                <TableRow key={loc.id}>
+                  <TableCell>
+                    <Badge variant="outline" className="capitalize text-[10px] flex items-center gap-1 w-fit">
+                      {LOCATION_LABEL_ICONS[loc.label]}
+                      {loc.label}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="font-medium text-sm">{loc.name}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">{loc.address}</TableCell>
+                  <TableCell className="font-mono text-[11px] whitespace-nowrap">
+                    {loc.latitude.toFixed(5)}, {loc.longitude.toFixed(5)}
+                  </TableCell>
+                  <TableCell>
+                    {loc.isDefault ? (
+                      <Badge className="text-[10px] bg-green-600 hover:bg-green-700">{t("locations.default", "Default")}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {format(new Date(loc.createdAt), "dd MMM yyyy")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }

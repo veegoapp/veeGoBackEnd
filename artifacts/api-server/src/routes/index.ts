@@ -23,6 +23,11 @@ import zonePricingRouter from "./zonePricing";
 import shuttleRouter from "./shuttle";
 import earningsRouter from "./earnings";
 import vehiclesRouter from "./vehicles";
+import auditLogsRouter from "./auditLogs";
+import locationsRouter from "./locations";
+import paymentsRouter from "./payments";
+import ratingsRouter from "./ratings";
+import chatRouter from "./chat";
 
 const router: IRouter = Router();
 
@@ -50,5 +55,10 @@ router.use(zonePricingRouter);
 router.use(shuttleRouter);
 router.use(earningsRouter);
 router.use(vehiclesRouter);
+router.use(auditLogsRouter);
+router.use(locationsRouter);
+router.use(paymentsRouter);
+router.use(ratingsRouter);
+router.use(chatRouter);
 
 export default router;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, driversTable, usersTable } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { writeAuditLog, getClientIp } from "../lib/auditLog";
 import {
   ListDriversQueryParams,
   GetDriverParams,
@@ -38,6 +39,15 @@ router.post("/drivers", authenticate, requireRole("admin"), async (req, res): Pr
   const parsed = CreateDriverBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [driver] = await db.insert(driversTable).values(parsed.data).returning();
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "CREATE",
+    entityType: "driver",
+    entityId: driver.id,
+    newData: { ...driver, rating: parseFloat(driver.rating) } as unknown as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.status(201).json({ ...driver, rating: parseFloat(driver.rating) });
 });
 
@@ -77,9 +87,21 @@ router.patch("/drivers/:id", authenticate, requireRole("admin"), async (req, res
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateDriverBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [existing] = await db.select().from(driversTable)
+    .where(and(eq(driversTable.id, params.data.id), eq(driversTable.isActive, true)));
   const [updated] = await db.update(driversTable).set(parsed.data)
     .where(and(eq(driversTable.id, params.data.id), eq(driversTable.isActive, true))).returning();
   if (!updated) { res.status(404).json({ error: "Driver not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "UPDATE",
+    entityType: "driver",
+    entityId: updated.id,
+    oldData: existing ? ({ ...existing, rating: parseFloat(existing.rating) } as unknown as Record<string, unknown>) : null,
+    newData: { ...updated, rating: parseFloat(updated.rating) } as unknown as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.json({ ...updated, rating: parseFloat(updated.rating) });
 });
 
@@ -92,6 +114,14 @@ router.delete("/drivers/:id", authenticate, requireRole("admin"), async (req, re
     .where(and(eq(driversTable.id, params.data.id), eq(driversTable.isActive, true)))
     .returning({ id: driversTable.id });
   if (!archived) { res.status(404).json({ error: "Driver not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "DELETE",
+    entityType: "driver",
+    entityId: archived.id,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.sendStatus(204);
 });
 

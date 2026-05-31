@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, promoCodesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { writeAuditLog, getClientIp } from "../lib/auditLog";
 import {
   ListPromoCodesQueryParams,
   CreatePromoCodeBody,
@@ -50,6 +51,15 @@ router.post("/promo", authenticate, requireRole("admin"), async (req, res): Prom
     discountValue: String(parsed.data.discountValue),
     expiryDate: parsed.data.expiryDate ? new Date(parsed.data.expiryDate) : undefined,
   }).returning();
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "CREATE",
+    entityType: "promo_code",
+    entityId: promo.id,
+    newData: formatPromo(promo as Record<string, unknown>),
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.status(201).json(formatPromo(promo as Record<string, unknown>));
 });
 
@@ -58,11 +68,22 @@ router.patch("/promo/:id", authenticate, requireRole("admin"), async (req, res):
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdatePromoCodeBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [existing] = await db.select().from(promoCodesTable).where(eq(promoCodesTable.id, params.data.id));
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.discountValue !== undefined) updateData.discountValue = String(parsed.data.discountValue);
   if (parsed.data.expiryDate) updateData.expiryDate = new Date(parsed.data.expiryDate);
   const [updated] = await db.update(promoCodesTable).set(updateData).where(eq(promoCodesTable.id, params.data.id)).returning();
   if (!updated) { res.status(404).json({ error: "Promo code not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "UPDATE",
+    entityType: "promo_code",
+    entityId: updated.id,
+    oldData: existing ? formatPromo(existing as Record<string, unknown>) : null,
+    newData: formatPromo(updated as Record<string, unknown>),
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.json(formatPromo(updated as Record<string, unknown>));
 });
 
@@ -71,6 +92,15 @@ router.delete("/promo/:id", authenticate, requireRole("admin"), async (req, res)
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const [deleted] = await db.delete(promoCodesTable).where(eq(promoCodesTable.id, params.data.id)).returning();
   if (!deleted) { res.status(404).json({ error: "Promo code not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "DELETE",
+    entityType: "promo_code",
+    entityId: deleted.id,
+    oldData: formatPromo(deleted as Record<string, unknown>),
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.sendStatus(204);
 });
 

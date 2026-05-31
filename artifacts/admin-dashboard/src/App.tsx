@@ -35,6 +35,8 @@ import Payments from "@/pages/payments";
 import Reports from "@/pages/reports";
 import DriverDetail from "@/pages/driver-detail";
 import TripDetail from "@/pages/trip-detail";
+import AuditLogs from "@/pages/audit-logs";
+import Ratings from "@/pages/ratings";
 
 const logoutRef = { current: () => {} };
 
@@ -121,6 +123,8 @@ function Router() {
         <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
         <Route path="/staff" component={() => <ProtectedRoute component={Staff} />} />
         <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+        <Route path="/audit-logs" component={() => <ProtectedRoute component={AuditLogs} />} />
+        <Route path="/ratings" component={() => <ProtectedRoute component={Ratings} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

@@ -17,7 +17,7 @@ import { formatEGP } from "@/lib/currency";
 import {
   ArrowLeft, Star, Phone, Bus, ShieldX, ShieldCheck, ToggleLeft, ToggleRight,
   UserCircle, Activity, CheckCircle2, XCircle, Clock, FileImage, ZoomIn, Hash,
-  CalendarDays, Wallet, CreditCard, Mail, Tag, Copy, Check, Bell, Trash2, MessageSquare,
+  CalendarDays, Wallet, CreditCard, Mail, Tag, Copy, Check, Bell, Trash2, MessageSquare, MapPin,
 } from "lucide-react";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useTranslation } from "react-i18next";
@@ -364,6 +364,7 @@ export default function DriverDetail() {
             {t("driverDetail.tabDocuments")}
             {pendingDocs > 0 && <span className="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold">{pendingDocs}</span>}
           </TabsTrigger>
+          <TabsTrigger value="locations">{t("locations.tabLocationHistory", "Location History")}</TabsTrigger>
         </TabsList>
 
         {/* Overview */}
@@ -549,6 +550,11 @@ export default function DriverDetail() {
             </div>
           )}
         </TabsContent>
+
+        {/* Location History */}
+        <TabsContent value="locations">
+          <DriverLocationHistoryTab driverId={Number(driverId)} />
+        </TabsContent>
       </Tabs>
 
       {/* ── Promo Code Dialog ────────────────────────────────────────────── */}
@@ -673,5 +679,108 @@ export default function DriverDetail() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ─── Driver Location History Tab ─────────────────────────────────────────────
+
+type DriverLocation = {
+  id: number;
+  driverId: number;
+  latitude: number;
+  longitude: number;
+  speed: number | null;
+  heading: number | null;
+  recordedAt: string;
+};
+
+function DriverLocationHistoryTab({ driverId }: { driverId: number }) {
+  const { t } = useTranslation();
+  const [page, setPage] = useState(1);
+  const LIMIT = 50;
+
+  const { data, isLoading } = useQuery<{ data: DriverLocation[]; total: number; page: number; limit: number }>({
+    queryKey: ["driver-locations", driverId, page],
+    queryFn: () => adminFetch(`/admin/driver-locations?driverId=${driverId}&page=${page}&limit=${LIMIT}`),
+    enabled: !!driverId,
+  });
+
+  const totalPages = data ? Math.ceil(data.total / LIMIT) : 1;
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4 space-y-2">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-base flex items-center gap-2">
+          <MapPin className="h-4 w-4" />
+          {t("locations.tabLocationHistory", "Location History")}
+        </CardTitle>
+        {data && (
+          <span className="text-xs text-muted-foreground">{data.total} {t("auditLogs.records", "records")}</span>
+        )}
+      </CardHeader>
+      <CardContent className="p-0">
+        {!data?.data.length ? (
+          <div className="py-12 text-center text-muted-foreground text-sm">
+            {t("locations.noLocationHistory", "No location history recorded yet")}
+          </div>
+        ) : (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("locations.latitude", "Latitude")}</TableHead>
+                  <TableHead>{t("locations.longitude", "Longitude")}</TableHead>
+                  <TableHead>{t("locations.speed", "Speed")}</TableHead>
+                  <TableHead>{t("locations.heading", "Heading")}</TableHead>
+                  <TableHead>{t("auditLogs.timestamp", "Timestamp")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.data.map((loc) => (
+                  <TableRow key={loc.id}>
+                    <TableCell className="font-mono text-xs">{loc.latitude.toFixed(6)}</TableCell>
+                    <TableCell className="font-mono text-xs">{loc.longitude.toFixed(6)}</TableCell>
+                    <TableCell className="text-xs">
+                      {loc.speed != null ? `${loc.speed.toFixed(1)} km/h` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {loc.heading != null ? `${loc.heading.toFixed(0)}°` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(loc.recordedAt), "dd MMM yyyy, HH:mm:ss")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {totalPages > 1 && (
+              <div className="border-t border-border p-3">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} />
+                    </PaginationItem>
+                    <PaginationItem className="text-sm text-muted-foreground px-4">{page} / {totalPages}</PaginationItem>
+                    <PaginationItem>
+                      <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"} />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, zonesTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { writeAuditLog, getClientIp } from "../lib/auditLog";
 import { z } from "zod";
 
 const router = Router();
@@ -28,7 +29,7 @@ router.get("/zones", authenticate, requireRole("admin"), async (req, res): Promi
       db.select({ count: sql<number>`count(*)::int` }).from(zonesTable),
     ]);
     res.json({ data, total: countResult[0].count, page, limit });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to list zones" });
   }
 });
@@ -38,8 +39,17 @@ router.post("/zones", authenticate, requireRole("admin"), async (req, res): Prom
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   try {
     const [zone] = await db.insert(zonesTable).values(parsed.data).returning();
+    void writeAuditLog({
+      userId: req.user?.id,
+      action: "CREATE",
+      entityType: "zone",
+      entityId: zone.id,
+      newData: zone as unknown as Record<string, unknown>,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"] ?? null,
+    });
     res.status(201).json(zone);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to create zone" });
   }
 });
@@ -58,14 +68,25 @@ router.patch("/zones/:id", authenticate, requireRole("admin"), async (req, res):
   const parsed = ZoneBody.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   try {
+    const [existing] = await db.select().from(zonesTable).where(eq(zonesTable.id, params.data.id));
+    if (!existing) { res.status(404).json({ error: "Zone not found" }); return; }
     const [updated] = await db
       .update(zonesTable)
       .set({ ...parsed.data, updatedAt: new Date() })
       .where(eq(zonesTable.id, params.data.id))
       .returning();
-    if (!updated) { res.status(404).json({ error: "Zone not found" }); return; }
+    void writeAuditLog({
+      userId: req.user?.id,
+      action: "UPDATE",
+      entityType: "zone",
+      entityId: updated.id,
+      oldData: existing as unknown as Record<string, unknown>,
+      newData: updated as unknown as Record<string, unknown>,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"] ?? null,
+    });
     res.json(updated);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to update zone" });
   }
 });
@@ -75,6 +96,15 @@ router.delete("/zones/:id", authenticate, requireRole("admin"), async (req, res)
   if (!params.success) { res.status(400).json({ error: "Invalid zone id" }); return; }
   const [deleted] = await db.delete(zonesTable).where(eq(zonesTable.id, params.data.id)).returning();
   if (!deleted) { res.status(404).json({ error: "Zone not found" }); return; }
+  void writeAuditLog({
+    userId: req.user?.id,
+    action: "DELETE",
+    entityType: "zone",
+    entityId: deleted.id,
+    oldData: deleted as unknown as Record<string, unknown>,
+    ipAddress: getClientIp(req),
+    userAgent: req.headers["user-agent"] ?? null,
+  });
   res.sendStatus(204);
 });
 

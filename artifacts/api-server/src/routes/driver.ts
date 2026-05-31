@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable } from "@workspace/db";
+import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable } from "@workspace/db";
 import { eq, and, or, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { signAccessToken, signRefreshToken } from "../lib/jwt";
@@ -388,6 +388,14 @@ router.patch("/driver/location", authenticate, requireRole("driver"), async (req
     currentSpeed: parsed.data.speed,
     currentHeading: parsed.data.heading,
   }).where(eq(driversTable.id, driver.id)).returning();
+
+  void db.insert(driverLocationsTable).values({
+    driverId: driver.id,
+    latitude: parsed.data.latitude,
+    longitude: parsed.data.longitude,
+    speed: parsed.data.speed ?? null,
+    heading: parsed.data.heading ?? null,
+  });
 
   if (parsed.data.tripId) {
     const tripId = parsed.data.tripId;

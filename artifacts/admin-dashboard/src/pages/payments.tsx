@@ -6,14 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import {
   Wallet, ArrowUpRight, Percent, DollarSign, Users, Star,
   TrendingUp, ArrowDownLeft, ArrowUpRight as ArrowUp, RefreshCw,
-  CheckCircle2, Clock, Ban, ChevronDown, ChevronUp,
+  CheckCircle2, Clock, Ban, ChevronDown, ChevronUp, CreditCard, Eye,
 } from "lucide-react";
+import { formatEGP } from "@/lib/currency";
 
 type Transaction = {
   id: number;
@@ -607,12 +611,318 @@ function CommissionView() {
   );
 }
 
+// ─── Payment Ledger (paymentsTable) ──────────────────────────────────────────
+
+type PaymentRecord = {
+  id: number;
+  userId: number;
+  bookingId: number | null;
+  rideId: number | null;
+  amount: string;
+  method: "wallet" | "cash" | "card";
+  status: "pending" | "completed" | "failed" | "refunded";
+  transactionRef: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  userName: string | null;
+  userEmail: string | null;
+  userPhone: string | null;
+};
+
+type PaymentSummary = {
+  total: number;
+  totalAmount: number;
+  completedCount: number;
+  completedAmount: number;
+  refundedCount: number;
+  refundedAmount: number;
+  pendingCount: number;
+  failedCount: number;
+  walletCount: number;
+  cashCount: number;
+  cardCount: number;
+};
+
+function statusColor(s: string) {
+  if (s === "completed") return "text-green-600 border-green-200 bg-green-50 dark:bg-green-950";
+  if (s === "refunded")  return "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950";
+  if (s === "failed")    return "text-red-600 border-red-200 bg-red-50 dark:bg-red-950";
+  return "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950";
+}
+
+function methodIcon(m: string) {
+  if (m === "card")   return <CreditCard className="h-3.5 w-3.5" />;
+  if (m === "wallet") return <Wallet className="h-3.5 w-3.5" />;
+  return <DollarSign className="h-3.5 w-3.5" />;
+}
+
+function PaymentLedgerView() {
+  const [page, setPage] = useState(1);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterMethod, setFilterMethod] = useState<string>("all");
+  const [selected, setSelected] = useState<PaymentRecord | null>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const LIMIT = 25;
+
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("limit", String(LIMIT));
+  if (filterStatus !== "all") params.set("status", filterStatus);
+  if (filterMethod !== "all") params.set("method", filterMethod);
+
+  const { data, isLoading } = useQuery<{ data: PaymentRecord[]; total: number; page: number; limit: number }>({
+    queryKey: ["admin-payments", page, filterStatus, filterMethod],
+    queryFn: () => adminFetch(`/admin/payments?${params.toString()}`),
+  });
+
+  const { data: summary } = useQuery<PaymentSummary>({
+    queryKey: ["admin-payments-summary"],
+    queryFn: () => adminFetch("/admin/payments/summary"),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) =>
+      adminFetch(`/admin/payments/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-payments-summary"] });
+      setSelected(null);
+      toast({ title: "Payment status updated" });
+    },
+    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+  });
+
+  const rows = data?.data ?? [];
+  const totalPages = data ? Math.ceil(data.total / LIMIT) : 1;
+
+  const handleFilterChange = (key: string, val: string) => {
+    setPage(1);
+    if (key === "status") setFilterStatus(val);
+    if (key === "method") setFilterMethod(val);
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-3 rounded-xl bg-purple-500/10">
+          <CreditCard className="h-6 w-6 text-purple-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">Payment Ledger</h1>
+          <p className="text-sm text-muted-foreground">Authoritative record of all payment transactions (bookings + rides)</p>
+        </div>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {!summary ? (
+          Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
+        ) : [
+          { label: "Total Payments",   value: summary.total,                           sub: "all records",       color: "bg-primary/10 text-primary" },
+          { label: "Completed",        value: formatEGP(summary.completedAmount),       sub: `${summary.completedCount} transactions`, color: "bg-green-500/10 text-green-600" },
+          { label: "Refunded",         value: formatEGP(summary.refundedAmount),        sub: `${summary.refundedCount} refunds`,       color: "bg-blue-500/10 text-blue-600" },
+          { label: "Pending / Failed", value: summary.pendingCount + summary.failedCount, sub: "require attention", color: "bg-amber-500/10 text-amber-600" },
+        ].map((s) => (
+          <Card key={s.label}>
+            <CardContent className="pt-5 flex items-center gap-3">
+              <div className={`p-2.5 rounded-lg ${s.color}`}>
+                <CreditCard className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-xl font-bold">{s.value}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+                <p className="text-[10px] text-muted-foreground">{s.sub}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap items-center">
+        <Select value={filterStatus} onValueChange={(v) => handleFilterChange("status", v)}>
+          <SelectTrigger className="w-40 h-9 text-sm"><SelectValue placeholder="All statuses" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="refunded">Refunded</SelectItem>
+            <SelectItem value="failed">Failed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={filterMethod} onValueChange={(v) => handleFilterChange("method", v)}>
+          <SelectTrigger className="w-36 h-9 text-sm"><SelectValue placeholder="All methods" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All methods</SelectItem>
+            <SelectItem value="wallet">Wallet</SelectItem>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="card">Card</SelectItem>
+          </SelectContent>
+        </Select>
+        {(filterStatus !== "all" || filterMethod !== "all") && (
+          <Button size="sm" variant="ghost" className="h-9" onClick={() => { setFilterStatus("all"); setFilterMethod("all"); setPage(1); }}>
+            Clear
+          </Button>
+        )}
+        {data && (
+          <span className="text-xs text-muted-foreground ml-auto">{data.total} records</span>
+        )}
+      </div>
+
+      {/* Table */}
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="p-4 space-y-3">{Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : !rows.length ? (
+            <div className="py-12 text-center text-muted-foreground text-sm">No payment records found</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>#</TableHead>
+                  <TableHead>User</TableHead>
+                  <TableHead>Reference</TableHead>
+                  <TableHead>Method</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="font-mono text-sm">#{p.id}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="text-sm font-medium">{p.userName ?? `User #${p.userId}`}</p>
+                        <p className="text-[10px] text-muted-foreground">{p.userEmail ?? ""}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {p.bookingId ? `Booking #${p.bookingId}` : p.rideId ? `Ride #${p.rideId}` : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize text-[10px] gap-1">
+                        {methodIcon(p.method)}{p.method}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`capitalize text-[10px] ${statusColor(p.status)}`}>
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className={`text-right font-bold text-sm ${p.status === "refunded" ? "text-blue-600" : p.status === "completed" ? "text-green-600" : ""}`}>
+                      {p.status === "refunded" ? "-" : ""}{formatEGP(parseFloat(p.amount))}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(p.createdAt), "dd MMM, HH:mm")}
+                    </TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setSelected(p)}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {totalPages > 1 && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} />
+            </PaginationItem>
+            <PaginationItem className="text-sm text-muted-foreground px-4">Page {page} of {totalPages}</PaginationItem>
+            <PaginationItem>
+              <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"} />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+
+      {/* Detail dialog */}
+      {selected && (
+        <Dialog open={!!selected} onOpenChange={(o) => !o && setSelected(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader><DialogTitle className="flex items-center gap-2"><CreditCard className="h-4 w-4" /> Payment #{selected.id}</DialogTitle></DialogHeader>
+            <div className="space-y-3 text-sm">
+              {[
+                { label: "User",           value: selected.userName ?? `User #${selected.userId}` },
+                { label: "Email",          value: selected.userEmail ?? "—" },
+                { label: "Reference",      value: selected.bookingId ? `Booking #${selected.bookingId}` : selected.rideId ? `Ride #${selected.rideId}` : "—" },
+                { label: "Method",         value: <Badge variant="outline" className="capitalize text-[10px]">{selected.method}</Badge> },
+                { label: "Status",         value: <Badge variant="outline" className={`capitalize text-[10px] ${statusColor(selected.status)}`}>{selected.status}</Badge> },
+                { label: "Amount",         value: <span className="font-bold">{formatEGP(parseFloat(selected.amount))}</span> },
+                { label: "Transaction Ref",value: selected.transactionRef ?? "—" },
+                { label: "Notes",          value: selected.notes ?? "—" },
+                { label: "Created",        value: format(new Date(selected.createdAt), "dd MMM yyyy, HH:mm:ss") },
+                { label: "Updated",        value: format(new Date(selected.updatedAt), "dd MMM yyyy, HH:mm:ss") },
+              ].map((row) => (
+                <div key={row.label} className="flex items-start justify-between gap-4 py-1 border-b border-border last:border-0">
+                  <span className="text-muted-foreground text-xs w-32 shrink-0">{row.label}</span>
+                  <span className="text-xs text-right">{row.value}</span>
+                </div>
+              ))}
+            </div>
+            {selected.status === "pending" && (
+              <div className="flex gap-2 pt-2">
+                <Button size="sm" variant="destructive" className="flex-1" disabled={updateMutation.isPending}
+                  onClick={() => updateMutation.mutate({ id: selected.id, status: "failed" })}>
+                  Mark Failed
+                </Button>
+                <Button size="sm" className="flex-1" disabled={updateMutation.isPending}
+                  onClick={() => updateMutation.mutate({ id: selected.id, status: "completed" })}>
+                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Mark Completed
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
 export default function Payments() {
   const [, params] = useRoute("/payments/:section");
-  const section = params?.section ?? "wallets";
+  const [section, setSection] = useState(params?.section ?? "ledger");
 
-  if (section === "wallets")    return <WalletsView />;
-  if (section === "payouts")    return <PayoutsView />;
-  if (section === "commission") return <CommissionView />;
-  return <WalletsView />;
+  const TABS = [
+    { key: "ledger",     label: "Payment Ledger" },
+    { key: "wallets",    label: "Wallets" },
+    { key: "payouts",    label: "Driver Payouts" },
+    { key: "commission", label: "Commission" },
+  ];
+
+  return (
+    <div>
+      <div className="border-b border-border px-6 pt-4 flex gap-1">
+        {TABS.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setSection(tab.key)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              section === tab.key
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {section === "ledger"     && <PaymentLedgerView />}
+      {section === "wallets"    && <WalletsView />}
+      {section === "payouts"    && <PayoutsView />}
+      {section === "commission" && <CommissionView />}
+    </div>
+  );
 }
