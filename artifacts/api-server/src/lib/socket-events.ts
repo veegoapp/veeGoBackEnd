@@ -30,6 +30,9 @@ export const SOCKET_EVENTS = {
   // ── Server → Admin room ──────────────────────────────────────────────────────
   ADMIN_NEW_CHAT_MESSAGE:  "admin:chat:new",
 
+  // ── Server → All authenticated clients (broadcast) ───────────────────────────
+  SERVICE_CONTROL_CHANGED: "service:control:changed",
+
   // ── Server → Socket direct ───────────────────────────────────────────────────
   DRIVER_LOCATION_ACK:   "driver:location:ack",
   ERROR:                 "error",

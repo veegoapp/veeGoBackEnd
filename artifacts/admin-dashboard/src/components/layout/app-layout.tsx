@@ -223,10 +223,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {
           title: t("nav.services"), href: "/services", icon: Layers,
           subItems: [
-            { title: t("nav.cars"), href: "/services", icon: Car },
-            { title: t("nav.shuttle"), href: "/services", icon: Bus },
-            { title: t("nav.motorcycles"), href: "/services", icon: Bike },
-            { title: t("nav.delivery"), href: "/services", icon: PackageOpen, comingSoon: true },
+            { title: t("nav.cars"), href: "/services/car", icon: Car },
+            { title: t("nav.shuttle"), href: "/services/shuttle", icon: Bus },
+            { title: t("nav.motorcycles"), href: "/services/motorcycle", icon: Bike },
+            { title: t("nav.delivery"), href: "/services/delivery", icon: PackageOpen },
           ],
         },
         { title: t("nav.routes"), href: "/routes", icon: Map },

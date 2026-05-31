@@ -117,6 +117,7 @@ function Router() {
         <Route path="/pricing" component={() => <ProtectedRoute component={Pricing} />} />
         <Route path="/zones" component={() => <ProtectedRoute component={Zones} />} />
         <Route path="/services" component={() => <ProtectedRoute component={Services} />} />
+        <Route path="/services/:type" component={() => <ProtectedRoute component={Services} />} />
         <Route path="/live-tracking" component={() => <ProtectedRoute component={LiveTracking} />} />
         <Route path="/support" component={() => <ProtectedRoute component={Support} />} />
         <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />

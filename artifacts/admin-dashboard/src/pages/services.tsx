@@ -936,15 +936,121 @@ function DeliveryView() {
   );
 }
 
+// ─── Services Landing Page ────────────────────────────────────────────────────
+
+const LANDING_CARDS = [
+  {
+    type: "car",
+    icon: Car,
+    label: "Car Services",
+    desc: "On-demand car rides — manage drivers, pricing, and service availability",
+    color: "text-blue-600",
+    bg: "bg-blue-500/10",
+    border: "hover:border-blue-300",
+    href: "/services/car",
+  },
+  {
+    type: "shuttle",
+    icon: Bus,
+    label: "Shuttle Services",
+    desc: "Scheduled shuttle routes, buses, driver assignments, and capacity",
+    color: "text-amber-600",
+    bg: "bg-amber-500/10",
+    border: "hover:border-amber-300",
+    href: "/services/shuttle",
+  },
+  {
+    type: "motorcycle",
+    icon: Bike,
+    label: "Motorcycle Services",
+    desc: "On-demand motorcycle rides — control availability and zone access",
+    color: "text-orange-600",
+    bg: "bg-orange-500/10",
+    border: "hover:border-orange-300",
+    href: "/services/motorcycle",
+  },
+  {
+    type: "delivery",
+    icon: PackageOpen,
+    label: "Delivery Services",
+    desc: "Package and food delivery — configure availability and service mode",
+    color: "text-violet-600",
+    bg: "bg-violet-500/10",
+    border: "hover:border-violet-300",
+    href: "/services/delivery",
+  },
+] as const;
+
+function ServicesLanding() {
+  const allControlsQuery = useQuery({
+    queryKey: ["service-controls-all"],
+    queryFn: () => adminFetch<{ data: Array<{ serviceType: string; isEnabled: boolean; displayMode: string }> }>("/services/control"),
+  });
+
+  const controlMap = Object.fromEntries(
+    (allControlsQuery.data?.data ?? []).map((c) => [c.serviceType, c])
+  );
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Services</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Manage availability, display mode, and service controls for each transport type
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {LANDING_CARDS.map(({ type, icon: Icon, label, desc, color, bg, border, href }) => {
+          const control = controlMap[type];
+          return (
+            <Link key={type} href={href}>
+              <Card className={`cursor-pointer hover:shadow-md transition-all ${border} h-full`}>
+                <CardContent className="pt-5 pb-5">
+                  <div className="flex items-start gap-4">
+                    <div className={`p-3 rounded-xl ${bg} shrink-0`}>
+                      <Icon className={`h-6 w-6 ${color}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-base">{label}</p>
+                        {control ? (
+                          <DisplayModeBadge mode={control.displayMode} />
+                        ) : null}
+                        {control && !control.isEnabled && (
+                          <Badge variant="outline" className="text-xs text-red-500 border-red-300 bg-red-50 dark:bg-red-950">
+                            Disabled
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{desc}</p>
+                      <div className="flex items-center gap-1 text-xs text-primary mt-3 font-medium">
+                        Open Control Panel <ArrowRight className="h-3 w-3" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Root page ────────────────────────────────────────────────────────────────
 
 export default function Services() {
-  const [, params] = useRoute("/services/:type");
+  const [matchType, params] = useRoute("/services/:type");
+
+  if (!matchType) return <ServicesLanding />;
+
   const type = params?.type ?? "car";
 
   if (type === "delivery") return <DeliveryView />;
   if (type === "motorcycle") return <MotorcycleView />;
   if (type === "shuttle") return <ShuttleView />;
-  if (type === "car" || type === "bike") return <CarBikeView type={type} />;
-  return <CarBikeView type="car" />;
+  if (type === "car" || type === "bike") return <CarBikeView type={type as "car" | "bike"} />;
+  return <ServicesLanding />;
 }

@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { db, serviceControlsTable, serviceControlLogsTable, zonesTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { db, serviceControlsTable, serviceControlLogsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { getIO } from "../socket";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import { z } from "zod";
 
 const router = Router();
@@ -125,6 +127,23 @@ router.patch("/admin/services/:type/control", authenticate, requireRole("admin")
       updated as unknown as Record<string, unknown>,
     );
 
+    const io = getIO();
+    if (io) {
+      const broadcastPayload = {
+        serviceType: updated.serviceType,
+        isEnabled: updated.isEnabled,
+        displayMode: updated.displayMode,
+        unavailableMessage: updated.unavailableMessage,
+        unavailableAction: updated.unavailableAction,
+        activeZoneIds: updated.activeZoneIds,
+        maintenanceEta: updated.maintenanceEta,
+        changedBy: req.user?.id ?? null,
+        changedAt: new Date().toISOString(),
+      };
+      io.to(SOCKET_ROOMS.ADMIN).emit(SOCKET_EVENTS.SERVICE_CONTROL_CHANGED, broadcastPayload);
+      io.emit(SOCKET_EVENTS.SERVICE_CONTROL_CHANGED, broadcastPayload);
+    }
+
     const logs = await getLastLogs(params.data.type, 10);
     res.json({ ...updated, logs });
   } catch (err) {
@@ -151,6 +170,23 @@ router.post("/admin/services/:type/control/reset", authenticate, requireRole("ad
       current as unknown as Record<string, unknown>,
       updated as unknown as Record<string, unknown>,
     );
+
+    const io = getIO();
+    if (io) {
+      const broadcastPayload = {
+        serviceType: updated.serviceType,
+        isEnabled: updated.isEnabled,
+        displayMode: updated.displayMode,
+        unavailableMessage: updated.unavailableMessage,
+        unavailableAction: updated.unavailableAction,
+        activeZoneIds: updated.activeZoneIds,
+        maintenanceEta: updated.maintenanceEta,
+        changedBy: req.user?.id ?? null,
+        changedAt: new Date().toISOString(),
+      };
+      io.to(SOCKET_ROOMS.ADMIN).emit(SOCKET_EVENTS.SERVICE_CONTROL_CHANGED, broadcastPayload);
+      io.emit(SOCKET_EVENTS.SERVICE_CONTROL_CHANGED, broadcastPayload);
+    }
 
     const logs = await getLastLogs(params.data.type, 10);
     res.json({ ...updated, logs });
