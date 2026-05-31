@@ -220,9 +220,25 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     {
       label: t("nav.groupTransport"),
       items: [
-        { title: t("nav.services"), href: "/services", icon: Layers },
+        {
+          title: t("nav.services"), href: "/services", icon: Layers,
+          subItems: [
+            { title: t("nav.cars"), href: "/services", icon: Car },
+            { title: t("nav.shuttle"), href: "/services", icon: Bus },
+            { title: t("nav.motorcycles"), href: "/services", icon: Bike },
+            { title: t("nav.delivery"), href: "/services", icon: PackageOpen, comingSoon: true },
+          ],
+        },
         { title: t("nav.routes"), href: "/routes", icon: Map },
-        { title: t("nav.pricing"), href: "/pricing", icon: Tag },
+        {
+          title: t("nav.pricing"), href: "/pricing", icon: Tag,
+          subItems: [
+            { title: t("nav.cars"), href: "/pricing", icon: Car },
+            { title: t("nav.motorcycles"), href: "/pricing", icon: Bike },
+            { title: t("nav.surge"), href: "/pricing", icon: Zap },
+            { title: t("nav.delivery"), href: "/pricing", icon: PackageOpen, comingSoon: true },
+          ],
+        },
       ],
     },
     {
@@ -235,8 +251,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     {
       label: t("nav.groupFinance"),
       items: [
-        { title: t("nav.payments"), href: "/payments", icon: CreditCard },
-        { title: t("nav.wallet"), href: "/wallet", icon: Wallet },
+        {
+          title: t("nav.payments"), href: "/payments", icon: CreditCard,
+          subItems: [
+            { title: t("nav.transactions"), href: "/payments", icon: CreditCard },
+            { title: t("nav.wallets"), href: "/wallet", icon: Wallet },
+            { title: t("nav.payouts"), href: "/payments", icon: ArrowUpRight },
+            { title: t("nav.commission"), href: "/payments", icon: Percent },
+          ],
+        },
       ],
     },
     {
@@ -244,7 +267,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { title: t("nav.support"), href: "/support", icon: MessageSquare },
         { title: t("nav.notifications"), href: "/notifications", icon: Bell },
-        { title: t("nav.reports"), href: "/reports", icon: BarChart3 },
+        {
+          title: t("nav.reports"), href: "/reports", icon: BarChart3,
+          subItems: [
+            { title: t("nav.revenue"), href: "/reports", icon: DollarSign },
+            { title: t("nav.trips"), href: "/reports", icon: Navigation },
+            { title: t("nav.drivers"), href: "/reports", icon: UserCircle },
+            { title: t("nav.passengers"), href: "/reports", icon: Users },
+            { title: t("nav.zones"), href: "/reports", icon: MapPin },
+            { title: t("nav.services"), href: "/reports", icon: Layers },
+            { title: t("nav.promoCodes"), href: "/reports", icon: Tags },
+            { title: t("nav.complaints"), href: "/reports", icon: MessageSquare },
+          ],
+        },
       ],
     },
     {

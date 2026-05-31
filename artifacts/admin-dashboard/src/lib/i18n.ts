@@ -13,6 +13,8 @@ export function getStoredLanguage(): string {
 
 export function setStoredLanguage(lang: string): void {
   localStorage.setItem(STORAGE_KEY, lang);
+  applyDirection(lang);
+  i18n.changeLanguage(lang);
 }
 
 export function applyDirection(lang: string): void {
@@ -29,16 +31,36 @@ i18n
       en: { translation: enTranslation },
       ar: { translation: arTranslation },
     },
+
     lng: getStoredLanguage(),
+
     fallbackLng: "en",
+
+    debug: process.env.NODE_ENV === "development",
+
+    saveMissing: true,
+
+    missingKeyHandler: (lng, ns, key) => {
+      console.warn(`[i18n missing key] ${lng} -> ${key}`);
+    },
+
+    detection: {
+      order: [],
+
+      // مهم: يمنع التغيير العشوائي من المتصفح
+      caches: [],
+    },
+
     interpolation: {
       escapeValue: false,
     },
-    detection: {
-      order: [],
+
+    react: {
+      useSuspense: false,
     },
   });
 
+// apply initial direction
 applyDirection(getStoredLanguage());
 
 export default i18n;
