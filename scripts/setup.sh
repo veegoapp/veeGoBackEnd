@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+echo "Checking environment..."
+
 if [ -z "$NEON_DATABASE_URL" ] && [ -z "$DATABASE_URL" ]; then
   echo "DB missing"
   exit 1
@@ -11,18 +13,24 @@ if [ -z "$SESSION_SECRET" ]; then
   exit 1
 fi
 
-echo "Installing dependencies..."
+echo "Installing dependencies once..."
 pnpm install
 
-# API
+echo "Starting API server..."
 cd artifacts/api-server
-pnpm install
 pnpm build
 pnpm start &
+API_PID=$!
 
-cd ..
+cd ../..
 
-# Admin
+echo "Starting Admin dashboard..."
 cd artifacts/admin-dashboard
-pnpm install
-pnpm dev --host 0.0.0.0
+pnpm dev --host 0.0.0.0 &
+ADMIN_PID=$!
+
+cd ../..
+
+echo "All services running..."
+
+wait $API_PID $ADMIN_PID
