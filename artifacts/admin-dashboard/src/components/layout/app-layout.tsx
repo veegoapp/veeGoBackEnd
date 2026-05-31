@@ -214,7 +214,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.bookings"), href: "/bookings", icon: Ticket },
           ],
         },
-        { title: t("nav.staff"), href: "/staff", icon: Shield },
       ],
     },
     {
@@ -233,10 +232,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {
           title: t("nav.pricing"), href: "/pricing", icon: Tag,
           subItems: [
-            { title: t("nav.cars"), href: "/pricing", icon: Car },
-            { title: t("nav.motorcycles"), href: "/pricing", icon: Bike },
-            { title: t("nav.surge"), href: "/pricing", icon: Zap },
-            { title: t("nav.delivery"), href: "/pricing", icon: PackageOpen, comingSoon: true },
+            { title: t("nav.cars"), href: "/pricing/car", icon: Car },
+            { title: t("nav.motorcycles"), href: "/pricing/bike", icon: Bike },
+            { title: t("nav.surge"), href: "/pricing/surge", icon: Zap },
+            { title: t("nav.delivery"), href: "/pricing/delivery", icon: PackageOpen, comingSoon: true },
           ],
         },
       ],

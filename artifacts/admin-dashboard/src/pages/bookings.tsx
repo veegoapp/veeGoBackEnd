@@ -3,18 +3,21 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Ticket, Filter, Ban, Download, Search, X, RefreshCcw } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { exportCSV, exportExcel, todayStr } from "@/lib/export";
+import { Ticket, Ban, Search, X, Eye, RefreshCcw, DollarSign, Download } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { formatEGP } from "@/lib/currency";
+import { exportCSV } from "@/lib/export";
 import { useTranslation } from "react-i18next";
+import { MoreHorizontal } from "lucide-react";
 
 type BookingRow = {
   id: number;
@@ -25,12 +28,16 @@ type BookingRow = {
   status: string;
   paymentStatus: string;
   createdAt: string;
-  promoCodId: number | null;
+  promoCodeId: number | null;
   userName: string | null;
   userEmail: string | null;
   userPhone: string | null;
   serviceType: string | null;
   departureTime: string | null;
+  arrivalTime: string | null;
+  routeName: string | null;
+  fromLocation: string | null;
+  toLocation: string | null;
 };
 
 type BookingsResponse = {
@@ -63,6 +70,15 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4 py-1.5 border-b last:border-0 text-sm">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="font-medium text-right">{value ?? "—"}</span>
+    </div>
+  );
+}
+
 export default function Bookings() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -70,6 +86,11 @@ export default function Bookings() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const debouncedSearch = useDebounce(search, 350);
+
+  const [detailBooking, setDetailBooking] = useState<BookingRow | null>(null);
+  const [refundDialog, setRefundDialog] = useState<{ open: false } | { open: true; booking: BookingRow }>({ open: false });
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -91,28 +112,53 @@ export default function Bookings() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: (id: number) =>
-      adminFetch(`/bookings/${id}/cancel`, { method: "PATCH" }),
+    mutationFn: (id: number) => adminFetch(`/bookings/${id}/cancel`, { method: "PATCH" }),
     onSuccess: () => {
       toast({ title: t("bookings.cancelSuccess") });
       queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
     },
     onError: (err: Error) =>
-      toast({
-        title: t("bookings.cancelFailed"),
-        description: err.message,
-        variant: "destructive",
+      toast({ title: t("bookings.cancelFailed"), description: err.message, variant: "destructive" }),
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: ({ userId, amount, description }: { userId: number; amount: number; description: string }) =>
+      adminFetch("/admin/wallet/refund", {
+        method: "POST",
+        body: JSON.stringify({ userId, amount, description }),
       }),
+    onSuccess: () => {
+      toast({ title: "Refund issued successfully" });
+      setRefundDialog({ open: false });
+      setRefundAmount("");
+      setRefundReason("");
+      queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Refund failed", description: err.message, variant: "destructive" }),
   });
 
   const handleCancel = useCallback(
     (id: number) => {
-      if (confirm(t("bookings.cancelConfirm"))) {
-        cancelMutation.mutate(id);
-      }
+      if (confirm(t("bookings.cancelConfirm"))) cancelMutation.mutate(id);
     },
-    [cancelMutation, t]
+    [cancelMutation, t],
   );
+
+  const handleRefundSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!refundDialog.open) return;
+    const amt = parseFloat(refundAmount);
+    if (isNaN(amt) || amt <= 0) {
+      toast({ title: "Enter a valid positive amount", variant: "destructive" });
+      return;
+    }
+    refundMutation.mutate({
+      userId: refundDialog.booking.userId,
+      amount: amt,
+      description: refundReason || `Admin refund for booking #${refundDialog.booking.id}`,
+    });
+  };
 
   const clearFilters = () => {
     setSearch("");
@@ -123,119 +169,220 @@ export default function Bookings() {
   };
 
   const hasFilters = search || statusFilter !== "all" || fromDate || toDate;
-
   const bookings = data?.data ?? [];
   const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
 
-  const buildExportRows = () =>
-    bookings.map((b) => {
-      const createdDate = b.createdAt ? new Date(b.createdAt) : null;
-      const depDate = b.departureTime ? new Date(b.departureTime) : null;
-
-      return {
+  const handleExport = () => {
+    exportCSV(
+      bookings.map((b) => ({
         "Booking ID": b.id,
-        Date:
-          createdDate && !isNaN(createdDate.getTime())
-            ? format(createdDate, "yyyy-MM-dd HH:mm")
-            : "",
+        Date: b.createdAt ? format(new Date(b.createdAt), "yyyy-MM-dd HH:mm") : "",
         "Customer Name": b.userName ?? `User #${b.userId}`,
         "Customer Email": b.userEmail ?? "",
         "Customer Phone": b.userPhone ?? "",
         "Trip ID": b.tripId,
+        Route: b.routeName ?? "",
+        From: b.fromLocation ?? "",
+        To: b.toLocation ?? "",
         Service: b.serviceType ?? "",
-        Departure:
-          depDate && !isNaN(depDate.getTime())
-            ? format(depDate, "yyyy-MM-dd HH:mm")
-            : "",
+        Departure: b.departureTime ? format(new Date(b.departureTime), "yyyy-MM-dd HH:mm") : "",
         Seats: b.seatCount,
-        "Total Price (EGP)": b.totalPrice,
+        "Total Price": b.totalPrice,
         Status: b.status,
         Payment: b.paymentStatus,
-      };
-    });
+      })),
+      `bookings-${format(new Date(), "yyyy-MM-dd")}`,
+    );
+  };
 
   return (
     <div className="p-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <Ticket className="h-7 w-7 text-primary" />
+            {t("bookings.title")}
+          </h1>
+          <p className="text-muted-foreground text-sm mt-0.5">
+            {data ? `${data.total} total bookings` : "Loading…"}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={bookings.length === 0}>
+          <Download className="h-4 w-4" /> Export CSV
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-xl border border-border">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by customer name, email, or phone…"
+            className="pl-9"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Label className="text-xs">From</Label>
+          <Input type="date" className="w-36 h-9 text-xs" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1); }} />
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Label className="text-xs">To</Label>
+          <Input type="date" className="w-36 h-9 text-xs" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(1); }} />
+        </div>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+            <X className="h-3.5 w-3.5" /> Clear
+          </Button>
+        )}
+      </div>
+
       {/* Table */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
+              <TableHead className="w-16">ID</TableHead>
               <TableHead>Date</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Trip</TableHead>
-              <TableHead>Seats</TableHead>
+              <TableHead>Passenger</TableHead>
+              <TableHead>Trip / Route</TableHead>
+              <TableHead className="w-16 text-center">Seats</TableHead>
               <TableHead>Amount</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Payment</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-right w-16">Actions</TableHead>
             </TableRow>
           </TableHeader>
 
           <TableBody>
             {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={9}>Loading...</TableCell>
-              </TableRow>
+              Array.from({ length: 6 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 9 }).map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : bookings.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center py-10">
-                  No bookings
+                <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                  No bookings found
                 </TableCell>
               </TableRow>
             ) : (
               bookings.map((b) => {
                 const createdDate = b.createdAt ? new Date(b.createdAt) : null;
+                const depDate = b.departureTime ? new Date(b.departureTime) : null;
+                const canCancel = b.status === "confirmed" || b.status === "pending";
+                const canRefund = b.paymentStatus === "paid" && b.status !== "cancelled";
 
                 return (
-                  <TableRow key={b.id}>
-                    <TableCell>#{b.id}</TableCell>
+                  <TableRow key={b.id} className="hover:bg-muted/30">
+                    <TableCell className="font-mono text-sm text-muted-foreground">#{b.id}</TableCell>
 
                     <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                       {createdDate && !isNaN(createdDate.getTime()) ? (
                         <>
                           {format(createdDate, "MMM d, yyyy")}
                           <br />
-                          <span className="text-xs">
-                            {format(createdDate, "HH:mm")}
-                          </span>
+                          <span className="text-xs">{format(createdDate, "HH:mm")}</span>
                         </>
-                      ) : (
-                        "-"
-                      )}
+                      ) : "—"}
                     </TableCell>
 
                     <TableCell>
-                      {b.userName ?? `User #${b.userId}`}
-                    </TableCell>
-
-                    <TableCell>TRP-{b.tripId}</TableCell>
-
-                    <TableCell>{b.seatCount}</TableCell>
-
-                    <TableCell>{formatEGP(b.totalPrice)}</TableCell>
-
-                    <TableCell>
-                      <Badge>{b.status}</Badge>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm">{b.userName ?? `User #${b.userId}`}</span>
+                        {b.userPhone && <span className="text-xs text-muted-foreground">{b.userPhone}</span>}
+                        {b.userEmail && <span className="text-xs text-muted-foreground">{b.userEmail}</span>}
+                      </div>
                     </TableCell>
 
                     <TableCell>
-                      <Badge>{b.paymentStatus}</Badge>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium">
+                          {b.routeName ?? `Trip #${b.tripId}`}
+                        </span>
+                        {(b.fromLocation || b.toLocation) && (
+                          <span className="text-xs text-muted-foreground">
+                            {b.fromLocation} → {b.toLocation}
+                          </span>
+                        )}
+                        {depDate && !isNaN(depDate.getTime()) && (
+                          <span className="text-xs text-muted-foreground">
+                            {format(depDate, "MMM d, HH:mm")}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    <TableCell className="text-center">{b.seatCount}</TableCell>
+
+                    <TableCell className="font-semibold">{formatEGP(b.totalPrice)}</TableCell>
+
+                    <TableCell>
+                      <Badge variant="outline" className={`capitalize ${STATUS_BADGE[b.status] ?? ""}`}>
+                        {b.status}
+                      </Badge>
+                    </TableCell>
+
+                    <TableCell>
+                      <Badge variant="outline" className={`capitalize ${PAYMENT_BADGE[b.paymentStatus] ?? ""}`}>
+                        {b.paymentStatus}
+                      </Badge>
                     </TableCell>
 
                     <TableCell className="text-right">
-                      {(b.status === "confirmed" ||
-                        b.status === "pending") && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancel(b.id)}
-                        >
-                          <Ban className="h-3 w-3 mr-1" />
-                          Cancel
-                        </Button>
-                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setDetailBooking(b)}>
+                            <Eye className="mr-2 h-4 w-4" /> View Details
+                          </DropdownMenuItem>
+                          {canRefund && (
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setRefundAmount(String(b.totalPrice));
+                                setRefundReason(`Refund for booking #${b.id}`);
+                                setRefundDialog({ open: true, booking: b });
+                              }}
+                            >
+                              <DollarSign className="mr-2 h-4 w-4 text-green-600" />
+                              <span className="text-green-700 dark:text-green-400">Refund to Wallet</span>
+                            </DropdownMenuItem>
+                          )}
+                          {canCancel && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={() => handleCancel(b.id)}
+                                disabled={cancelMutation.isPending}
+                              >
+                                <Ban className="mr-2 h-4 w-4" /> Cancel Booking
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 );
@@ -244,6 +391,159 @@ export default function Bookings() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination */}
+      {data && data.total > data.limit && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            <PaginationItem className="text-sm text-muted-foreground px-4">
+              Page {page} of {totalPages}
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+
+      {/* View Details Dialog */}
+      <Dialog open={!!detailBooking} onOpenChange={(o) => { if (!o) setDetailBooking(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Ticket className="h-4 w-4" /> Booking #{detailBooking?.id}
+            </DialogTitle>
+          </DialogHeader>
+          {detailBooking && (
+            <div className="space-y-4 py-1">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Passenger</p>
+                <DetailRow label="Name" value={detailBooking.userName ?? `User #${detailBooking.userId}`} />
+                <DetailRow label="Email" value={detailBooking.userEmail} />
+                <DetailRow label="Phone" value={detailBooking.userPhone} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Trip</p>
+                <DetailRow label="Trip ID" value={`#${detailBooking.tripId}`} />
+                <DetailRow label="Route" value={detailBooking.routeName} />
+                <DetailRow label="From" value={detailBooking.fromLocation} />
+                <DetailRow label="To" value={detailBooking.toLocation} />
+                <DetailRow label="Service" value={detailBooking.serviceType} />
+                <DetailRow
+                  label="Departure"
+                  value={detailBooking.departureTime
+                    ? format(new Date(detailBooking.departureTime), "MMM d, yyyy HH:mm")
+                    : null}
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Booking</p>
+                <DetailRow label="Seats" value={detailBooking.seatCount} />
+                <DetailRow label="Total Price" value={formatEGP(detailBooking.totalPrice)} />
+                <DetailRow label="Status" value={
+                  <Badge variant="outline" className={`capitalize ${STATUS_BADGE[detailBooking.status] ?? ""}`}>
+                    {detailBooking.status}
+                  </Badge>
+                } />
+                <DetailRow label="Payment" value={
+                  <Badge variant="outline" className={`capitalize ${PAYMENT_BADGE[detailBooking.paymentStatus] ?? ""}`}>
+                    {detailBooking.paymentStatus}
+                  </Badge>
+                } />
+                <DetailRow
+                  label="Booked At"
+                  value={detailBooking.createdAt
+                    ? format(new Date(detailBooking.createdAt), "MMM d, yyyy HH:mm")
+                    : null}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            {detailBooking && detailBooking.paymentStatus === "paid" && detailBooking.status !== "cancelled" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setRefundAmount(String(detailBooking.totalPrice));
+                  setRefundReason(`Refund for booking #${detailBooking.id}`);
+                  setRefundDialog({ open: true, booking: detailBooking });
+                  setDetailBooking(null);
+                }}
+              >
+                <DollarSign className="mr-1.5 h-3.5 w-3.5 text-green-600" /> Refund to Wallet
+              </Button>
+            )}
+            {detailBooking && (detailBooking.status === "confirmed" || detailBooking.status === "pending") && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => { setDetailBooking(null); handleCancel(detailBooking.id); }}
+              >
+                <Ban className="mr-1.5 h-3.5 w-3.5" /> Cancel Booking
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Refund Dialog */}
+      <Dialog open={refundDialog.open} onOpenChange={(o) => { if (!o) setRefundDialog({ open: false }); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-green-600" />
+              Refund to Wallet
+            </DialogTitle>
+          </DialogHeader>
+          {refundDialog.open && (
+            <form onSubmit={handleRefundSubmit} className="space-y-4 py-1">
+              <p className="text-sm text-muted-foreground">
+                Refund wallet credit to <strong>{refundDialog.booking.userName ?? `User #${refundDialog.booking.userId}`}</strong> for booking <strong>#{refundDialog.booking.id}</strong>.
+              </p>
+              <div className="space-y-1.5">
+                <Label htmlFor="refund-amount">Amount (EGP)</Label>
+                <Input
+                  id="refund-amount"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={refundAmount}
+                  onChange={(e) => setRefundAmount(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="refund-reason">Reason</Label>
+                <Input
+                  id="refund-reason"
+                  placeholder="e.g. Trip cancelled by operator"
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setRefundDialog({ open: false })}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={refundMutation.isPending}>
+                  {refundMutation.isPending ? "Processing…" : "Issue Refund"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

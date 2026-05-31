@@ -1,0 +1,116 @@
+Fix and improve the following issues in the Admin Dashboard.
+Do not break any existing functionality.
+All data must come from and be saved to the API Server only.
+The API Server is the single source of truth.
+No direct DB access from the frontend.
+
+=====================================================
+FIX 1 — Customers page: user detail 404 + dashboard crash
+=====================================================
+Clicking "Details" next to any customer causes a 404 
+and then crashes the entire admin dashboard with a reload.
+
+Investigate and fix the routing issue in the Customers 
+page so that clicking a user opens their detail page 
+correctly without crashing.
+
+=====================================================
+FIX 2 — Bookings page (under Trips > Bookings)
+=====================================================
+The Bookings page must show real bookings from the database.
+
+Endpoint already exists:
+GET /api/admin/bookings
+Auth: Bearer JWT + admin role
+
+Display all bookings with at minimum:
+- Booking ID
+- Passenger name
+- Trip details (route, departure time)
+- Seat count
+- Total price
+- Payment status
+- Booking status
+
+Add these actions on each booking row:
+- View Details (show full booking info in a dialog)
+- Cancel Booking → PATCH /api/admin/bookings/:id/cancel
+- Refund → POST /api/admin/wallet/refund
+
+Suggest any other useful actions you think make sense 
+for an admin managing bookings.
+
+=====================================================
+FIX 3 — Remove duplicate Staff page from sidebar
+=====================================================
+The sidebar has a "Staff" item that duplicates what's 
+already inside Settings.
+
+Remove the standalone /staff route and sidebar item.
+Staff management should only be accessible from inside 
+the Settings page.
+
+=====================================================
+FIX 4 — Routes page: ensure all data comes from DB
+=====================================================
+The Routes page and everything inside it (stations, 
+stops, schedules, etc.) must come from the database 
+via the API Server.
+
+Verify and fix:
+- GET /api/routes → loads all routes from DB
+- GET /api/routes/:id → loads single route with stations
+- GET /api/routes/:id/stations → loads stations from DB
+- Any edits made in the admin (add/edit/delete route 
+  or station) must call the correct API endpoint and 
+  persist to the database
+
+If any data is hardcoded or coming from static files, 
+replace it with real API calls.
+
+=====================================================
+FIX 5 — Pricing pages not clickable
+=====================================================
+The Pricing sub-pages (/pricing/car, /pricing/shuttle, 
+etc.) were working before but are now not clickable.
+
+Investigate and fix the routing or navigation issue 
+so all pricing sub-pages are accessible and functional.
+
+=====================================================
+INFO — Zones page
+=====================================================
+The Zones page is responsible for defining geographic 
+zones used for:
+- Service availability (which services run in which zone)
+- Surge pricing (higher prices in certain zones)
+- Driver/passenger zone matching
+
+Make sure the Zones page:
+- Loads all zones from GET /api/zones
+- Allows creating, editing, and deleting zones
+- All changes persist to the database via the API Server
+
+=====================================================
+RETRY ALL — Job Queue
+=====================================================
+Add a "Retry All" button to the Queue Monitor card 
+that re-enqueues every dead-letter entry in one click.
+
+Endpoint to add:
+POST /api/admin/queue/retry-all
+Auth: Bearer JWT + admin role
+Response: { success: true, retriedCount: number, pendingCount: number }
+
+The button should:
+- Show "Retrying..." with spinner while in-flight
+- Disable all other retry buttons while running
+- Refresh the queue monitor card on success
+
+=====================================================
+REPORT FOR EXTERNAL APPS
+=====================================================
+At the end, list any new or changed API endpoints 
+that the Passenger App or Driver App need to know about,
+with method, path, auth, and response shape.
+=====================================================

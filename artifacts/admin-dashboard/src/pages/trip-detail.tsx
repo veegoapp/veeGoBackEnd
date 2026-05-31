@@ -376,7 +376,7 @@ export default function TripDetail() {
                     <TableCell className="font-mono text-sm">#{b.id}</TableCell>
                     <TableCell>
                       {b.user ? (
-                        <Link href={`/customers/${b.user.id}`} className="hover:underline text-primary text-sm font-medium">
+                        <Link href={`/users/${b.user.id}`} className="hover:underline text-primary text-sm font-medium">
                           {b.user.name}
                         </Link>
                       ) : (

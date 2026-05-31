@@ -231,7 +231,7 @@ export default function UserDetail() {
     mutationFn: () => adminFetch(`/admin/users/${userId}`, { method: "DELETE" }),
     onSuccess: () => {
       toast({ title: "Account deleted" });
-      navigate("/customers");
+      navigate("/users");
     },
     onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
   });
@@ -279,7 +279,7 @@ export default function UserDetail() {
       {/* Header */}
       <div className="flex items-center gap-4">
         <Button variant="outline" size="icon" asChild>
-          <Link href="/customers"><ArrowLeft className="h-4 w-4" /></Link>
+          <Link href="/users"><ArrowLeft className="h-4 w-4" /></Link>
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">{user.name}</h1>

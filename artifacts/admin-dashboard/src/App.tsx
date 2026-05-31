@@ -115,6 +115,7 @@ function Router() {
         <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />
         <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
         <Route path="/promo" component={() => <ProtectedRoute component={Promo} />} />
+        <Route path="/pricing/:type" component={() => <ProtectedRoute component={Pricing} />} />
         <Route path="/pricing" component={() => <ProtectedRoute component={Pricing} />} />
         <Route path="/zones" component={() => <ProtectedRoute component={Zones} />} />
         <Route path="/services" component={() => <ProtectedRoute component={Services} />} />

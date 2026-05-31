@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { useTranslation } from "react-i18next";
+import { useToast } from "@/hooks/use-toast";
 
 /* ─────────────────────────── Types ─────────────────────────── */
 
@@ -521,6 +522,7 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
 
 function QueueMonitor() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<QueueStatus>({
     queryKey: ["admin-queue-status"],
     queryFn: () => adminFetch<QueueStatus>("/admin/queue/status"),
@@ -536,6 +538,19 @@ function QueueMonitor() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["admin-queue-status"] });
     },
+  });
+
+  const retryAllMutation = useMutation({
+    mutationFn: () =>
+      adminFetch<{ success: boolean; retriedCount: number; pendingCount: number }>(
+        "/admin/queue/retry-all",
+        { method: "POST" },
+      ),
+    onSuccess: (res) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-queue-status"] });
+      toast({ title: `${res.retriedCount} job${res.retriedCount === 1 ? "" : "s"} re-queued` });
+    },
+    onError: (err: Error) => toast({ title: "Retry All failed", description: err.message, variant: "destructive" }),
   });
 
   const hasFailures = (data?.deadLetterCount ?? 0) > 0;
@@ -554,6 +569,18 @@ function QueueMonitor() {
               <span className="text-xs text-muted-foreground hidden sm:inline">
                 Updated {format(new Date(dataUpdatedAt), "HH:mm:ss")}
               </span>
+            )}
+            {hasFailures && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 h-7 text-xs border-violet-500/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
+                onClick={() => retryAllMutation.mutate()}
+                disabled={retryAllMutation.isPending || retryMutation.isPending}
+              >
+                <RefreshCw className={`h-3 w-3 ${retryAllMutation.isPending ? "animate-spin" : ""}`} />
+                {retryAllMutation.isPending ? "Retrying…" : "Retry All"}
+              </Button>
             )}
             <Button
               variant="outline"

@@ -175,6 +175,16 @@ router.post("/admin/queue/retry/:jobId", authenticate, requireRole("admin"), (re
   res.json({ success: true, jobId, pendingCount: jobQueue.pendingCount });
 });
 
+// ─── Retry all dead-letter jobs ───────────────────────────────────────────────
+router.post("/admin/queue/retry-all", authenticate, requireRole("admin"), (_req, res): void => {
+  const dlq = jobQueue.deadLetterQueue;
+  let retriedCount = 0;
+  for (const entry of dlq) {
+    if (jobQueue.retryFromDLQ(entry.job.id)) retriedCount++;
+  }
+  res.json({ success: true, retriedCount, pendingCount: jobQueue.pendingCount });
+});
+
 // Analytics
 router.get("/admin/analytics", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const [

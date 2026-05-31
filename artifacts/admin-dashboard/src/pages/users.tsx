@@ -34,6 +34,7 @@ export default function Customers() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
+  const [, navigate] = useLocation();
 
   const { data, isLoading } = useListAdminUsers({
     page,
@@ -148,7 +149,7 @@ export default function Customers() {
                 <TableRow
                   key={user.id}
                   className="cursor-pointer hover:bg-muted/40 transition-colors"
-                  onClick={() => { window.location.href = `/customers/${user.id}`; }}
+                  onClick={() => navigate(`/users/${user.id}`)}
                 >
                   <TableCell>
                     <div className="flex flex-col">
@@ -184,7 +185,7 @@ export default function Customers() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link href={`/customers/${user.id}`} className="flex w-full items-center cursor-pointer">
+                          <Link href={`/users/${user.id}`} className="flex w-full items-center cursor-pointer">
                             <Eye className="mr-2 h-4 w-4" />
                             {t("common.details")}
                           </Link>
