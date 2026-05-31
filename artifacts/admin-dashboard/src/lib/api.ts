@@ -7,7 +7,18 @@ export async function adminFetch<T = unknown>(
   options: RequestInit = {},
 ): Promise<T> {
   const token = localStorage.getItem("accessToken");
-  const res = await fetch(`${API_BASE}${path}`, {
+  const fullUrl = `${API_BASE}${path}`;
+  const method = options.method ?? "GET";
+
+  console.group(`[adminFetch] ${method} ${fullUrl}`);
+  console.log("Full URL:", fullUrl);
+  console.log("Method:", method);
+  if (options.body) {
+    try { console.log("Body:", JSON.parse(options.body as string)); }
+    catch { console.log("Body (raw):", options.body); }
+  }
+
+  const res = await fetch(fullUrl, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -15,6 +26,12 @@ export async function adminFetch<T = unknown>(
       ...(options.headers as Record<string, string> | undefined),
     },
   });
+
+  console.log("Response status:", res.status);
+  const raw = await res.clone().text();
+  console.log("Response body (first 500 chars):", raw.slice(0, 500));
+  console.groupEnd();
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((err as any).error || res.statusText);
