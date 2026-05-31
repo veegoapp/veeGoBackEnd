@@ -68,6 +68,21 @@ class JobQueue {
     return this.queue.length;
   }
 
+  retryFromDLQ(jobId: string): boolean {
+    const idx = this.deadLetters.findIndex((e) => e.job.id === jobId);
+    if (idx === -1) return false;
+    const [entry] = this.deadLetters.splice(idx, 1);
+    const retried: Job = {
+      ...entry!.job,
+      attempt: 0,
+      scheduledAt: Date.now(),
+    };
+    this.queue.push(retried);
+    this.scheduleRun();
+    logger.info({ jobId, type: retried.type }, "Job re-enqueued from dead-letter queue");
+    return true;
+  }
+
   private scheduleRun(): void {
     if (this.running) return;
     if (this.timer) return;

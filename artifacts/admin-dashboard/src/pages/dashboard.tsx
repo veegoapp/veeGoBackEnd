@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
 import { useLocation } from "wouter";
 import {
@@ -520,11 +520,22 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
 /* ─────────────────────────── Queue Monitor ─────────────────────────── */
 
 function QueueMonitor() {
-  const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<QueueStatus>({
     queryKey: ["admin-queue-status"],
     queryFn: () => adminFetch<QueueStatus>("/admin/queue/status"),
     refetchInterval: 30_000,
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (jobId: string) =>
+      adminFetch<{ success: boolean; jobId: string; pendingCount: number }>(
+        `/admin/queue/retry/${encodeURIComponent(jobId)}`,
+        { method: "POST" },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-queue-status"] });
+    },
   });
 
   const hasFailures = (data?.deadLetterCount ?? 0) > 0;
@@ -630,29 +641,52 @@ function QueueMonitor() {
             <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
               <AlertTriangle className="h-3 w-3 text-red-500" /> Recent Failed Jobs (last 20)
             </p>
-            <div className="rounded-md border divide-y max-h-56 overflow-y-auto">
-              {data!.recentDeadLetters.map((entry) => (
-                <div key={entry.jobId} className="px-3 py-2 text-xs flex flex-col gap-0.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
-                        {entry.type}
-                      </Badge>
-                      <span className="text-muted-foreground font-mono text-[10px]">{entry.jobId}</span>
+            <div className="rounded-md border divide-y max-h-64 overflow-y-auto">
+              {data!.recentDeadLetters.map((entry) => {
+                const isRetrying = retryMutation.isPending && retryMutation.variables === entry.jobId;
+                const didRetry = retryMutation.isSuccess && retryMutation.variables === entry.jobId;
+                return (
+                  <div key={entry.jobId} className="px-3 py-2.5 text-xs flex flex-col gap-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono shrink-0">
+                          {entry.type}
+                        </Badge>
+                        <span className="text-muted-foreground font-mono text-[10px] truncate">
+                          {entry.jobId}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-muted-foreground text-[10px]">
+                          {relativeTime(entry.failedAt)}
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[10px] gap-1 border-violet-500/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
+                          onClick={() => retryMutation.mutate(entry.jobId)}
+                          disabled={isRetrying || retryMutation.isPending}
+                        >
+                          <RefreshCw className={`h-2.5 w-2.5 ${isRetrying ? "animate-spin" : ""}`} />
+                          {isRetrying ? "Retrying…" : didRetry ? "Queued" : "Retry"}
+                        </Button>
+                      </div>
                     </div>
-                    <span className="text-muted-foreground shrink-0">
-                      {relativeTime(entry.failedAt)}
-                    </span>
+                    <p className="text-red-500 dark:text-red-400 truncate">
+                      {entry.lastError}
+                    </p>
+                    <p className="text-muted-foreground">
+                      Attempt {entry.attempt}/{entry.maxAttempts}
+                    </p>
                   </div>
-                  <p className="text-red-500 dark:text-red-400 truncate">
-                    {entry.lastError}
-                  </p>
-                  <p className="text-muted-foreground">
-                    Attempt {entry.attempt}/{entry.maxAttempts}
-                  </p>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            {retryMutation.isError && (
+              <p className="text-xs text-red-500 mt-2">
+                Retry failed: {(retryMutation.error as Error).message}
+              </p>
+            )}
           </div>
         ) : !isLoading && (
           <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">

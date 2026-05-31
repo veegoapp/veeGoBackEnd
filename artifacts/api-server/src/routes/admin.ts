@@ -166,6 +166,15 @@ router.get("/admin/queue/status", authenticate, requireRole("admin"), (_req, res
   });
 });
 
+// ─── Retry a dead-letter job ──────────────────────────────────────────────────
+router.post("/admin/queue/retry/:jobId", authenticate, requireRole("admin"), (req, res): void => {
+  const { jobId } = req.params;
+  if (!jobId) { res.status(400).json({ error: "Missing jobId" }); return; }
+  const ok = jobQueue.retryFromDLQ(jobId);
+  if (!ok) { res.status(404).json({ error: "Job not found in dead-letter queue" }); return; }
+  res.json({ success: true, jobId, pendingCount: jobQueue.pendingCount });
+});
+
 // Analytics
 router.get("/admin/analytics", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const [
