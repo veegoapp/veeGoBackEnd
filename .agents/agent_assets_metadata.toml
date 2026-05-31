@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "pNqvGMbX-me0UDgWFA2kS"
+uri = "file://feature-reports/admin-changelog.md"
+type = "text"
+title = "Admin API Changelog"
