@@ -28,6 +28,7 @@ import locationsRouter from "./locations";
 import paymentsRouter from "./payments";
 import ratingsRouter from "./ratings";
 import chatRouter from "./chat";
+import serviceControlsRouter from "./serviceControls";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,6 @@ router.use(locationsRouter);
 router.use(paymentsRouter);
 router.use(ratingsRouter);
 router.use(chatRouter);
+router.use(serviceControlsRouter);
 
 export default router;

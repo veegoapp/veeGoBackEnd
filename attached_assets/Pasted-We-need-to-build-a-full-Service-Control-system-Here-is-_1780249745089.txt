@@ -1,0 +1,104 @@
+We need to build a full Service Control system. Here is exactly what is needed:
+
+ARCHITECTURE RULE (non-negotiable):
+The API Server is the single source of truth for everything.
+No data is stored or read directly by the frontend.
+Every request from Admin Dashboard, Passenger App, or Driver App must go through the API Server.
+The database is only touched by the API Server.
+
+---
+
+PART 1 — DATABASE (api-server + db package)
+
+Add a service_controls table with these columns:
+- id (primary key)
+- service_type: enum → 'shuttle' | 'car' | 'motorcycle' | 'delivery'
+- is_enabled: boolean (master on/off switch)
+- display_mode: enum → 'live' | 'coming_soon' | 'unavailable' | 'maintenance'
+- unavailable_message: text (shown to passengers/drivers when service is off or display_mode is not live)
+- unavailable_action: enum → 'none' | 'show_message' | 'hide_service'
+- active_zone_ids: integer[] (list of zone IDs where service is active — empty = all zones)
+- maintenance_eta: timestamp nullable (shown when display_mode = maintenance)
+- max_active_rides: integer nullable (capacity cap per service)
+- updated_by: integer (userId of last admin who changed it)
+- updated_at: timestamp
+
+Seed the table with one row per service type using safe defaults:
+is_enabled = true, display_mode = 'live', unavailable_action = 'none'
+
+---
+
+PART 2 — API SERVER ENDPOINTS
+
+Add these endpoints under /api/admin/services/:type/ (protected: admin role only):
+
+GET    /api/admin/services/:type/control        → return full control row
+PATCH  /api/admin/services/:type/control        → update any fields
+POST   /api/admin/services/:type/control/reset  → reset to defaults
+
+Add these PUBLIC endpoints (used by Passenger App and Driver App, no admin role required, JWT required):
+
+GET /api/services/control        → returns all 4 services control data (only expose: service_type, is_enabled, display_mode, unavailable_message, unavailable_action, active_zone_ids, maintenance_eta)
+GET /api/services/:type/control  → same but for one service
+
+IMPORTANT: The passenger and driver apps must call these endpoints to know whether to show, hide, or display a message for each service. The frontend never decides this on its own.
+
+---
+
+PART 3 — ADMIN DASHBOARD PAGES
+
+There are 4 service pages already in the sidebar:
+- /services (general or redirect)
+- Each service has its own sub-page: shuttle, car, motorcycle, delivery
+
+For EACH of the 4 service pages, build a full control panel with:
+
+1. Master Toggle — enable/disable the service (calls PATCH endpoint)
+
+2. Display Mode selector — 4 options:
+   - Live (service is running normally)
+   - Coming Soon (grayed out with badge in apps)
+   - Unavailable (show custom message)
+   - Maintenance (show message + optional ETA)
+
+3. Unavailable Message field — text input, saved to unavailable_message column
+   Shown to passengers/drivers when display_mode is not 'live'
+
+4. Action on tap selector — what happens when user taps a disabled service in the app:
+   - None (do nothing)
+   - Show Message (show unavailable_message in a modal/alert)
+   - Hide Service (service disappears from the app entirely)
+
+5. Zone Restriction — multi-select from existing zones (from GET /api/zones)
+   Empty selection = available in all zones
+
+6. Capacity Limit — number input for max_active_rides (optional)
+
+7. Activity Log — show last 10 changes: who changed what and when
+   (read from an audit log — see Part 4)
+
+8. Save button — single PATCH call with all changed fields
+
+---
+
+PART 4 — AUDIT LOG
+
+Add a service_control_logs table:
+- id, service_type, changed_by (userId), changed_at, changes (jsonb — before/after diff)
+
+Every PATCH to /api/admin/services/:type/control must write a row to this table.
+The GET /api/admin/services/:type/control response should include the last 10 log entries.
+
+---
+
+PART 5 — REPORT FOR EXTERNAL APPS
+
+After completing everything above, provide a report at the end listing:
+- Any new API endpoints the Passenger App needs to call (with method, path, auth, and response shape)
+- Any new API endpoints the Driver App needs to call (with method, path, auth, and response shape)
+- Any behavior changes the apps need to implement based on display_mode and unavailable_action values
+
+Do not modify anything in the Passenger App or Driver App repos.
+Do not break any existing endpoints.
+Do not change the database connection or ORM setup.
+Use Drizzle ORM and Zod validation for all new endpoints, consistent with the existing codebase style.

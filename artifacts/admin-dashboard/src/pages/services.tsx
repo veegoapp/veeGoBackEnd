@@ -12,12 +12,19 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import {
   Car, Bus, Bike, PackageOpen, Navigation, DollarSign,
   CheckCircle2, XCircle, ArrowRight, Map, UserCircle,
   Settings2, ShieldCheck, Star, Pencil, Check, X,
+  ToggleLeft, Radio, MessageSquare, MousePointer, Globe,
+  Activity, Clock, RotateCcw, History, AlertTriangle,
+  WrenchIcon, EyeOff, Zap,
 } from "lucide-react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type PricingConfig = {
   id: number;
@@ -49,19 +56,66 @@ type ServiceSettings = {
   maxActiveRidesPerDriver: number;
 };
 
+type Zone = {
+  id: number;
+  name: string;
+  isActive: boolean;
+};
+
+type ServiceControlLog = {
+  id: number;
+  serviceType: string;
+  changedBy: number | null;
+  changedAt: string;
+  changes: Record<string, { before: unknown; after: unknown }>;
+};
+
+type ServiceControlData = {
+  id: number;
+  serviceType: string;
+  isEnabled: boolean;
+  displayMode: "live" | "coming_soon" | "unavailable" | "maintenance";
+  unavailableMessage: string | null;
+  unavailableAction: "none" | "show_message" | "hide_service";
+  activeZoneIds: number[];
+  maintenanceEta: string | null;
+  maxActiveRides: number | null;
+  updatedBy: number | null;
+  updatedAt: string;
+  logs: ServiceControlLog[];
+};
+
+// ─── Metadata ─────────────────────────────────────────────────────────────────
+
 const SERVICE_META: Record<string, { icon: React.ElementType; label: string; color: string; bg: string; desc: string }> = {
-  car:      { icon: Car,         label: "Car Services",      color: "text-blue-600",   bg: "bg-blue-500/10",   desc: "On-demand car rides — drivers, trips, and pricing" },
-  shuttle:  { icon: Bus,         label: "Shuttle Services",  color: "text-amber-600",  bg: "bg-amber-500/10",  desc: "Scheduled shuttle routes, buses, and driver assignments" },
-  bike:     { icon: Bike,        label: "Bike Services",     color: "text-green-600",  bg: "bg-green-500/10",  desc: "On-demand bike rides — drivers, trips, and pricing" },
-  delivery: { icon: PackageOpen, label: "Delivery Services", color: "text-violet-600", bg: "bg-violet-500/10", desc: "" },
+  car:        { icon: Car,         label: "Car Services",        color: "text-blue-600",   bg: "bg-blue-500/10",   desc: "On-demand car rides — drivers, trips, and pricing" },
+  shuttle:    { icon: Bus,         label: "Shuttle Services",    color: "text-amber-600",  bg: "bg-amber-500/10",  desc: "Scheduled shuttle routes, buses, and driver assignments" },
+  bike:       { icon: Bike,        label: "Bike Services",       color: "text-green-600",  bg: "bg-green-500/10",  desc: "On-demand bike rides — drivers, trips, and pricing" },
+  motorcycle: { icon: Bike,        label: "Motorcycle Services", color: "text-orange-600", bg: "bg-orange-500/10", desc: "On-demand motorcycle rides" },
+  delivery:   { icon: PackageOpen, label: "Delivery Services",   color: "text-violet-600", bg: "bg-violet-500/10", desc: "Package and food delivery" },
 };
 
 const ALL_LICENSE_TYPES = [
-  { value: "standard",   label: "Standard License" },
-  { value: "commercial", label: "Commercial License" },
-  { value: "cdl",        label: "CDL (Commercial Driver's License)" },
-  { value: "motorcycle", label: "Motorcycle License" },
+  { value: "standard",    label: "Standard License" },
+  { value: "commercial",  label: "Commercial License" },
+  { value: "cdl",         label: "CDL (Commercial Driver's License)" },
+  { value: "motorcycle",  label: "Motorcycle License" },
 ];
+
+const DISPLAY_MODE_OPTIONS = [
+  { value: "live",         label: "Live",         icon: Zap,           desc: "Service is running normally",              color: "text-green-600",  badge: "bg-green-500/10 text-green-600 border-green-300" },
+  { value: "coming_soon",  label: "Coming Soon",  icon: Clock,         desc: "Grayed out with 'coming soon' badge",       color: "text-amber-600",  badge: "bg-amber-500/10 text-amber-600 border-amber-300" },
+  { value: "unavailable",  label: "Unavailable",  icon: XCircle,       desc: "Show custom message to users",              color: "text-red-600",    badge: "bg-red-500/10 text-red-600 border-red-300" },
+  { value: "maintenance",  label: "Maintenance",  icon: WrenchIcon,    desc: "Show message + optional ETA",               color: "text-orange-600", badge: "bg-orange-500/10 text-orange-600 border-orange-300" },
+] as const;
+
+const UNAVAILABLE_ACTION_OPTIONS = [
+  { value: "none",          label: "Do Nothing",      desc: "Tap does nothing" },
+  { value: "show_message",  label: "Show Message",    desc: "Show unavailable message in alert" },
+  { value: "hide_service",  label: "Hide Service",    desc: "Service disappears from app entirely" },
+] as const;
+
+// ─── Helper components ────────────────────────────────────────────────────────
 
 function StatCard({ label, value, icon: Icon, color, loading }: { label: string; value: string | number; icon: React.ElementType; color: string; loading?: boolean }) {
   return (
@@ -76,6 +130,378 @@ function StatCard({ label, value, icon: Icon, color, loading }: { label: string;
     </Card>
   );
 }
+
+function DisplayModeBadge({ mode }: { mode: string }) {
+  const opt = DISPLAY_MODE_OPTIONS.find(o => o.value === mode);
+  if (!opt) return null;
+  return (
+    <Badge variant="outline" className={`text-xs ${opt.badge}`}>
+      {opt.label}
+    </Badge>
+  );
+}
+
+function formatChanges(changes: Record<string, { before: unknown; after: unknown }>) {
+  return Object.entries(changes).map(([key, { before, after }]) => (
+    <span key={key} className="block text-xs">
+      <span className="font-medium">{key}</span>:&nbsp;
+      <span className="text-red-500 line-through">{JSON.stringify(before)}</span>
+      {" → "}
+      <span className="text-green-600">{JSON.stringify(after)}</span>
+    </span>
+  ));
+}
+
+// ─── Service Control Panel ────────────────────────────────────────────────────
+
+type ServiceControlType = "shuttle" | "car" | "motorcycle" | "delivery";
+
+function ServiceControlPanel({ type }: { type: ServiceControlType }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["service-control", type],
+    queryFn: () => adminFetch<ServiceControlData>(`/admin/services/${type}/control`),
+  });
+
+  const zonesQuery = useQuery({
+    queryKey: ["zones-list"],
+    queryFn: () => adminFetch<{ data: Zone[]; total: number }>("/zones?limit=200"),
+  });
+
+  const [draft, setDraft] = useState<Partial<ServiceControlData>>({});
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (data) {
+      setDraft({
+        isEnabled: data.isEnabled,
+        displayMode: data.displayMode,
+        unavailableMessage: data.unavailableMessage,
+        unavailableAction: data.unavailableAction,
+        activeZoneIds: data.activeZoneIds,
+        maintenanceEta: data.maintenanceEta,
+        maxActiveRides: data.maxActiveRides,
+      });
+      setIsDirty(false);
+    }
+  }, [data]);
+
+  const updateDraft = (patch: Partial<ServiceControlData>) => {
+    setDraft(prev => ({ ...prev, ...patch }));
+    setIsDirty(true);
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: (values: Partial<ServiceControlData>) =>
+      adminFetch<ServiceControlData>(`/admin/services/${type}/control`, {
+        method: "PATCH",
+        body: JSON.stringify(values),
+      }),
+    onSuccess: (updated) => {
+      toast({ title: "Control settings saved" });
+      queryClient.setQueryData(["service-control", type], updated);
+      setIsDirty(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: () =>
+      adminFetch<ServiceControlData>(`/admin/services/${type}/control/reset`, { method: "POST" }),
+    onSuccess: (updated) => {
+      toast({ title: "Reset to defaults" });
+      queryClient.setQueryData(["service-control", type], updated);
+      setIsDirty(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Reset failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const toggleZone = (id: number) => {
+    const current = draft.activeZoneIds ?? [];
+    const next = current.includes(id) ? current.filter(z => z !== id) : [...current, id];
+    updateDraft({ activeZoneIds: next });
+  };
+
+  if (isLoading || !data || draft.isEnabled === undefined) {
+    return (
+      <Card>
+        <CardContent className="pt-5 space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const zones = zonesQuery.data?.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            Service Control
+          </CardTitle>
+          <div className="flex items-center gap-2 flex-wrap">
+            <DisplayModeBadge mode={data.displayMode} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => resetMutation.mutate()}
+              disabled={resetMutation.isPending}
+              className="gap-1.5 text-xs"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset
+            </Button>
+            {isDirty && (
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate(draft)}
+                disabled={saveMutation.isPending}
+                className="gap-1.5"
+              >
+                <Check className="h-3.5 w-3.5" />
+                {saveMutation.isPending ? "Saving…" : "Save Changes"}
+              </Button>
+            )}
+          </div>
+        </div>
+        <CardDescription>Control service visibility and availability in passenger and driver apps</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+
+        {/* 1 — Master toggle */}
+        <div className="flex items-center justify-between gap-4 p-4 rounded-lg border bg-muted/30">
+          <div className="flex items-center gap-2.5">
+            <ToggleLeft className="h-4 w-4 text-muted-foreground" />
+            <div>
+              <p className="text-sm font-medium">Master Switch</p>
+              <p className="text-xs text-muted-foreground">Enable or disable this service globally</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              checked={draft.isEnabled ?? data.isEnabled}
+              onCheckedChange={(v) => updateDraft({ isEnabled: v })}
+            />
+            <span className={`text-xs font-medium ${(draft.isEnabled ?? data.isEnabled) ? "text-green-600" : "text-muted-foreground"}`}>
+              {(draft.isEnabled ?? data.isEnabled) ? "Enabled" : "Disabled"}
+            </span>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* 2 — Display mode */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <Radio className="h-4 w-4 text-muted-foreground" />
+            Display Mode
+          </Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {DISPLAY_MODE_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const selected = (draft.displayMode ?? data.displayMode) === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => updateDraft({ displayMode: opt.value })}
+                  className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
+                    selected
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                      : "border-border bg-muted/20 hover:bg-muted/50"
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${opt.color}`} />
+                  <div>
+                    <p className="text-sm font-medium">{opt.label}</p>
+                    <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                  </div>
+                  {selected && <CheckCircle2 className="h-4 w-4 text-primary ml-auto shrink-0 mt-0.5" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* 3 — Unavailable message */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+            Unavailable Message
+          </Label>
+          <p className="text-xs text-muted-foreground">Shown to passengers and drivers when display mode is not Live</p>
+          <Textarea
+            placeholder="e.g. This service is temporarily unavailable. Please try again later."
+            value={draft.unavailableMessage ?? ""}
+            onChange={(e) => updateDraft({ unavailableMessage: e.target.value || null })}
+            rows={3}
+            className="resize-none text-sm"
+          />
+        </div>
+
+        <Separator />
+
+        {/* 4 — Unavailable action */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <MousePointer className="h-4 w-4 text-muted-foreground" />
+            Action on Tap (when service is disabled)
+          </Label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {UNAVAILABLE_ACTION_OPTIONS.map((opt) => {
+              const selected = (draft.unavailableAction ?? data.unavailableAction) === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => updateDraft({ unavailableAction: opt.value })}
+                  className={`flex flex-col gap-1 p-3 rounded-lg border text-left transition-all ${
+                    selected
+                      ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                      : "border-border bg-muted/20 hover:bg-muted/50"
+                  }`}
+                >
+                  <p className="text-sm font-medium">{opt.label}</p>
+                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* 5 — Maintenance ETA (shown when maintenance mode) */}
+        {(draft.displayMode ?? data.displayMode) === "maintenance" && (
+          <>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                Maintenance ETA (optional)
+              </Label>
+              <p className="text-xs text-muted-foreground">When do you expect the service to resume?</p>
+              <Input
+                type="datetime-local"
+                value={draft.maintenanceEta ? new Date(draft.maintenanceEta).toISOString().slice(0, 16) : ""}
+                onChange={(e) => updateDraft({ maintenanceEta: e.target.value ? new Date(e.target.value).toISOString() : null })}
+                className="text-sm max-w-xs"
+              />
+            </div>
+            <Separator />
+          </>
+        )}
+
+        {/* 6 — Zone restriction */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            Zone Restriction
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Select zones where this service is active. Empty selection = available in all zones.
+          </p>
+          {zonesQuery.isLoading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+            </div>
+          ) : zones.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">No zones configured yet.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
+              {zones.map((zone) => {
+                const checked = (draft.activeZoneIds ?? data.activeZoneIds).includes(zone.id);
+                return (
+                  <div key={zone.id} className="flex items-center gap-2.5 p-2.5 rounded-lg border bg-muted/20">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggleZone(zone.id)}
+                      id={`zone-${zone.id}`}
+                    />
+                    <label htmlFor={`zone-${zone.id}`} className="text-sm cursor-pointer select-none flex-1">
+                      {zone.name}
+                      {!zone.isActive && <span className="text-xs text-muted-foreground ml-1">(inactive)</span>}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {(draft.activeZoneIds ?? data.activeZoneIds).length === 0 && (
+            <p className="text-xs text-green-600 flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Available in all zones
+            </p>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* 7 — Capacity limit */}
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label className="text-sm font-medium flex items-center gap-2">
+              <Activity className="h-4 w-4 text-muted-foreground" />
+              Max Active Rides Capacity
+            </Label>
+            <p className="text-xs text-muted-foreground mt-0.5">Cap concurrent active rides (leave empty = no limit)</p>
+          </div>
+          <Input
+            type="number"
+            min="1"
+            placeholder="No limit"
+            value={draft.maxActiveRides ?? ""}
+            onChange={(e) => updateDraft({ maxActiveRides: e.target.value ? parseInt(e.target.value) : null })}
+            className="w-28 text-right text-sm"
+          />
+        </div>
+
+        <Separator />
+
+        {/* 8 — Activity log */}
+        <div className="space-y-3">
+          <Label className="text-sm font-medium flex items-center gap-2">
+            <History className="h-4 w-4 text-muted-foreground" />
+            Recent Changes
+          </Label>
+          {data.logs.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic py-2">No changes recorded yet.</p>
+          ) : (
+            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+              {data.logs.map((log) => (
+                <div key={log.id} className="p-3 rounded-lg border bg-muted/20 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {log.changedBy ? `Admin #${log.changedBy}` : "System"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(log.changedAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {formatChanges(log.changes as Record<string, { before: unknown; after: unknown }>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Original ServiceSettingsPanel (driver requirements) ─────────────────────
 
 function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
   const { toast } = useToast();
@@ -148,19 +574,9 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
             <Settings2 className="h-4 w-4" />
-            Service Settings
+            Driver Requirements
           </CardTitle>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2" title={data.isEnabled ? "Disable service" : "Enable service"}>
-              <Switch
-                checked={data.isEnabled}
-                onCheckedChange={toggleEnabled}
-                disabled={mutation.isPending}
-              />
-              <span className={`text-xs font-medium ${data.isEnabled ? "text-green-600" : "text-muted-foreground"}`}>
-                {data.isEnabled ? "Enabled" : "Disabled"}
-              </span>
-            </div>
             {!editing && (
               <Button variant="outline" size="sm" onClick={() => { setDraft(data); setEditing(true); }} className="gap-1.5">
                 <Pencil className="h-3.5 w-3.5" /> Edit
@@ -290,6 +706,8 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
   );
 }
 
+// ─── Car / Bike view ──────────────────────────────────────────────────────────
+
 function CarBikeView({ type }: { type: "car" | "bike" }) {
   const meta = SERVICE_META[type];
   const Icon = meta.icon;
@@ -331,6 +749,7 @@ function CarBikeView({ type }: { type: "car" | "bike" }) {
         <StatCard label="Cancelled"    value={cancelled} icon={XCircle}       color="bg-red-500/10 text-red-500"        loading={ridesQuery.isLoading} />
       </div>
 
+      <ServiceControlPanel type={type as ServiceControlType} />
       <ServiceSettingsPanel type={type} />
 
       {pricingQuery.isLoading ? (
@@ -420,6 +839,8 @@ function CarBikeView({ type }: { type: "car" | "bike" }) {
   );
 }
 
+// ─── Shuttle view ─────────────────────────────────────────────────────────────
+
 function ShuttleView() {
   const routesQuery = useQuery({
     queryKey: ["routes-count"],
@@ -448,13 +869,14 @@ function ShuttleView() {
         <StatCard label="Trips Scheduled" value={tripsData?.total         ?? 0} icon={Navigation} color="bg-primary/10 text-primary"       loading={tripsLoading} />
       </div>
 
+      <ServiceControlPanel type="shuttle" />
       <ServiceSettingsPanel type="shuttle" />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: "Manage Routes",    desc: "Create and edit shuttle routes and stations",  href: "/routes",  icon: Map,        color: "bg-amber-500/10 text-amber-600" },
+          { label: "Manage Routes",    desc: "Create and edit shuttle routes and stations",  href: "/routes",   icon: Map,        color: "bg-amber-500/10 text-amber-600" },
           { label: "Fleet Management", desc: "Register and manage the bus fleet",             href: "/vehicles", icon: Bus,        color: "bg-blue-500/10 text-blue-600" },
-          { label: "Driver Roster",    desc: "Assign and manage shuttle drivers",             href: "/drivers", icon: UserCircle, color: "bg-green-500/10 text-green-600" },
+          { label: "Driver Roster",    desc: "Assign and manage shuttle drivers",             href: "/drivers",  icon: UserCircle, color: "bg-green-500/10 text-green-600" },
         ].map((item) => (
           <Link key={item.href} href={item.href}>
             <Card className="cursor-pointer hover:shadow-md transition-all hover:border-primary/30 h-full">
@@ -476,27 +898,52 @@ function ShuttleView() {
   );
 }
 
+// ─── Motorcycle view ──────────────────────────────────────────────────────────
+
+function MotorcycleView() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-3 rounded-xl bg-orange-500/10">
+          <Bike className="h-6 w-6 text-orange-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">Motorcycle Services</h1>
+          <p className="text-sm text-muted-foreground">On-demand motorcycle rides</p>
+        </div>
+      </div>
+      <ServiceControlPanel type="motorcycle" />
+    </div>
+  );
+}
+
+// ─── Delivery view ────────────────────────────────────────────────────────────
+
+function DeliveryView() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-3 rounded-xl bg-violet-500/10">
+          <PackageOpen className="h-6 w-6 text-violet-600" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold">Delivery Services</h1>
+          <p className="text-sm text-muted-foreground">Package and food delivery</p>
+        </div>
+      </div>
+      <ServiceControlPanel type="delivery" />
+    </div>
+  );
+}
+
+// ─── Root page ────────────────────────────────────────────────────────────────
+
 export default function Services() {
   const [, params] = useRoute("/services/:type");
   const type = params?.type ?? "car";
 
-  if (type === "delivery") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="p-5 rounded-2xl bg-violet-500/10 mb-5">
-          <PackageOpen className="h-10 w-10 text-violet-500" />
-        </div>
-        <span className="text-xs font-bold uppercase tracking-widest text-violet-500 bg-violet-500/10 px-3 py-1 rounded-full mb-4">
-          Coming Soon
-        </span>
-        <h2 className="text-2xl font-bold">Delivery Services</h2>
-        <p className="text-muted-foreground text-sm mt-2 max-w-sm">
-          Delivery service management is currently in development and will be available in a future release.
-        </p>
-      </div>
-    );
-  }
-
+  if (type === "delivery") return <DeliveryView />;
+  if (type === "motorcycle") return <MotorcycleView />;
   if (type === "shuttle") return <ShuttleView />;
   if (type === "car" || type === "bike") return <CarBikeView type={type} />;
   return <CarBikeView type="car" />;

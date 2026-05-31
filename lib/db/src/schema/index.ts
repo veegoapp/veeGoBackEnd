@@ -27,3 +27,4 @@ export * from "./driverLocations";
 export * from "./userLocations";
 export * from "./auditLogs";
 export * from "./chatMessages";
+export * from "./serviceControls";
