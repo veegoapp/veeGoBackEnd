@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
 
-# check secrets only
 if [ -z "$NEON_DATABASE_URL" ] && [ -z "$DATABASE_URL" ]; then
   echo "DB missing"
   exit 1
@@ -12,7 +11,18 @@ if [ -z "$SESSION_SECRET" ]; then
   exit 1
 fi
 
-echo "Dependencies installing..."
+echo "Installing dependencies..."
 pnpm install
 
-echo "Setup complete (no servers started)"
+# API
+cd artifacts/api-server
+pnpm install
+pnpm build
+pnpm start &
+
+cd ..
+
+# Admin
+cd artifacts/admin-dashboard
+pnpm install
+pnpm dev --host 0.0.0.0
