@@ -266,7 +266,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { title: t("nav.support"), href: "/support", icon: MessageSquare },
         { title: t("nav.notifications"), href: "/notifications", icon: Bell },
-        { title: t("nav.reports"), href: "/reports", icon: BarChart3 },
+        {
+          title: t("nav.reports"), href: "/reports", icon: BarChart3,
+          subItems: [
+            { title: t("nav.revenue"),    href: "/reports/revenue",    icon: DollarSign },
+            { title: t("nav.trips"),      href: "/reports/trips",      icon: Navigation },
+            { title: t("nav.drivers"),    href: "/reports/drivers",    icon: UserCircle },
+            { title: t("nav.passengers"), href: "/reports/passengers", icon: Users },
+            { title: t("nav.zones"),      href: "/reports/zones",      icon: MapPin },
+            { title: t("nav.services"),   href: "/reports/services",   icon: Layers },
+            { title: t("nav.promoCodes"), href: "/reports/promo",      icon: Tags },
+            { title: t("nav.complaints"), href: "/reports/complaints", icon: MessageSquare },
+          ],
+        },
       ],
     },
     {
