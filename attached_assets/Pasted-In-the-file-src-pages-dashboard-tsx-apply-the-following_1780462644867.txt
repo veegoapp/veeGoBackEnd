@@ -1,0 +1,38 @@
+In the file `src/pages/dashboard.tsx`, apply the following changes carefully without breaking anything else in the project:
+
+**1 — Remove the simple live map:**
+Delete the `LiveMap` component, the `driverToPos` function, and the `MAP_BOUNDS` constant entirely. Also remove the data fetch that was only feeding this map if it is not used anywhere else on the page.
+
+**2 — Replace it with a shortcut card:**
+In the exact same location where the map was, add a simple card that displays:
+- Number of online drivers
+- Number of currently active trips
+- A `Link` button that navigates to `/live-tracking`
+
+Use data that is already being fetched on the page — do not add any new API calls.
+
+**3 — Remove the Job Queue section:**
+Delete the `QueueStatus` interface, its fetch logic, and its card from the page entirely.
+
+**4 — Reorder the activity section:**
+Change the order to: Active Trips first, then Recent Bookings, then Upcoming Departures, then Support Tickets last.
+
+---
+
+In the file `src/components/layout/app-layout.tsx`, apply the following fixes:
+
+**5 — Fix sidebar expand/collapse:**
+In the `NavItemRow` component, the `onClick` on the row `div` currently only toggles when the item has no `href`. Change it so that when an item has `subItems`, clicking anywhere on the row always toggles open/close regardless of whether the item also has an `href`. The parent row should never navigate — it should only expand or collapse. The chevron arrow should continue to work as before.
+
+**6 — Fix disabled sub-pages under Payments and Reports:**
+In the `navGroups` array, the sub-items under Payments (transactions, wallets, payouts, commission) and Reports (revenue, trips, drivers, passengers, zones, services, promo codes, complaints) all currently point to the same `href` as their parent. Give each sub-item its own correct `href` that matches the actual routes already defined in `App.tsx`. For any sub-page that does not have a dedicated route yet, mark it with `comingSoon: true` instead of pointing it to the parent route.
+
+---
+
+**Important rules — do not break anything:**
+- Only modify these two files: `src/pages/dashboard.tsx` and `src/components/layout/app-layout.tsx`
+- Do not touch any other file in the project
+- Do not change or remove any existing API calls or endpoints
+- Do not change any types or interfaces that are still being used
+- The four stat cards at the top with their sparklines must remain exactly as they are
+- All data must come from the existing API endpoints already in the file

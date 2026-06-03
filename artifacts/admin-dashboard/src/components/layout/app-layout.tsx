@@ -81,7 +81,7 @@ function NavItemRow({
           ? "bg-primary/10 text-primary font-semibold"
           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
       )}
-      onClick={() => !item.href && hasSubItems && setIsOpen((o) => !o)}
+      onClick={() => hasSubItems && setIsOpen((o) => !o)}
     >
       <div className="flex items-center gap-2.5 min-w-0">
         <Icon
@@ -113,7 +113,7 @@ function NavItemRow({
     </div>
   );
 
-  const wrappedRow = item.href ? (
+  const wrappedRow = item.href && !hasSubItems ? (
     <Link href={item.href}>{rowInner}</Link>
   ) : (
     rowInner
@@ -138,9 +138,9 @@ function NavItemRow({
       {tooltipWrapped}
       {hasSubItems && isOpen && !collapsed && (
         <div className="mt-0.5 border-l border-slate-200 dark:border-slate-700 ml-[18px]">
-          {item.subItems!.map((sub) => (
+          {item.subItems!.map((sub, i) => (
             <NavItemRow
-              key={sub.href}
+              key={sub.href ?? sub.title ?? i}
               item={sub}
               location={location}
               collapsed={false}
@@ -255,8 +255,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           subItems: [
             { title: t("nav.transactions"), href: "/payments", icon: CreditCard },
             { title: t("nav.wallets"), href: "/wallet", icon: Wallet },
-            { title: t("nav.payouts"), href: "/payments", icon: ArrowUpRight },
-            { title: t("nav.commission"), href: "/payments", icon: Percent },
+            { title: t("nav.payouts"), icon: ArrowUpRight, comingSoon: true },
+            { title: t("nav.commission"), icon: Percent, comingSoon: true },
           ],
         },
       ],
@@ -269,14 +269,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {
           title: t("nav.reports"), href: "/reports", icon: BarChart3,
           subItems: [
-            { title: t("nav.revenue"), href: "/reports", icon: DollarSign },
-            { title: t("nav.trips"), href: "/reports", icon: Navigation },
-            { title: t("nav.drivers"), href: "/reports", icon: UserCircle },
-            { title: t("nav.passengers"), href: "/reports", icon: Users },
-            { title: t("nav.zones"), href: "/reports", icon: MapPin },
-            { title: t("nav.services"), href: "/reports", icon: Layers },
-            { title: t("nav.promoCodes"), href: "/reports", icon: Tags },
-            { title: t("nav.complaints"), href: "/reports", icon: MessageSquare },
+            { title: t("nav.revenue"), icon: DollarSign, comingSoon: true },
+            { title: t("nav.trips"), icon: Navigation, comingSoon: true },
+            { title: t("nav.drivers"), icon: UserCircle, comingSoon: true },
+            { title: t("nav.passengers"), icon: Users, comingSoon: true },
+            { title: t("nav.zones"), icon: MapPin, comingSoon: true },
+            { title: t("nav.services"), icon: Layers, comingSoon: true },
+            { title: t("nav.promoCodes"), icon: Tags, comingSoon: true },
+            { title: t("nav.complaints"), icon: MessageSquare, comingSoon: true },
           ],
         },
       ],

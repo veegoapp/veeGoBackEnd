@@ -1,15 +1,14 @@
-import React, { useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
 import {
   AreaChart, Area, ResponsiveContainer, Tooltip, XAxis,
 } from "recharts";
 import {
   Navigation, DollarSign, Users, Wifi, RefreshCw,
   TrendingUp, TrendingDown, Minus, MapPin, Clock,
-  Circle, MessageSquare, ArrowRight, Bus, ListTodo,
-  AlertTriangle, BarChart3, CheckCircle2,
+  Circle, MessageSquare, ArrowRight, Bus,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format, parseISO, isToday, isYesterday } from "date-fns";
 import { useTranslation } from "react-i18next";
-import { useToast } from "@/hooks/use-toast";
 
 /* ─────────────────────────── Types ─────────────────────────── */
 
@@ -60,22 +58,6 @@ interface Activity {
   activeTrips: Array<{ id: number; routeName: string | null; fromLocation: string | null; toLocation: string | null; driverName: string | null; status: string; departureTime: string; availableSeats: number; totalSeats: number }>;
   recentBookings: Array<{ id: number; status: string; totalPrice: string; seatCount: number; createdAt: string; userName: string | null; userEmail: string | null }>;
   upcomingDepartures: Array<{ id: number; routeName: string | null; fromLocation: string | null; toLocation: string | null; departureTime: string; status: string }>;
-}
-
-interface QueueStatus {
-  pendingCount: number;
-  deadLetterCount: number;
-  failuresByType: Record<string, number>;
-  recentDeadLetters: Array<{
-    jobId: string;
-    type: string;
-    attempt: number;
-    maxAttempts: number;
-    lastError: string;
-    failedAt: string;
-    createdAt: string;
-  }>;
-  asOf: string;
 }
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
@@ -241,151 +223,6 @@ function StatCard({
   );
 }
 
-/* ─────────────────────────── Live Map ─────────────────────────── */
-
-const MAP_BOUNDS = { latMin: 20, latMax: 40, lngMin: 35, lngMax: 60 };
-
-function driverToPos(lat: number | null, lng: number | null): { top: number; left: number } | null {
-  if (lat == null || lng == null) return null;
-  const top = 100 - ((lat - MAP_BOUNDS.latMin) / (MAP_BOUNDS.latMax - MAP_BOUNDS.latMin)) * 100;
-  const left = ((lng - MAP_BOUNDS.lngMin) / (MAP_BOUNDS.lngMax - MAP_BOUNDS.lngMin)) * 100;
-  if (top < 0 || top > 100 || left < 0 || left > 100) return null;
-  return { top: Math.max(3, Math.min(97, top)), left: Math.max(3, Math.min(97, left)) };
-}
-
-function LiveMap({ drivers, loading }: { drivers: LiveDriver[]; loading: boolean }) {
-  const { t } = useTranslation();
-  const online = drivers.filter((d) => d.isOnline);
-  const withGps = online.filter((d) => d.currentLatitude != null && d.currentLongitude != null);
-  const withoutGps = online.filter((d) => d.currentLatitude == null || d.currentLongitude == null);
-
-  const placed = useMemo(() => {
-    const result: Array<{ driver: LiveDriver; top: number; left: number }> = [];
-    const occupied = new Set<string>();
-
-    for (const d of withGps) {
-      const pos = driverToPos(d.currentLatitude, d.currentLongitude);
-      if (pos) {
-        result.push({ driver: d, ...pos });
-        occupied.add(`${Math.round(pos.top)}-${Math.round(pos.left)}`);
-      }
-    }
-
-    let angle = 0;
-    for (const d of withoutGps) {
-      const top = 50 + 30 * Math.sin((angle * Math.PI) / 180);
-      const left = 50 + 30 * Math.cos((angle * Math.PI) / 180);
-      result.push({ driver: d, top, left });
-      angle += 360 / Math.max(withoutGps.length, 1);
-    }
-
-    return result;
-  }, [drivers]);
-
-  return (
-    <Card className="overflow-hidden">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <MapPin className="h-4 w-4 text-blue-500" />
-            {t("dashboard.liveNetworkMap")}
-          </CardTitle>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" /> {t("common.online")}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber-500" /> {t("trips.enRoute")}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-slate-400" /> {t("common.offline")}
-            </span>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
-        <div className="relative w-full bg-slate-950 dark:bg-slate-900" style={{ height: 360 }}>
-          {/* Grid lines */}
-          <svg className="absolute inset-0 w-full h-full opacity-10" xmlns="http://www.w3.org/2000/svg">
-            {Array.from({ length: 11 }).map((_, i) => (
-              <React.Fragment key={i}>
-                <line x1={`${i * 10}%`} y1="0" x2={`${i * 10}%`} y2="100%" stroke="#64748b" strokeWidth="0.5" />
-                <line x1="0" y1={`${i * 10}%`} x2="100%" y2={`${i * 10}%`} stroke="#64748b" strokeWidth="0.5" />
-              </React.Fragment>
-            ))}
-          </svg>
-
-          {/* Road-like lines */}
-          <svg className="absolute inset-0 w-full h-full opacity-20" xmlns="http://www.w3.org/2000/svg">
-            <path d="M 0,180 Q 200,120 400,180 T 800,160" stroke="#334155" strokeWidth="6" fill="none" />
-            <path d="M 0,250 Q 300,200 600,250 T 1200,220" stroke="#334155" strokeWidth="4" fill="none" />
-            <path d="M 200,0 Q 250,180 220,360" stroke="#334155" strokeWidth="5" fill="none" />
-            <path d="M 550,0 Q 520,180 560,360" stroke="#334155" strokeWidth="4" fill="none" />
-          </svg>
-
-          {loading ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex items-center gap-2 text-slate-400 text-sm">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                {t("common.loading2")}
-              </div>
-            </div>
-          ) : online.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-              <Bus className="h-8 w-8 mb-2 opacity-40" />
-              <p className="text-sm">{t("dashboard.noDriversOnline")}</p>
-            </div>
-          ) : (
-            placed.map(({ driver: d, top, left }) => {
-              const dotColor = d.status === "busy" ? "#f59e0b" : d.isOnline ? "#10b981" : "#94a3b8";
-              return (
-                <div
-                  key={d.id}
-                  className="absolute group"
-                  style={{ top: `${top}%`, left: `${left}%`, transform: "translate(-50%,-50%)" }}
-                >
-                  <div className="relative cursor-pointer">
-                    <span
-                      className="flex h-3.5 w-3.5 rounded-full ring-2 ring-slate-900 shadow-lg"
-                      style={{ backgroundColor: dotColor }}
-                    >
-                      {d.isOnline && (
-                        <span
-                          className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-50"
-                          style={{ backgroundColor: dotColor }}
-                        />
-                      )}
-                    </span>
-                    <div className="absolute hidden group-hover:block bottom-6 left-1/2 -translate-x-1/2 bg-popover border border-border rounded-md shadow-xl p-2.5 text-xs w-40 z-20 pointer-events-none">
-                      <p className="font-semibold text-foreground">{d.name}</p>
-                      <p className="text-muted-foreground capitalize mt-0.5">{d.status}</p>
-                      {d.currentLatitude != null && (
-                        <p className="text-muted-foreground font-mono text-[10px] mt-1">
-                          {d.currentLatitude.toFixed(4)}, {d.currentLongitude?.toFixed(4)}
-                        </p>
-                      )}
-                      {d.currentSpeed != null && (
-                        <p className="text-muted-foreground mt-0.5">{d.currentSpeed.toFixed(0)} km/h</p>
-                      )}
-                      {d.activeTrip && (
-                        <p className="text-blue-400 mt-0.5">Trip #{d.activeTrip.id}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-
-          <div className="absolute bottom-3 left-4 text-xs text-slate-500">
-            {online.length} {t("dashboard.driversOnline")}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 /* ─────────────────────────── Activity Feed ─────────────────────────── */
 
 function ActivitySection({ activity, loading }: { activity?: Activity; loading: boolean }) {
@@ -393,7 +230,48 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
   const [, setLocation] = useLocation();
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
+    <div className="grid gap-6 lg:grid-cols-4">
+      {/* Active Trips */}
+      <Card className="flex flex-col">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Circle className="h-4 w-4 fill-green-500 text-green-500" /> {t("dashboard.activeTrips")}
+            </CardTitle>
+            <Button variant="ghost" size="sm" className="text-xs h-7 gap-1" onClick={() => setLocation("/trips")}>
+              {t("common.viewAll")} <ArrowRight className="h-3 w-3" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="flex-1 space-y-0 px-4 pb-4">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full mb-2" />)
+          ) : (activity?.activeTrips ?? []).length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">{t("dashboard.noActiveTripsNow")}</p>
+          ) : (
+            (activity?.activeTrips ?? []).slice(0, 6).map((trip) => (
+              <div key={trip.id} className="flex items-center justify-between py-2 border-b last:border-0 gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{trip.routeName ?? `Trip #${trip.id}`}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {trip.fromLocation} → {trip.toLocation}
+                  </p>
+                  {trip.driverName && (
+                    <p className="text-xs text-muted-foreground">{trip.driverName}</p>
+                  )}
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-medium">{format(parseISO(trip.departureTime), "HH:mm")}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {trip.totalSeats - trip.availableSeats}/{trip.totalSeats} {t("bookings.seats")}
+                  </p>
+                </div>
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
       {/* Recent Bookings */}
       <Card className="flex flex-col">
         <CardHeader className="pb-3">
@@ -433,12 +311,12 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
         </CardContent>
       </Card>
 
-      {/* Active Trips */}
+      {/* Upcoming Departures */}
       <Card className="flex flex-col">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Circle className="h-4 w-4 fill-green-500 text-green-500" /> {t("dashboard.activeTrips")}
+              <Clock className="h-4 w-4 text-violet-500" /> {t("dashboard.upcomingDepartures")}
             </CardTitle>
             <Button variant="ghost" size="sm" className="text-xs h-7 gap-1" onClick={() => setLocation("/trips")}>
               {t("common.viewAll")} <ArrowRight className="h-3 w-3" />
@@ -448,25 +326,25 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
         <CardContent className="flex-1 space-y-0 px-4 pb-4">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full mb-2" />)
-          ) : (activity?.activeTrips ?? []).length === 0 ? (
-            <p className="text-xs text-muted-foreground py-6 text-center">{t("dashboard.noActiveTripsNow")}</p>
+          ) : (activity?.upcomingDepartures ?? []).length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">{t("dashboard.noUpcomingDepartures")}</p>
           ) : (
-            (activity?.activeTrips ?? []).slice(0, 6).map((trip) => (
-              <div key={trip.id} className="flex items-center justify-between py-2 border-b last:border-0 gap-3">
+            (activity?.upcomingDepartures ?? []).slice(0, 6).map((dep) => (
+              <div key={dep.id} className="flex items-center justify-between py-2 border-b last:border-0 gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{trip.routeName ?? `Trip #${trip.id}`}</p>
+                  <p className="text-sm font-medium truncate">{dep.routeName ?? `Trip #${dep.id}`}</p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {trip.fromLocation} → {trip.toLocation}
+                    {dep.fromLocation} → {dep.toLocation}
                   </p>
-                  {trip.driverName && (
-                    <p className="text-xs text-muted-foreground">{trip.driverName}</p>
-                  )}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-sm font-medium">{format(parseISO(trip.departureTime), "HH:mm")}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {trip.totalSeats - trip.availableSeats}/{trip.totalSeats} {t("bookings.seats")}
-                  </p>
+                  <p className="text-sm font-medium">{format(parseISO(dep.departureTime), "HH:mm")}</p>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] capitalize px-1.5 py-0 ${STATUS_COLOR[dep.status] ? `border-transparent text-white ${STATUS_COLOR[dep.status]}` : ""}`}
+                  >
+                    {dep.status}
+                  </Badge>
                 </div>
               </div>
             ))
@@ -515,214 +393,6 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-/* ─────────────────────────── Queue Monitor ─────────────────────────── */
-
-function QueueMonitor() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const { data, isLoading, isFetching, refetch, dataUpdatedAt } = useQuery<QueueStatus>({
-    queryKey: ["admin-queue-status"],
-    queryFn: () => adminFetch<QueueStatus>("/admin/queue/status"),
-    refetchInterval: 30_000,
-  });
-
-  const retryMutation = useMutation({
-    mutationFn: (jobId: string) =>
-      adminFetch<{ success: boolean; jobId: string; pendingCount: number }>(
-        `/admin/queue/retry/${encodeURIComponent(jobId)}`,
-        { method: "POST" },
-      ),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["admin-queue-status"] });
-    },
-  });
-
-  const retryAllMutation = useMutation({
-    mutationFn: () =>
-      adminFetch<{ success: boolean; retriedCount: number; pendingCount: number }>(
-        "/admin/queue/retry-all",
-        { method: "POST" },
-      ),
-    onSuccess: (res) => {
-      void queryClient.invalidateQueries({ queryKey: ["admin-queue-status"] });
-      toast({ title: `${res.retriedCount} job${res.retriedCount === 1 ? "" : "s"} re-queued` });
-    },
-    onError: (err: Error) => toast({ title: "Retry All failed", description: err.message, variant: "destructive" }),
-  });
-
-  const hasFailures = (data?.deadLetterCount ?? 0) > 0;
-  const hasPending = (data?.pendingCount ?? 0) > 0;
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            <ListTodo className="h-4 w-4 text-violet-500" />
-            Queue Monitor
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            {dataUpdatedAt > 0 && (
-              <span className="text-xs text-muted-foreground hidden sm:inline">
-                Updated {format(new Date(dataUpdatedAt), "HH:mm:ss")}
-              </span>
-            )}
-            {hasFailures && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5 h-7 text-xs border-violet-500/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
-                onClick={() => retryAllMutation.mutate()}
-                disabled={retryAllMutation.isPending || retryMutation.isPending}
-              >
-                <RefreshCw className={`h-3 w-3 ${retryAllMutation.isPending ? "animate-spin" : ""}`} />
-                {retryAllMutation.isPending ? "Retrying…" : "Retry All"}
-              </Button>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 h-7 text-xs"
-              onClick={() => refetch()}
-              disabled={isFetching}
-            >
-              <RefreshCw className={`h-3 w-3 ${isFetching ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Summary counters */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="h-3.5 w-3.5 text-amber-500" />
-              Pending Jobs
-            </div>
-            {isLoading ? (
-              <Skeleton className="h-7 w-16" />
-            ) : (
-              <span className={`text-2xl font-bold ${hasPending ? "text-amber-500" : "text-foreground"}`}>
-                {data?.pendingCount ?? 0}
-              </span>
-            )}
-          </div>
-
-          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-1">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-              Dead-Letter Queue
-            </div>
-            {isLoading ? (
-              <Skeleton className="h-7 w-16" />
-            ) : (
-              <span className={`text-2xl font-bold ${hasFailures ? "text-red-500" : "text-foreground"}`}>
-                {data?.deadLetterCount ?? 0}
-              </span>
-            )}
-          </div>
-
-          <div className="rounded-lg border bg-muted/30 p-3 flex flex-col gap-1 col-span-2 sm:col-span-1">
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <BarChart3 className="h-3.5 w-3.5 text-blue-500" />
-              Job Types Affected
-            </div>
-            {isLoading ? (
-              <Skeleton className="h-7 w-16" />
-            ) : (
-              <span className="text-2xl font-bold">
-                {Object.keys(data?.failuresByType ?? {}).length}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Per-type failure stats */}
-        {!isLoading && Object.keys(data?.failuresByType ?? {}).length > 0 && (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-              <BarChart3 className="h-3 w-3" /> Failures by Job Type
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {Object.entries(data!.failuresByType).map(([type, count]) => (
-                <Badge
-                  key={type}
-                  variant="outline"
-                  className="gap-1.5 border-red-500/30 text-red-600 dark:text-red-400 bg-red-500/5"
-                >
-                  <span className="font-mono text-[10px]">{type}</span>
-                  <span className="font-bold">{count}</span>
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recent dead-letter entries */}
-        {!isLoading && (data?.recentDeadLetters ?? []).length > 0 ? (
-          <div>
-            <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
-              <AlertTriangle className="h-3 w-3 text-red-500" /> Recent Failed Jobs (last 20)
-            </p>
-            <div className="rounded-md border divide-y max-h-64 overflow-y-auto">
-              {data!.recentDeadLetters.map((entry) => {
-                const isRetrying = retryMutation.isPending && retryMutation.variables === entry.jobId;
-                const didRetry = retryMutation.isSuccess && retryMutation.variables === entry.jobId;
-                return (
-                  <div key={entry.jobId} className="px-3 py-2.5 text-xs flex flex-col gap-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono shrink-0">
-                          {entry.type}
-                        </Badge>
-                        <span className="text-muted-foreground font-mono text-[10px] truncate">
-                          {entry.jobId}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-muted-foreground text-[10px]">
-                          {relativeTime(entry.failedAt)}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-6 px-2 text-[10px] gap-1 border-violet-500/40 text-violet-600 dark:text-violet-400 hover:bg-violet-500/10"
-                          onClick={() => retryMutation.mutate(entry.jobId)}
-                          disabled={isRetrying || retryMutation.isPending}
-                        >
-                          <RefreshCw className={`h-2.5 w-2.5 ${isRetrying ? "animate-spin" : ""}`} />
-                          {isRetrying ? "Retrying…" : didRetry ? "Queued" : "Retry"}
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-red-500 dark:text-red-400 truncate">
-                      {entry.lastError}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Attempt {entry.attempt}/{entry.maxAttempts}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-            {retryMutation.isError && (
-              <p className="text-xs text-red-500 mt-2">
-                Retry failed: {(retryMutation.error as Error).message}
-              </p>
-            )}
-          </div>
-        ) : !isLoading && (
-          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-            <CheckCircle2 className="h-4 w-4" />
-            <span>No failed jobs — queue is healthy</span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -856,11 +526,44 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Live Map */}
-      <LiveMap drivers={drivers} loading={liveLoading} />
-
-      {/* Queue Monitor */}
-      <QueueMonitor />
+      {/* Live Network Shortcut */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapPin className="h-4 w-4 text-blue-500" />
+            {t("dashboard.liveNetworkMap")}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-8">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{t("dashboard.driversOnline")}</span>
+              {liveLoading ? (
+                <Skeleton className="h-9 w-16" />
+              ) : (
+                <span className="text-3xl font-bold">{onlineDrivers}</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs text-muted-foreground">{t("dashboard.activeTrips")}</span>
+              {activityLoading ? (
+                <Skeleton className="h-9 w-16" />
+              ) : (
+                <span className="text-3xl font-bold">{(activity?.activeTrips ?? []).length}</span>
+              )}
+            </div>
+            <div className="ml-auto">
+              <Link href="/live-tracking">
+                <Button variant="outline" className="gap-2">
+                  <Navigation className="h-4 w-4" />
+                  {t("nav.live")}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Activity */}
       <ActivitySection activity={activity} loading={activityLoading} />
