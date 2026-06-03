@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { io, Socket } from "socket.io-client";
 import { adminFetch } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAdminSocket } from "@/hooks/useAdminSocket";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -304,7 +305,8 @@ function ConversationList({
 export default function ChatInbox() {
   const queryClient = useQueryClient();
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const { token } = useAuth();
+  const { connected, socketRef } = useAdminSocket(token);
 
   // Stats
   const statsQuery = useQuery({
@@ -332,26 +334,18 @@ export default function ChatInbox() {
   }, [queryClient, selectedTripId]);
 
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) return;
-
-    const socket = io(window.location.origin, {
-      path: "/api/socket.io",
-      auth: { token },
-      transports: ["websocket", "polling"],
-      reconnectionAttempts: 10,
-    });
-
-    socketRef.current = socket;
+    if (!connected) return;
+    const socket = socketRef.current;
+    if (!socket) return;
 
     socket.on("admin:new-chat-message", handleNewMessage);
     socket.on("trip:chat-message",       handleNewMessage);
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      socket.off("admin:new-chat-message", handleNewMessage);
+      socket.off("trip:chat-message",       handleNewMessage);
     };
-  }, [handleNewMessage]);
+  }, [connected, handleNewMessage, socketRef]);
 
   const stats     = statsQuery.data;
   const convs     = convsQuery.data?.data ?? [];

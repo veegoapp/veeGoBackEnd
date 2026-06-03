@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Radio, Gauge, Navigation, Bus, UserCircle, RefreshCw,
-  Star, MapPin, Wifi, WifiOff,
+  Star, MapPin, Wifi, WifiOff, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link } from "wouter";
 import { useTranslation } from "react-i18next";
 import { formatDistanceToNow } from "date-fns";
@@ -69,6 +71,8 @@ const STATUS_BADGE: Record<string, string> = {
 export default function LiveTracking() {
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const { t } = useTranslation();
   const { token } = useAuth();
 
@@ -91,13 +95,29 @@ export default function LiveTracking() {
     [baseDrivers, locationUpdates]
   );
 
-  const online    = drivers.filter((d) => d.status === "online" || d.status === "busy");
-  const offline   = drivers.filter((d) => d.status === "offline" || d.status === "suspended");
+  const filteredDrivers: LiveDriver[] = useMemo(() => {
+    return drivers.filter((d) => {
+      if (statusFilter !== "all") {
+        if (statusFilter === "online"    && d.status !== "online")    return false;
+        if (statusFilter === "busy"      && d.status !== "busy")      return false;
+        if (statusFilter === "offline"   && d.status !== "offline")   return false;
+        if (statusFilter === "suspended" && d.status !== "suspended") return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        if (!d.name.toLowerCase().includes(q) && !d.phone.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [drivers, searchQuery, statusFilter]);
+
+  const online    = filteredDrivers.filter((d) => d.status === "online" || d.status === "busy");
+  const offline   = filteredDrivers.filter((d) => d.status === "offline" || d.status === "suspended");
   const withGps   = online.filter((d) => d.currentLatitude != null && d.currentLongitude != null);
 
   const driverMarkers: DriverMarker[] = useMemo(
     () =>
-      drivers
+      filteredDrivers
         .filter((d) => d.currentLatitude != null && d.currentLongitude != null)
         .map((d) => ({
           id: d.id,
@@ -170,6 +190,41 @@ export default function LiveTracking() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Driver search + status filter */}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search by name or phone…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="All statuses" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="online">Online</SelectItem>
+            <SelectItem value="busy">On Trip</SelectItem>
+            <SelectItem value="offline">Offline</SelectItem>
+            <SelectItem value="suspended">Suspended</SelectItem>
+          </SelectContent>
+        </Select>
+        {(searchQuery || statusFilter !== "all") && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+            Clear
+          </Button>
+        )}
+        {(searchQuery || statusFilter !== "all") && (
+          <span className="text-xs text-muted-foreground ml-auto">
+            {filteredDrivers.length} of {drivers.length} drivers
+          </span>
+        )}
       </div>
 
       {/* MapLibre Fleet Map */}

@@ -72,5 +72,5 @@ export function useAdminSocket(token: string | null) {
     };
   }, [token]);
 
-  return { connected, locationUpdates };
+  return { connected, locationUpdates, socketRef };
 }

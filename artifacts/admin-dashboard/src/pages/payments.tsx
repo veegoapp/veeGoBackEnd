@@ -72,116 +72,6 @@ function txIcon(type: string) {
   return <ArrowUp className="h-4 w-4 text-red-500" />;
 }
 
-function WalletsView() {
-  const [page, setPage] = useState(1);
-  const limit = 20;
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["admin-wallet-transactions", page],
-    queryFn: () => adminFetch<{ data: Transaction[]; total: number; page: number; limit: number }>(
-      `/admin/wallet/transactions?page=${page}&limit=${limit}`
-    ),
-  });
-
-  const transactions = data?.data ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = Math.ceil(total / limit);
-
-  const totalDeposits = transactions.filter((t) => t.type === "deposit").reduce((s, t) => s + t.amount, 0);
-  const totalPayments = transactions.filter((t) => t.type === "payment").reduce((s, t) => s + t.amount, 0);
-  const totalRefunds  = transactions.filter((t) => t.type === "refund").reduce((s, t) => s + t.amount, 0);
-
-  return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-blue-500/10">
-          <Wallet className="h-6 w-6 text-blue-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold">Wallets</h1>
-          <p className="text-sm text-muted-foreground">All passenger wallet transactions across the platform</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {isLoading ? (
-          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
-        ) : [
-          { label: "Deposits (this page)",  value: `$${totalDeposits.toFixed(2)}`,  icon: ArrowDownLeft, color: "bg-green-500/10 text-green-600" },
-          { label: "Payments (this page)",  value: `$${totalPayments.toFixed(2)}`,  icon: ArrowUp,        color: "bg-red-500/10 text-red-500" },
-          { label: "Refunds (this page)",   value: `$${totalRefunds.toFixed(2)}`,   icon: RefreshCw,      color: "bg-blue-500/10 text-blue-600" },
-        ].map((s) => (
-          <Card key={s.label}>
-            <CardContent className="pt-5 flex items-center gap-3">
-              <div className={`p-2.5 rounded-lg ${s.color}`}>
-                <s.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-xl font-bold">{s.value}</p>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Transaction History</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-3">
-              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
-            </div>
-          ) : transactions.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No transactions found</div>
-          ) : (
-            <div className="divide-y divide-border">
-              {transactions.map((tx) => (
-                <div key={tx.id} className="flex items-center gap-3 px-4 py-3">
-                  <div className="p-2 rounded-full bg-muted shrink-0">{txIcon(tx.type)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{tx.user?.name ?? `User #${tx.userId}`}</p>
-                      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${txTypeColor(tx.type)}`}>
-                        {tx.type}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate">{tx.description || "—"}</p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className={`text-sm font-semibold ${tx.type === "deposit" || tx.type === "refund" ? "text-green-600" : "text-red-500"}`}>
-                      {tx.type === "deposit" || tx.type === "refund" ? "+" : "-"}${Math.abs(tx.amount).toFixed(2)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">{format(new Date(tx.createdAt), "MMM d, HH:mm")}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {totalPages > 1 && (
-        <Pagination>
-          <PaginationContent>
-            <PaginationItem>
-              <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} />
-            </PaginationItem>
-            <PaginationItem className="text-sm text-muted-foreground px-4">
-              Page {page} of {totalPages}
-            </PaginationItem>
-            <PaginationItem>
-              <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={page >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"} />
-            </PaginationItem>
-          </PaginationContent>
-        </Pagination>
-      )}
-    </div>
-  );
-}
-
 function PayoutsView() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -897,7 +787,6 @@ export default function Payments() {
 
   const TABS = [
     { key: "ledger",     label: "Payment Ledger" },
-    { key: "wallets",    label: "Wallets" },
     { key: "payouts",    label: "Driver Payouts" },
     { key: "commission", label: "Commission" },
   ];
@@ -920,7 +809,6 @@ export default function Payments() {
         ))}
       </div>
       {section === "ledger"     && <PaymentLedgerView />}
-      {section === "wallets"    && <WalletsView />}
       {section === "payouts"    && <PayoutsView />}
       {section === "commission" && <CommissionView />}
     </div>

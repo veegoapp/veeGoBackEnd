@@ -33,6 +33,7 @@ import DriverDetailPanel from "@/components/DriverDetailPanel";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "wouter";
 import { Clock } from "lucide-react";
+import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 
 const driverSchema = z.object({
   userId: z.coerce.number().min(1, "User ID is required to link the account"),
@@ -49,14 +50,15 @@ export default function Drivers() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { t } = useTranslation();
 
   const { data, isLoading } = useListDrivers({
-    page: 1,
-    limit: 300,
+    page: page,
+    limit: 15,
   });
 
   const { data: busesData } = useListBuses({ limit: 100 });
@@ -230,10 +232,10 @@ export default function Drivers() {
             className="pl-9"
             placeholder={t("drivers.searchDrivers")}
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder={t("drivers.allStatuses", "All Statuses")} />
           </SelectTrigger>
@@ -244,7 +246,7 @@ export default function Drivers() {
           </SelectContent>
         </Select>
         {(search || statusFilter !== "all") && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); }}>
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setStatusFilter("all"); setPage(1); }}>
             {t("common.clear", "Clear")}
           </Button>
         )}
@@ -337,6 +339,28 @@ export default function Drivers() {
           </TableBody>
         </Table>
       </div>
+
+      {data && Math.ceil(data.total / 15) > 1 && (
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            <PaginationItem className="text-sm text-muted-foreground px-4">
+              Page {page} of {Math.ceil(data.total / 15)}
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext
+                onClick={() => setPage((p) => Math.min(Math.ceil(data.total / 15), p + 1))}
+                className={page >= Math.ceil(data.total / 15) ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
 
     </div>
   );

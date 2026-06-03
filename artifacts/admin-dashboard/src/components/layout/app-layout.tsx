@@ -235,7 +235,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.cars"), href: "/pricing/car", icon: Car },
             { title: t("nav.motorcycles"), href: "/pricing/bike", icon: Bike },
             { title: t("nav.surge"), href: "/pricing/surge", icon: Zap },
-            { title: t("nav.delivery"), href: "/pricing/delivery", icon: PackageOpen, comingSoon: true },
+            { title: t("nav.delivery"), href: "/pricing/delivery", icon: PackageOpen },
           ],
         },
       ],
@@ -266,19 +266,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       items: [
         { title: t("nav.support"), href: "/support", icon: MessageSquare },
         { title: t("nav.notifications"), href: "/notifications", icon: Bell },
-        {
-          title: t("nav.reports"), href: "/reports", icon: BarChart3,
-          subItems: [
-            { title: t("nav.revenue"), icon: DollarSign, comingSoon: true },
-            { title: t("nav.trips"), icon: Navigation, comingSoon: true },
-            { title: t("nav.drivers"), icon: UserCircle, comingSoon: true },
-            { title: t("nav.passengers"), icon: Users, comingSoon: true },
-            { title: t("nav.zones"), icon: MapPin, comingSoon: true },
-            { title: t("nav.services"), icon: Layers, comingSoon: true },
-            { title: t("nav.promoCodes"), icon: Tags, comingSoon: true },
-            { title: t("nav.complaints"), icon: MessageSquare, comingSoon: true },
-          ],
-        },
+        { title: t("nav.reports"), href: "/reports", icon: BarChart3 },
       ],
     },
     {
