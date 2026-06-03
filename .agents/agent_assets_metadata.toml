@@ -6,3 +6,9 @@ id = "pNqvGMbX-me0UDgWFA2kS"
 uri = "file://feature-reports/admin-changelog.md"
 type = "text"
 title = "Admin API Changelog"
+
+[[outputs]]
+id = "yEHJuVm4SjBQoGeFCjASF"
+uri = "file://PRODUCTION_READINESS.md"
+type = "text"
+title = "Production Readiness Report"
