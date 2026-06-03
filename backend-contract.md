@@ -1,823 +1,964 @@
 # Backend API Contract
 
-> **Base URL:** All REST endpoints are prefixed with `/api`  
-> **Example:** `POST /api/auth/register`  
-> **Socket.IO path:** `/api/socket.io`  
-> **Auth:** `Authorization: Bearer <jwt>` header on all authenticated routes  
-> **Roles:** `user` (passenger) · `driver` · `admin`  
-> **Error shape:** `{ "error": "string message" }`  
-> **Monetary values:** Stored as strings in DB; returned as **floats** in responses  
-> **Pagination shape:** `{ data: [...], total: number, page: number, limit: number }`
+**Base URL:** `https://0f7ebc97-871a-44da-9afe-1004df3f3f52-00-etsuj4iud2kt.worf.replit.dev`  
+**REST prefix:** `/api` (all REST endpoints below are relative to `/api`)  
+**WebSocket path:** `/api/socket.io`  
+**Generated from:** actual source code audit — June 2026
 
 ---
 
 ## Table of Contents
 
-1. [Authentication](#1-authentication)
-2. [Users (Passenger)](#2-users-passenger)
-3. [Driver Profile](#3-driver-profile)
+1. [Authentication & Conventions](#1-authentication--conventions)
+2. [Health](#2-health)
+3. [Auth Endpoints](#3-auth-endpoints)
 4. [Rides (On-demand)](#4-rides-on-demand)
-5. [Wallet](#5-wallet)
-6. [Shuttle / Bus Bookings](#6-shuttle--bus-bookings)
-7. [Payments](#7-payments)
-8. [Notifications](#8-notifications)
-9. [Zones & Zone Pricing](#9-zones--zone-pricing)
-10. [Service Controls](#10-service-controls)
-11. [Ratings](#11-ratings)
-12. [Support & Chat](#12-support--chat)
-13. [Promo Codes](#13-promo-codes)
-14. [Routes & Stations (Shuttle)](#14-routes--stations-shuttle)
-15. [Trips (Shuttle)](#15-trips-shuttle)
-16. [Buses](#16-buses)
-17. [Bookings (Shuttle)](#17-bookings-shuttle)
-18. [Driver Documents](#18-driver-documents)
-19. [Vehicles](#19-vehicles)
-20. [Locations](#20-locations)
-21. [Suggestions](#21-route-suggestions)
-22. [Audit Logs](#22-audit-logs)
-23. [Staff](#23-staff)
-24. [Earnings (Admin)](#24-earnings-admin)
-25. [Drivers (Admin)](#25-drivers-admin)
-26. [Admin General](#26-admin-general)
-27. [Dashboard (Admin)](#27-dashboard-admin)
-28. [Health Check](#28-health-check)
-29. [WebSocket Events](#29-websocket-events)
-30. [Push Notifications](#30-push-notifications)
-31. [Deprecated Aliases](#31-deprecated-aliases)
+5. [Routes & Stations](#5-routes--stations)
+6. [Trips (Shuttle)](#6-trips-shuttle)
+7. [Bookings](#7-bookings)
+8. [Drivers — Admin Management](#8-drivers--admin-management)
+9. [Driver — Self-Service (role: driver)](#9-driver--self-service-role-driver)
+10. [Driver Documents](#10-driver-documents)
+11. [Users — Admin Management](#11-users--admin-management)
+12. [User Locations](#12-user-locations)
+13. [Ratings](#13-ratings)
+14. [Payments](#14-payments)
+15. [Wallet](#15-wallet)
+16. [Notifications](#16-notifications)
+17. [Support Tickets](#17-support-tickets)
+18. [Chat](#18-chat)
+19. [Zones](#19-zones)
+20. [Zone Pricing](#20-zone-pricing)
+21. [Promo Codes](#21-promo-codes)
+22. [Shuttle](#22-shuttle)
+23. [Buses](#23-buses)
+24. [Vehicles](#24-vehicles)
+25. [Earnings](#25-earnings)
+26. [Dashboard](#26-dashboard)
+27. [Service Controls](#27-service-controls)
+28. [Staff & Roles](#28-staff--roles)
+29. [Suggestions](#29-suggestions)
+30. [Audit Logs](#30-audit-logs)
+31. [Admin Analytics](#31-admin-analytics)
+32. [WebSocket Events](#32-websocket-events)
 
 ---
 
-## 1. Authentication
+## 1. Authentication & Conventions
 
-### `POST /api/auth/register`
-Register a new passenger or driver account.
+### Authentication
 
+All protected endpoints require a JWT Bearer token:
+
+```
+Authorization: Bearer <accessToken>
+```
+
+Login returns two tokens:
+- `accessToken` — short-lived; used in `Authorization` header
+- `refreshToken` — long-lived; used to obtain new access tokens
+
+### Role Values
+
+| Role | Description |
+|------|-------------|
+| `passenger` | Default registered user |
+| `driver` | Driver account |
+| `admin` | Administrator/staff |
+
+### Common Error Shapes
+
+```jsonc
+// 400 Bad Request
+{ "error": "Validation message or field description" }
+
+// 401 Unauthorized
+{ "error": "Unauthorized" }
+
+// 403 Forbidden
+{ "error": "Forbidden" }
+
+// 404 Not Found
+{ "error": "Resource not found" }
+
+// 409 Conflict
+{ "error": "Description of conflict" }
+
+// 500 Internal Server Error
+{ "error": "Description" }
+```
+
+### Pagination
+
+Most list endpoints support:
+
+| Query param | Type | Default | Description |
+|-------------|------|---------|-------------|
+| `page` | int | `1` | 1-indexed page number |
+| `limit` | int | `20` | Results per page (max 100) |
+
+Paginated responses return:
+```jsonc
+{ "data": [...], "total": 123, "page": 1, "limit": 20 }
+```
+
+### Numeric Money Fields
+
+All monetary amounts are stored as strings in the database but **parsed to `float`** in all API responses. Always send numeric values (not strings) in request bodies.
+
+---
+
+## 2. Health
+
+No authentication required.
+
+### `GET /health`
+```jsonc
+// 200 OK
+{ "status": "ok", "timestamp": "2026-06-03T00:00:00.000Z" }
+```
+
+### `GET /healthz`
+```jsonc
+// 200 OK
+{ "status": "ok" }
+```
+
+### `GET /health/db`
+```jsonc
+// 200 OK
+{
+  "status": "ok",
+  "database": "connected",
+  "latencyMs": 12,
+  "provider": "neon",
+  "timestamp": "2026-06-03T00:00:00.000Z"
+}
+
+// 503 Service Unavailable
+{
+  "status": "error",
+  "database": "disconnected",
+  "error": "connection refused",
+  "timestamp": "2026-06-03T00:00:00.000Z"
+}
+```
+
+---
+
+## 3. Auth Endpoints
+
+### `POST /auth/register`
 **Auth:** None
 
-**Request body:**
-```json
+**Request:**
+```jsonc
 {
-  "name": "string (required)",
-  "email": "string (valid email, required)",
-  "password": "string (min 6 chars, required)",
-  "phone": "string (optional)",
-  "role": "user | driver (default: user)"
+  "name": "Jane Doe",
+  "email": "jane@example.com",
+  "phone": "+1234567890",
+  "password": "securepass123"
 }
 ```
 
 **Response `201`:**
-```json
+```jsonc
 {
-  "token": "jwt_string",
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
   "user": {
     "id": 1,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "role": "user",
-    "phone": null,
-    "createdAt": "2026-01-01T00:00:00.000Z"
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "phone": "+1234567890",
+    "role": "passenger",
+    "createdAt": "2026-06-03T00:00:00.000Z"
   }
 }
 ```
 
-**Errors:** `400` email already in use · `400` validation failure
-
 ---
 
-### `POST /api/auth/login`
-Log in and receive a JWT.
-
+### `POST /auth/register/driver`
 **Auth:** None
 
-**Request body:**
-```json
+**Request:**
+```jsonc
 {
-  "email": "string",
-  "password": "string"
+  "name": "John Driver",
+  "email": "john@example.com",
+  "phone": "+1234567890",
+  "password": "securepass123",
+  "vehicleType": "car",          // "car" | "motorcycle" | "van" | "minibus"
+  "plateNumber": "ABC-1234",
+  "make": "Toyota",
+  "model": "Camry",
+  "year": 2020,
+  "color": "White"
+}
+```
+
+**Response `201`:**
+```jsonc
+{
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "user": { "id": 2, "role": "driver", ... },
+  "driver": { "id": 1, "userId": 2, "status": "pending", ... }
+}
+```
+
+---
+
+### `POST /auth/login`
+**Auth:** None  
+**Note:** Both `email` and `credential` field names are accepted for the identifier.
+
+**Request:**
+```jsonc
+{
+  "email": "jane@example.com",   // OR "credential": "jane@example.com"
+  "password": "securepass123"
 }
 ```
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "token": "jwt_string",
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
   "user": {
     "id": 1,
-    "name": "John Doe",
-    "email": "john@example.com",
-    "role": "user",
-    "phone": null
+    "name": "Jane Doe",
+    "email": "jane@example.com",
+    "phone": "+1234567890",
+    "role": "passenger",
+    "walletBalance": "150.00",
+    "createdAt": "2026-06-03T00:00:00.000Z"
   }
 }
 ```
 
-**Errors:** `401` invalid credentials
-
 ---
 
-### `GET /api/auth/me` *(deprecated — use `GET /api/users/me`)*
-Returns the currently authenticated user.
+### `POST /auth/refresh`
+**Auth:** None (uses refresh token)
 
-**Auth:** Bearer token (any role)
-
-**Response `200`:** same user object as register/login.
-
----
-
-## 2. Users (Passenger)
-
-### `GET /api/users/me`
-Get the authenticated user's profile.
-
-**Auth:** Bearer token (any role)
+**Request:**
+```jsonc
+{ "refreshToken": "eyJ..." }
+```
 
 **Response `200`:**
-```json
+```jsonc
+{ "accessToken": "eyJ...", "refreshToken": "eyJ..." }
+```
+
+---
+
+### `POST /auth/logout`
+**Auth:** Required
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "message": "Logged out successfully" }
+```
+
+---
+
+### `GET /auth/me`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
 {
   "id": 1,
   "name": "Jane Doe",
   "email": "jane@example.com",
   "phone": "+1234567890",
-  "role": "user",
-  "avatarUrl": null,
-  "createdAt": "2026-01-01T00:00:00.000Z"
+  "role": "passenger",
+  "walletBalance": "150.00",
+  "isBlocked": false,
+  "createdAt": "2026-06-03T00:00:00.000Z"
 }
 ```
 
 ---
 
-### `PATCH /api/users/me`
-Update the authenticated user's profile.
+### `PATCH /auth/me`
+**Auth:** Required
 
-**Auth:** Bearer token (any role)
-
-**Request body (all optional):**
-```json
+**Request (all fields optional):**
+```jsonc
 {
-  "name": "string",
-  "phone": "string",
-  "avatarUrl": "string (URL)"
+  "name": "Jane Smith",
+  "phone": "+0987654321",
+  "email": "new@example.com"
 }
 ```
 
-**Response `200`:** Updated user object.
+**Response `200`:** Updated user object (same shape as `GET /auth/me`)
 
 ---
 
-### `PATCH /api/users/me/password`
-Change password.
+### `POST /auth/change-password`
+**Auth:** Required
 
-**Auth:** Bearer token (any role)
-
-**Request body:**
-```json
+**Request:**
+```jsonc
 {
-  "currentPassword": "string",
-  "newPassword": "string (min 6 chars)"
-}
-```
-
-**Response `200`:** `{ "message": "Password updated" }`
-
-**Errors:** `400` incorrect current password
-
----
-
-### `GET /api/users` *(Admin)*
-List all users with pagination.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:**
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `page` | int | 1 | Page number |
-| `limit` | int | 20 | Items per page (max 100) |
-| `search` | string | — | Filter by name or email |
-| `role` | `user\|driver\|admin` | — | Filter by role |
-
-**Response `200`:** Paginated user objects.
-
----
-
-### `GET /api/users/:id` *(Admin)*
-Get a single user by ID.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** User object.
-
-**Errors:** `404` not found
-
----
-
-### `PATCH /api/users/:id` *(Admin)*
-Update any user.
-
-**Auth:** Bearer token — `admin`
-
-**Request body (all optional):**
-```json
-{
-  "name": "string",
-  "email": "string",
-  "phone": "string",
-  "role": "user | driver | admin",
-  "isActive": true
-}
-```
-
-**Response `200`:** Updated user object.
-
----
-
-### `DELETE /api/users/:id` *(Admin)*
-Delete a user.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-## 3. Driver Profile
-
-### `GET /api/driver/me`
-Get the authenticated driver's profile.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:**
-```json
-{
-  "id": 10,
-  "userId": 5,
-  "name": "Ahmed Ali",
-  "phone": "+201001234567",
-  "email": "ahmed@example.com",
-  "status": "online",
-  "isOnline": true,
-  "isActive": true,
-  "rating": 4.8,
-  "vehicleType": "car",
-  "vehiclePlate": "ABC-123",
-  "vehicleModel": "Toyota Corolla",
-  "vehicleColor": "White",
-  "currentLatitude": 30.0444,
-  "currentLongitude": 31.2357,
-  "createdAt": "2026-01-01T00:00:00.000Z"
-}
-```
-
----
-
-### `PATCH /api/driver/me`
-Update the driver's own profile.
-
-**Auth:** Bearer token — `driver`
-
-**Request body (all optional):**
-```json
-{
-  "name": "string",
-  "phone": "string",
-  "vehicleType": "car | bike",
-  "vehiclePlate": "string",
-  "vehicleModel": "string",
-  "vehicleColor": "string"
-}
-```
-
-**Response `200`:** Updated driver object.
-
----
-
-### `PATCH /api/driver/status`
-Set online / offline status.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{ "isOnline": true }
-```
-
-**Response `200`:** `{ "isOnline": true, "status": "online" }`
-
----
-
-### `PATCH /api/driver/location`
-Push the driver's current GPS coordinates.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{
-  "latitude": 30.0444,
-  "longitude": 31.2357,
-  "heading": 90,
-  "speed": 45.5
-}
-```
-
-**Response `200`:** `{ "ok": true }`
-
-**Side effects:** Broadcasts `driver:location_updated` to the socket room `drivers:available:{vehicleType}` and `admin:room`.
-
----
-
-### `GET /api/driver/trips`
-List the driver's own trips (shuttle trips assigned to them).
-
-**Auth:** Bearer token — `driver`
-
-**Query params:** `status`, `page` (default 1), `limit` (default 20)
-
-**Response `200`:** Paginated trip objects.
-
----
-
-### `GET /api/driver/trips/:id`
-Get a single trip assigned to this driver.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Trip object.
-
----
-
-### `PATCH /api/driver/trips/:id/accept`
-Accept an assigned shuttle trip.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated trip object (status → `driver_assigned`).
-
----
-
-### `PATCH /api/driver/trips/:id/reject`
-Reject an assigned shuttle trip (returns trip to `waiting_driver`).
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated trip object.
-
----
-
-### `PATCH /api/driver/trips/:id/start`
-Start a shuttle trip (status `driver_assigned` or `boarding` → `active`).
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated trip object.
-
-**Side effects:** Creates a `TRIP_STARTED` trip event; initialises station progress records; sets driver status to `busy`.
-
----
-
-### `PATCH /api/driver/trips/:id/complete`
-Complete a shuttle trip (status `active` → `completed`).
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated trip object.
-
-**Side effects:** Creates `TRIP_COMPLETED` event; sets driver status back to `online`; marks confirmed bookings as `completed`; creates a `driverEarnings` record (commission rate read from settings key `driver_commission_rate`, default 15%).
-
----
-
-### `PATCH /api/driver/trips/:id/cancel`
-Cancel a shuttle trip.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{ "reason": "string (required)" }
-```
-
-**Response `200`:** Updated trip object (status → `cancelled`).
-
-**Side effects:** Creates `TRIP_CANCELLED` event; sets driver status back to `online`.
-
----
-
-### `GET /api/driver/trips/:id/stations`
-Get the station list with progress for a trip.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "name": "Station A",
-      "order": 1,
-      "progress": { "status": "pending", "arrivedAt": null, "completedAt": null },
-      "status": "pending",
-      "expectedPassengers": 4
-    }
-  ]
-}
-```
-
----
-
-### `PATCH /api/driver/trips/:id/stations/:stationId/arrived`
-Mark a station as arrived.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Station progress record.
-
----
-
-### `PATCH /api/driver/trips/:id/stations/:stationId/completed`
-Mark a station as completed (departed).
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Station progress record.
-
----
-
-### `PATCH /api/driver/bookings/:id/board`
-Mark a passenger booking as boarded.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated booking object.
-
-**Side effects:** Emits `booking:boarded` to `passenger:{userId}` socket room.
-
----
-
-### `PATCH /api/driver/bookings/:id/absent`
-Mark a passenger as absent (no-show).
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated booking object (status → `absent`).
-
----
-
-### `GET /api/driver/wallet/balance`
-Get the driver's wallet balance.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:**
-```json
-{
-  "balance": 250.00,
-  "totalPaid": 1800.00,
-  "totalPending": 50.00
-}
-```
-
----
-
-### `GET /api/driver/wallet/payout-methods`
-List available payout methods.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:**
-```json
-{
-  "data": [
-    { "id": "bank_transfer", "name": "Bank Transfer", "description": "2-3 business days", "isAvailable": true },
-    { "id": "mobile_money", "name": "Mobile Money", "description": "Instant", "isAvailable": true },
-    { "id": "cash", "name": "Cash Pickup", "description": "Visit nearest office", "isAvailable": true }
-  ]
-}
-```
-
----
-
-### `POST /api/driver/wallet/payout-methods`
-Add a payout method.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{
-  "type": "string (required)",
-  "accountNumber": "string (optional)",
-  "accountName": "string (optional)",
-  "bankName": "string (optional)",
-  "phoneNumber": "string (optional)"
-}
-```
-
-**Response `201`:** Created payout method object.
-
----
-
-### `DELETE /api/driver/wallet/payout-methods/:id`
-Remove a payout method.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** `{ "ok": true, "deleted": "method_id" }`
-
----
-
-### `POST /api/driver/wallet/payout`
-Request a payout.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{
-  "amount": 100.00,
-  "method": "bank_transfer"
+  "currentPassword": "oldpass123",
+  "newPassword": "newpass456"
 }
 ```
 
 **Response `200`:**
-```json
-{
-  "ok": true,
-  "amount": 100.00,
-  "method": "bank_transfer",
-  "message": "Payout request submitted successfully"
-}
+```jsonc
+{ "message": "Password changed successfully" }
 ```
-
-**Errors:** `400` insufficient balance (includes `available` field)
 
 ---
 
-### `GET /api/driver/earnings`
-Get earnings summary and 10 most recent records.
+### `POST /auth/forgot-password`
+**Auth:** None
 
-**Auth:** Bearer token — `driver`
+**Request:**
+```jsonc
+{ "email": "jane@example.com" }
+```
 
 **Response `200`:**
-```json
-{
-  "totalEarned": 2050.00,
-  "tripCount": 42,
-  "recent": [
-    { "id": 1, "tripId": 99, "amount": 48.75, "status": "confirmed", "date": "2026-06-03" }
-  ]
-}
+```jsonc
+{ "message": "If the email exists, a reset link has been sent" }
 ```
 
 ---
 
-### `GET /api/driver/earnings/history`
-Paginated earnings history.
+### `POST /auth/reset-password`
+**Auth:** None
 
-**Auth:** Bearer token — `driver`
-
-**Query params:** `page` (default 1), `limit` (default 20)
-
-**Response `200`:** Paginated earning objects.
-
----
-
-### `GET /api/driver/notifications`
-Last 50 notifications for the driver.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** `{ "data": [...notificationObjects] }`
-
----
-
-### `GET /api/driver/settings`
-Get driver-specific app settings.
-
-**Auth:** Bearer token — `driver`
+**Request:**
+```jsonc
+{
+  "token": "reset-token-from-email",
+  "newPassword": "newpass789"
+}
+```
 
 **Response `200`:**
-```json
-{
-  "notifications": true,
-  "language": "en"
-}
+```jsonc
+{ "message": "Password reset successfully" }
 ```
-
----
-
-### `PATCH /api/driver/settings`
-Update driver-specific app settings.
-
-**Auth:** Bearer token — `driver`
-
-**Request body (all optional):**
-```json
-{
-  "notifications": true,
-  "language": "ar"
-}
-```
-
-**Response `200`:** Updated settings object.
-
----
-
-### `GET /api/driver/reviews`
-Get ratings/reviews received by the driver.
-
-**Auth:** Bearer token — `driver`
-
-**Query params:** `page` (default 1), `limit` (default 20, max 50)
-
-**Response `200`:** Paginated review objects from ride events.
 
 ---
 
 ## 4. Rides (On-demand)
 
-### `POST /api/rides/request`
-Request an on-demand ride.
+Ride statuses: `searching` → `driver_assigned` → `driver_arrived` → `active` → `completed` | `cancelled`
 
-**Auth:** Bearer token — `user`
+### `POST /rides`
+**Auth:** Required (passenger)
 
-**Request body:**
-```json
+**Request:**
+```jsonc
 {
-  "pickupLatitude": 30.0444,
-  "pickupLongitude": 31.2357,
-  "pickupAddress": "123 Main St",
-  "dropoffLatitude": 30.0600,
-  "dropoffLongitude": 31.2500,
-  "dropoffAddress": "456 Other St",
-  "vehicleType": "car | bike",
-  "promoCode": "SAVE10 (optional)"
+  "pickupLatitude": 24.7136,
+  "pickupLongitude": 46.6753,
+  "dropoffLatitude": 24.6877,
+  "dropoffLongitude": 46.7219,
+  "pickupAddress": "Riyadh, Al Olaya",
+  "dropoffAddress": "Riyadh, Al Nakheel",
+  "vehicleType": "car",          // "car" | "motorcycle" | "van"
+  "paymentMethod": "wallet",     // "wallet" | "cash"
+  "promoCode": "SAVE10"          // optional
 }
 ```
 
-**Response `201`:** Ride object.
-
-**Side effects:** Emits `ride:new_request` to `drivers:available:{vehicleType}` socket room.
-
----
-
-### `GET /api/rides`
-List the authenticated user's ride history.
-
-**Auth:** Bearer token — `user`
-
-**Query params:** `page`, `limit`, `status`
-
-**Response `200`:** Paginated ride objects.
-
----
-
-### `GET /api/rides/:id`
-Get a single ride.
-
-**Auth:** Bearer token — `user` (own rides) or `admin`
-
-**Response `200`:** Ride object.
-
----
-
-### `PATCH /api/rides/:id/cancel`
-Cancel a pending ride (passenger-initiated).
-
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
-{ "reason": "string (optional)" }
-```
-
-**Response `200`:** Updated ride object (status → `cancelled`).
-
----
-
-### `PATCH /api/rides/:id/accept` *(Driver)*
-Accept a ride request.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated ride object (status → `accepted`).
-
-**Side effects:** Emits `ride:accepted` to `passenger:{userId}` socket room.
-
----
-
-### `PATCH /api/rides/:id/arrived` *(Driver)*
-Mark driver as arrived at pickup.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated ride object (status → `arrived`).
-
-**Side effects:** Emits `ride:driver_arrived` to `passenger:{userId}` socket room.
-
----
-
-### `PATCH /api/rides/:id/start` *(Driver)*
-Start the ride.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated ride object (status → `in_progress`).
-
-**Side effects:** Emits `ride:started` to `passenger:{userId}` socket room.
-
----
-
-### `PATCH /api/rides/:id/complete` *(Driver)*
-Complete the ride.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** Updated ride object with final fare (status → `completed`).
-
-**Side effects:** Emits `ride:completed` to `passenger:{userId}` socket room; deducts fare from wallet if applicable; creates `TRIP_COMPLETED` event.
-
----
-
-### `PATCH /api/rides/:id/cancel` *(Driver)*
-Cancel an accepted ride.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{ "reason": "string" }
-```
-
-**Response `200`:** Updated ride object (status → `cancelled`).
-
-**Side effects:** Emits `ride:cancelled` to `passenger:{userId}` socket room.
-
----
-
-### `GET /api/rides/all` *(Admin)*
-List all rides across all users.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `status`, `vehicleType`, `driverId`, `userId`
-
-**Response `200`:** Paginated ride objects.
-
----
-
-### `POST /api/rides/:id/rate`
-Rate a completed ride (passenger rates driver).
-
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
+**Response `201`:**
+```jsonc
 {
-  "rating": 5,
-  "comment": "Great ride! (optional)"
+  "id": 42,
+  "userId": 1,
+  "status": "searching",
+  "vehicleType": "car",
+  "pickupLatitude": "24.7136",
+  "pickupLongitude": "46.6753",
+  "dropoffLatitude": "24.6877",
+  "dropoffLongitude": "46.7219",
+  "pickupAddress": "Riyadh, Al Olaya",
+  "dropoffAddress": "Riyadh, Al Nakheel",
+  "estimatedPrice": 25.50,
+  "paymentMethod": "wallet",
+  "createdAt": "2026-06-03T10:00:00.000Z"
 }
 ```
 
-**Response `200`:** `{ "ok": true }`
-
 ---
 
-## 5. Wallet
+### `GET /rides`
+**Auth:** Required  
+**Note:** Passengers see own rides; admins see all rides.
 
-### `GET /api/wallet/balance`
-Get the authenticated user's wallet balance.
+**Query params:**
 
-**Auth:** Bearer token — `user`
+| Param | Type | Description |
+|-------|------|-------------|
+| `status` | string | Filter by status |
+| `page` | int | Page number |
+| `limit` | int | Per page |
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "balance": 150.00,
-  "currency": "EGP"
+  "data": [ { "id": 42, "status": "completed", ... } ],
+  "total": 100,
+  "page": 1,
+  "limit": 20
 }
 ```
 
 ---
 
-### `GET /api/wallet/transactions`
-Paginated transaction history.
+### `GET /rides/:id`
+**Auth:** Required
 
-**Auth:** Bearer token — `user`
+**Response `200`:** Full ride object including driver info if assigned:
+```jsonc
+{
+  "id": 42,
+  "status": "driver_assigned",
+  "driver": {
+    "id": 1,
+    "name": "Ahmed Ali",
+    "phone": "+966501234567",
+    "rating": 4.8,
+    "vehicle": { "plateNumber": "ABC-1234", "make": "Toyota", "model": "Camry", "color": "White" }
+  },
+  "estimatedPrice": 25.50,
+  "actualPrice": null,
+  ...
+}
+```
 
-**Query params:** `page` (default 1), `limit` (default 20)
+---
 
-**Response `200`:** Paginated transaction objects:
-```json
+### `POST /rides/:id/cancel`
+**Auth:** Required (passenger cancels own ride; admin cancels any)
+
+**Request:**
+```jsonc
+{ "reason": "Changed my mind" }   // optional
+```
+
+**Response `200`:**
+```jsonc
+{ "id": 42, "status": "cancelled", ... }
+```
+
+---
+
+### `POST /rides/:id/rate`
+**Auth:** Required (passenger)
+
+**Request:**
+```jsonc
+{
+  "rating": 5,           // 1–5
+  "comment": "Great ride!"  // optional
+}
+```
+
+**Response `200`:**
+```jsonc
+{ "ok": true, "rideId": 42, "rating": 5 }
+```
+
+---
+
+### `GET /rides/:id/driver-location`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "latitude": 24.7100,
+  "longitude": 46.6800,
+  "updatedAt": "2026-06-03T10:05:00.000Z"
+}
+```
+
+---
+
+### `POST /rides/:id/accept` _(Driver)_
+**Auth:** Required (role: driver)
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "id": 42, "status": "driver_assigned", "driverId": 1, ... }
+```
+
+---
+
+### `POST /rides/:id/arrived` _(Driver)_
+**Auth:** Required (role: driver)
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "id": 42, "status": "driver_arrived", ... }
+```
+
+---
+
+### `POST /rides/:id/start` _(Driver)_
+**Auth:** Required (role: driver)
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "id": 42, "status": "active", ... }
+```
+
+---
+
+### `POST /rides/:id/complete` _(Driver)_
+**Auth:** Required (role: driver)
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "id": 42, "status": "completed", "actualPrice": 25.50, ... }
+```
+
+---
+
+### `POST /rides/:id/cancel` _(Driver cancel)_
+**Auth:** Required (role: driver)
+
+**Request:**
+```jsonc
+{ "reason": "Passenger not found" }  // optional
+```
+
+**Response `200`:**
+```jsonc
+{ "id": 42, "status": "cancelled", ... }
+```
+
+---
+
+## 5. Routes & Stations
+
+Shuttle route management. Several endpoints are **public** (no auth required).
+
+### `GET /routes`
+**Auth:** None (public)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `search` | string | Filter by route name (ILIKE) |
+
+**Response `200`:**
+```jsonc
 {
   "data": [
     {
       "id": 1,
-      "type": "credit | debit",
-      "amount": 50.00,
-      "description": "Wallet top-up",
-      "createdAt": "2026-06-03T12:00:00.000Z"
+      "name": "City Center → Airport",
+      "fromLocation": "City Center",
+      "toLocation": "Airport",
+      "estimatedDuration": 45,
+      "basePrice": 15.00,
+      "isActive": true,
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ],
+  "total": 5
+}
+```
+
+---
+
+### `POST /routes`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "name": "City Center → Airport",
+  "fromLocation": "City Center",
+  "toLocation": "Airport",
+  "estimatedDuration": 45,    // minutes
+  "basePrice": 15.00,
+  "isActive": true             // optional, default true
+}
+```
+
+**Response `201`:** Route object with `basePrice` as float.
+
+---
+
+### `GET /routes/:id`
+**Auth:** None (public)
+
+**Response `200`:** Single route object.  
+**Response `404`:** `{ "error": "Route not found" }`
+
+---
+
+### `PATCH /routes/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "Updated Name",
+  "fromLocation": "...",
+  "toLocation": "...",
+  "estimatedDuration": 50,
+  "basePrice": 18.00,
+  "isActive": false
+}
+```
+
+**Response `200`:** Updated route object.
+
+---
+
+### `DELETE /routes/:id`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+### `GET /routes/:id/stations`
+**Auth:** None (public)
+
+**Response `200`:** Array of station objects ordered by `order`:
+```jsonc
+[
+  {
+    "id": 1,
+    "routeId": 1,
+    "name": "Main Station",
+    "latitude": "24.7136",
+    "longitude": "46.6753",
+    "order": 1,
+    "direction": "outbound",
+    "segmentPrice": 5.00,
+    "createdAt": "..."
+  }
+]
+```
+
+---
+
+### `POST /routes/:id/stations`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "name": "New Station",
+  "latitude": 24.7200,
+  "longitude": 46.6900,
+  "order": 3,
+  "direction": "outbound",      // "outbound" | "return", default "outbound"
+  "segmentPrice": 5.00          // optional
+}
+```
+
+**Response `201`:** Station object with `segmentPrice` as float or null.
+
+---
+
+### `PATCH /routes/:id/stations/:stationId`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "Renamed Station",
+  "latitude": 24.7205,
+  "longitude": 46.6905,
+  "order": 4,
+  "direction": "return",
+  "segmentPrice": 6.50
+}
+```
+
+**Response `200`:** Updated station object.
+
+---
+
+### `DELETE /routes/:id/stations/:stationId`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+## 6. Trips (Shuttle)
+
+Trip statuses: `scheduled` → `boarding` | `driver_assigned` → `active` → `completed` | `cancelled`
+
+### `GET /trips`
+**Auth:** None (public)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `routeId` | int | Filter by route |
+| `status` | string | Filter by status |
+| `from` | ISO date | Departure time from |
+| `to` | ISO date | Departure time to |
+| `page` | int | Page number |
+| `limit` | int | Per page |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 10,
+      "routeId": 1,
+      "busId": 2,
+      "driverId": 3,
+      "departureTime": "2026-06-03T07:00:00.000Z",
+      "arrivalTime": "2026-06-03T07:45:00.000Z",
+      "availableSeats": 18,
+      "totalSeats": 20,
+      "price": 15.00,
+      "status": "scheduled",
+      "isActive": true,
+      "routeName": "City Center → Airport",
+      "fromLocation": "City Center",
+      "toLocation": "Airport"
+    }
+  ],
+  "total": 30,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /trips`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "routeId": 1,
+  "busId": 2,
+  "driverId": 3,
+  "departureTime": "2026-06-03T07:00:00.000Z",
+  "arrivalTime": "2026-06-03T07:45:00.000Z",
+  "availableSeats": 20,
+  "totalSeats": 20,
+  "price": 15.00,
+  "status": "scheduled",         // optional, default "scheduled"
+  "isActive": true,              // optional, default true
+  "recurringType": "weekdays",   // optional
+  "weekdays": "0,1,2,3,4"       // optional (Sun=0 ... Sat=6)
+}
+```
+
+**Response `201`:** Trip object.
+
+---
+
+### `GET /trips/:id`
+**Auth:** Required
+
+**Response `200`:** Trip object with route and driver details.
+
+---
+
+### `PATCH /trips/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):** Same fields as POST.
+
+**Response `200`:** Updated trip object.
+
+---
+
+### `DELETE /trips/:id`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+### `POST /trips/:id/board`
+**Auth:** Required
+
+Marks a passenger as boarded on a trip. Uses `userId` from JWT.
+
+**Request:**
+```jsonc
+{ "bookingId": 5 }  // optional; if omitted, infers from userId
+```
+
+**Response `200`:**
+```jsonc
+{
+  "ok": true,
+  "tripId": 10,
+  "bookingId": 5,
+  "status": "boarded"
+}
+```
+
+---
+
+### `GET /trips/:id/progress`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "tripId": 10,
+  "status": "active",
+  "currentStation": { "id": 3, "name": "Midpoint Stop", "order": 3 },
+  "stations": [
+    { "stationId": 1, "stationName": "Start", "status": "arrived", "arrivedAt": "..." },
+    { "stationId": 2, "stationName": "Stop 2", "status": "arrived", "arrivedAt": "..." },
+    { "stationId": 3, "stationName": "Midpoint Stop", "status": "pending" }
+  ]
+}
+```
+
+---
+
+### `GET /trips/:id/events`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "tripId": 10,
+  "events": [
+    { "id": 1, "type": "LOCATION_UPDATE", "metadata": { ... }, "createdAt": "..." }
+  ]
+}
+```
+
+---
+
+### `POST /trips/:id/next-station` _(Driver)_
+**Auth:** Required (role: driver)
+
+Advances the trip to the next station and emits socket events.
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{
+  "ok": true,
+  "tripId": 10,
+  "currentStation": { "id": 4, "name": "Next Stop", "order": 4 },
+  "isLastStation": false
+}
+```
+
+---
+
+## 7. Bookings
+
+### `POST /bookings`
+**Auth:** Required (any authenticated user)
+
+Creates a booking and deducts wallet balance in a DB transaction.
+
+**Request:**
+```jsonc
+{
+  "tripId": 10,
+  "seatCount": 2,
+  "promoCode": "SAVE10"    // optional
+}
+```
+
+**Response `201`:**
+```jsonc
+{
+  "id": 55,
+  "userId": 1,
+  "tripId": 10,
+  "seatCount": 2,
+  "totalPrice": 30.00,
+  "status": "confirmed",
+  "paymentStatus": "paid",
+  "createdAt": "2026-06-03T09:00:00.000Z"
+}
+```
+
+**Error `400`:** Insufficient wallet balance, trip full, trip not bookable  
+**Error `409`:** Duplicate booking
+
+---
+
+### `GET /bookings/:id`
+**Auth:** Required
+
+**Response `200`:** Full booking object with trip and route details.
+
+---
+
+### `POST /bookings/:id/cancel`
+**Auth:** Required
+
+Cancels booking and refunds wallet.
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{
+  "id": 55,
+  "status": "cancelled",
+  "refundAmount": 30.00
+}
+```
+
+---
+
+### `GET /users/me/bookings`
+**Auth:** Required
+
+**Query params:** `page`, `limit`, `status`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 55,
+      "tripId": 10,
+      "seatCount": 2,
+      "totalPrice": 30.00,
+      "status": "confirmed",
+      "trip": {
+        "routeName": "City Center → Airport",
+        "departureTime": "2026-06-03T07:00:00.000Z",
+        "arrivalTime": "2026-06-03T07:45:00.000Z"
+      }
     }
   ],
   "total": 10,
@@ -828,999 +969,43 @@ Paginated transaction history.
 
 ---
 
-### `POST /api/wallet/topup`
-Add funds to the user's wallet (initiates payment).
+## 8. Drivers — Admin Management
 
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
-{
-  "amount": 100.00,
-  "paymentMethod": "card | mobile_money"
-}
-```
-
-**Response `200`:** `{ "ok": true, "newBalance": 250.00 }`
-
----
-
-### `GET /api/wallet/admin` *(Admin)*
-List all wallets / transaction overview.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `userId`
-
-**Response `200`:** Paginated wallet/transaction objects.
-
----
-
-## 6. Shuttle / Bus Bookings
-
-> These endpoints deal with pre-scheduled shuttle trips (bus service).
-
-### `GET /api/shuttle/trips`
-List available shuttle trips for passengers to book.
-
-**Auth:** None
+### `GET /drivers`
+**Auth:** Required (role: admin)
 
 **Query params:**
+
 | Param | Type | Description |
 |-------|------|-------------|
-| `routeId` | int | Filter by route |
-| `date` | string (YYYY-MM-DD) | Filter by departure date |
-| `page` | int | Default 1 |
-| `limit` | int | Default 20 |
-
-**Response `200`:** Paginated trip objects with route and available seat info.
-
----
-
-### `GET /api/shuttle/trips/:id`
-Get a single shuttle trip with full details.
-
-**Auth:** None
-
-**Response `200`:** Trip object including route, bus, driver, and station info.
-
----
-
-### `POST /api/shuttle/book`
-Book seats on a shuttle trip.
-
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
-{
-  "tripId": 42,
-  "seatCount": 2,
-  "boardingStationId": 5,
-  "alightingStationId": 8,
-  "promoCode": "SAVE10 (optional)"
-}
-```
-
-**Response `201`:** Booking object.
-
----
-
-### `GET /api/shuttle/bookings`
-List the authenticated user's shuttle bookings.
-
-**Auth:** Bearer token — `user`
-
-**Query params:** `page`, `limit`, `status`
-
-**Response `200`:** Paginated booking objects.
-
----
-
-### `GET /api/shuttle/bookings/:id`
-Get a single booking.
-
-**Auth:** Bearer token — `user`
-
-**Response `200`:** Booking object.
-
----
-
-### `PATCH /api/shuttle/bookings/:id/cancel`
-Cancel a shuttle booking.
-
-**Auth:** Bearer token — `user`
-
-**Response `200`:** Updated booking object (status → `cancelled`).
-
----
-
-### `GET /api/shuttle/routes`
-List all shuttle routes (public).
-
-**Auth:** None
-
-**Query params:** `search` (name filter)
-
-**Response `200`:** `{ "data": [...routeObjects], "total": 10 }`
-
----
-
-## 7. Payments
-
-### `POST /api/payments/initiate`
-Initiate a payment session.
-
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
-{
-  "amount": 100.00,
-  "currency": "EGP",
-  "type": "wallet_topup | booking | ride",
-  "referenceId": 42
-}
-```
+| `search` | string | Search name/phone/email |
+| `status` | string | `pending` \| `active` \| `suspended` \| `rejected` |
+| `isOnline` | bool | Filter by online status |
+| `page` | int | Page |
+| `limit` | int | Per page |
 
 **Response `200`:**
-```json
-{
-  "paymentId": "pay_abc123",
-  "redirectUrl": "https://payment-gateway.example.com/...",
-  "expiresAt": "2026-06-03T13:00:00.000Z"
-}
-```
-
----
-
-### `POST /api/payments/webhook`
-Payment gateway webhook callback.
-
-**Auth:** None (verified via gateway signature header)
-
-**Request body:** Gateway-specific payload.
-
-**Response `200`:** `{ "received": true }`
-
-**Side effects:** Updates payment status; credits wallet or activates booking.
-
----
-
-### `GET /api/payments/:id`
-Get payment status.
-
-**Auth:** Bearer token — `user`
-
-**Response `200`:**
-```json
-{
-  "id": "pay_abc123",
-  "status": "pending | completed | failed",
-  "amount": 100.00,
-  "type": "wallet_topup",
-  "createdAt": "2026-06-03T12:00:00.000Z"
-}
-```
-
----
-
-### `GET /api/payments` *(Admin)*
-List all payments.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `status`, `userId`
-
-**Response `200`:** Paginated payment objects.
-
----
-
-## 8. Notifications
-
-### `GET /api/notifications`
-Get the authenticated user's notifications (latest 50).
-
-**Auth:** Bearer token — `user` or `driver`
-
-**Response `200`:**
-```json
+```jsonc
 {
   "data": [
     {
       "id": 1,
-      "title": "Ride confirmed",
-      "body": "Your driver is on the way",
-      "type": "ride_update",
-      "isRead": false,
-      "createdAt": "2026-06-03T12:00:00.000Z"
-    }
-  ]
-}
-```
-
----
-
-### `PATCH /api/notifications/:id/read`
-Mark a notification as read.
-
-**Auth:** Bearer token — any role
-
-**Response `200`:** Updated notification object.
-
----
-
-### `PATCH /api/notifications/read-all`
-Mark all notifications as read.
-
-**Auth:** Bearer token — any role
-
-**Response `200`:** `{ "ok": true }`
-
----
-
-### `POST /api/notifications/send` *(Admin)*
-Send a push notification to a user.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "userId": 10,
-  "title": "string",
-  "body": "string",
-  "type": "string (optional)"
-}
-```
-
-**Response `201`:** Notification object.
-
-**Side effects:** Emits `notification:new` to `passenger:{userId}` socket room.
-
----
-
-## 9. Zones & Zone Pricing
-
-### `GET /api/zones`
-List all delivery/ride zones.
-
-**Auth:** None
-
-**Response `200`:** `{ "data": [...zoneObjects] }`
-
-Each zone object:
-```json
-{
-  "id": 1,
-  "name": "Zone A",
-  "isActive": true,
-  "polygon": [[30.0, 31.0], [30.1, 31.0], [30.1, 31.1], [30.0, 31.1]],
-  "createdAt": "2026-01-01T00:00:00.000Z"
-}
-```
-
----
-
-### `POST /api/zones` *(Admin)*
-Create a zone.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "name": "string",
-  "polygon": "[[lat,lng], ...]",
-  "isActive": true
-}
-```
-
-**Response `201`:** Zone object.
-
----
-
-### `PATCH /api/zones/:id` *(Admin)*
-Update a zone.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated zone object.
-
----
-
-### `DELETE /api/zones/:id` *(Admin)*
-Delete a zone.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-### `GET /api/zone-pricing`
-List zone pricing rules.
-
-**Auth:** None
-
-**Response `200`:** `{ "data": [...pricingObjects] }`
-
-Each pricing object:
-```json
-{
-  "id": 1,
-  "zoneId": 1,
-  "vehicleType": "car | bike",
-  "baseFare": 10.00,
-  "perKmRate": 2.50,
-  "perMinuteRate": 0.50,
-  "minimumFare": 15.00,
-  "surgePricing": false,
-  "surgeMultiplier": 1.0
-}
-```
-
----
-
-### `POST /api/zone-pricing` *(Admin)*
-Create a pricing rule.
-
-**Auth:** Bearer token — `admin`
-
-**Response `201`:** Pricing object.
-
----
-
-### `PATCH /api/zone-pricing/:id` *(Admin)*
-Update a pricing rule.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated pricing object.
-
----
-
-### `DELETE /api/zone-pricing/:id` *(Admin)*
-Delete a pricing rule.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-## 10. Service Controls
-
-Manage which on-demand services are active.
-
-**Service types:** `shuttle` · `car` · `motorcycle` · `delivery`
-
-### `GET /api/service-controls`
-Get the current status of all services.
-
-**Auth:** None
-
-**Response `200`:**
-```json
-{
-  "data": [
-    { "id": 1, "service": "car", "isActive": true, "updatedAt": "2026-06-03T00:00:00.000Z" }
-  ]
-}
-```
-
----
-
-### `PATCH /api/service-controls/:service` *(Admin)*
-Enable or disable a service.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{ "isActive": false }
-```
-
-**Response `200`:** Updated service control object.
-
----
-
-## 11. Ratings
-
-### `POST /api/ratings`
-Submit a rating (passenger rates driver after a ride/trip).
-
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
-{
-  "driverId": 10,
-  "rideId": 55,
-  "rating": 5,
-  "comment": "Excellent service"
-}
-```
-
-**Response `201`:** Rating object.
-
-**Side effects:** Recalculates and updates driver's average rating in `driversTable`.
-
----
-
-### `GET /api/ratings`
-List ratings (own if passenger, received if driver).
-
-**Auth:** Bearer token — `user` or `driver`
-
-**Query params:** `page`, `limit`
-
-**Response `200`:** Paginated rating objects.
-
----
-
-### `GET /api/ratings/driver/:driverId`
-Get all ratings for a specific driver.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Paginated rating objects.
-
----
-
-## 12. Support & Chat
-
-### `POST /api/support/tickets`
-Open a support ticket.
-
-**Auth:** Bearer token — any role
-
-**Request body:**
-```json
-{
-  "subject": "string",
-  "message": "string",
-  "type": "general | billing | technical | driver | ride",
-  "priority": "low | medium | high (default: medium)"
-}
-```
-
-**Response `201`:** Ticket object.
-
----
-
-### `GET /api/support/tickets`
-List the authenticated user's support tickets.
-
-**Auth:** Bearer token — any role
-
-**Query params:** `page`, `limit`, `status`
-
-**Response `200`:** Paginated ticket objects.
-
----
-
-### `GET /api/support/tickets/:id`
-Get a ticket with its messages.
-
-**Auth:** Bearer token — any role (own tickets) or `admin`
-
-**Response `200`:**
-```json
-{
-  "id": 1,
-  "subject": "Payment issue",
-  "status": "open | pending | closed",
-  "priority": "medium",
-  "type": "billing",
-  "messages": [
-    { "id": 1, "body": "I was charged twice", "sender": "user", "createdAt": "..." }
-  ],
-  "createdAt": "..."
-}
-```
-
----
-
-### `POST /api/support/tickets/:id/messages`
-Add a message to a ticket.
-
-**Auth:** Bearer token — any role (own tickets) or `admin`
-
-**Request body:**
-```json
-{ "body": "string" }
-```
-
-**Response `201`:** Message object.
-
----
-
-### `PATCH /api/support/tickets/:id` *(Admin)*
-Update ticket status or priority.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "status": "open | pending | closed",
-  "priority": "low | medium | high"
-}
-```
-
-**Response `200`:** Updated ticket object.
-
----
-
-### `GET /api/support/tickets/all` *(Admin)*
-List all support tickets.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `status`, `type`, `priority`, `search`
-
-**Response `200`:** Paginated ticket objects with user info.
-
----
-
-### `GET /api/chat/:ticketId/messages`
-Get messages for a support ticket (chat view).
-
-**Auth:** Bearer token — any role (own tickets) or `admin`
-
-**Response `200`:** `{ "data": [...messageObjects] }`
-
----
-
-### `POST /api/chat/:ticketId/messages`
-Send a chat message on a ticket.
-
-**Auth:** Bearer token — any role (own tickets) or `admin`
-
-**Request body:**
-```json
-{ "body": "string" }
-```
-
-**Response `201`:** Message object.
-
----
-
-## 13. Promo Codes
-
-### `POST /api/promo/validate`
-Validate a promo code.
-
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
-{
-  "code": "SAVE10",
-  "amount": 100.00
-}
-```
-
-**Response `200`:**
-```json
-{
-  "valid": true,
-  "discountType": "percentage | fixed",
-  "discountValue": 10,
-  "discountAmount": 10.00,
-  "finalAmount": 90.00
-}
-```
-
-**Errors:** `400` invalid/expired/usage-limit-exceeded
-
----
-
-### `GET /api/promo` *(Admin)*
-List all promo codes.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `isActive`
-
-**Response `200`:** Paginated promo objects.
-
----
-
-### `POST /api/promo` *(Admin)*
-Create a promo code.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "code": "SAVE10",
-  "discountType": "percentage | fixed",
-  "discountValue": 10,
-  "minOrderAmount": 50.00,
-  "maxUses": 100,
-  "expiresAt": "2026-12-31T23:59:59.000Z",
-  "isActive": true
-}
-```
-
-**Response `201`:** Promo code object.
-
----
-
-### `PATCH /api/promo/:id` *(Admin)*
-Update a promo code.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated promo object.
-
----
-
-### `DELETE /api/promo/:id` *(Admin)*
-Delete a promo code.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-## 14. Routes & Stations (Shuttle)
-
-### `GET /api/routes`
-List all shuttle routes.
-
-**Auth:** None
-
-**Query params:** `search` (name filter, case-insensitive)
-
-**Response `200`:**
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "name": "Cairo–Alexandria",
-      "fromLocation": "Cairo",
-      "toLocation": "Alexandria",
-      "basePrice": 75.00,
+      "userId": 2,
+      "name": "Ahmed Ali",
+      "phone": "+966501234567",
+      "email": "ahmed@example.com",
+      "status": "active",
+      "isOnline": true,
       "isActive": true,
-      "createdAt": "2026-01-01T00:00:00.000Z"
+      "rating": 4.8,
+      "totalRides": 152,
+      "assignedBusId": 3,
+      "currentLatitude": "24.7136",
+      "currentLongitude": "46.6753",
+      "createdAt": "..."
     }
   ],
-  "total": 1
-}
-```
-
----
-
-### `GET /api/routes/:id`
-Get a single route.
-
-**Auth:** None
-
-**Response `200`:** Route object (same shape, `basePrice` as float).
-
-**Errors:** `404` not found
-
----
-
-### `POST /api/routes` *(Admin)*
-Create a route.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "name": "string",
-  "fromLocation": "string",
-  "toLocation": "string",
-  "basePrice": 75.00,
-  "isActive": true
-}
-```
-
-**Response `201`:** Route object.
-
----
-
-### `PATCH /api/routes/:id` *(Admin)*
-Update a route.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated route object.
-
----
-
-### `DELETE /api/routes/:id` *(Admin)*
-Delete a route.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-### `GET /api/routes/:id/stations`
-List stations on a route (ordered by `order` field).
-
-**Auth:** None
-
-**Response `200`:**
-```json
-[
-  {
-    "id": 1,
-    "routeId": 1,
-    "name": "Tahrir Square",
-    "latitude": 30.0444,
-    "longitude": 31.2357,
-    "order": 1,
-    "direction": "outbound",
-    "segmentPrice": 10.00
-  }
-]
-```
-
----
-
-### `POST /api/routes/:id/stations` *(Admin)*
-Add a station to a route.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "name": "string",
-  "latitude": 30.0444,
-  "longitude": 31.2357,
-  "order": 1,
-  "direction": "outbound | return (default: outbound)",
-  "segmentPrice": 10.00
-}
-```
-
-**Response `201`:** Station object.
-
----
-
-### `PATCH /api/routes/:id/stations/:stationId` *(Admin)*
-Update a station.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated station object.
-
----
-
-### `DELETE /api/routes/:id/stations/:stationId` *(Admin)*
-Delete a station.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-## 15. Trips (Shuttle)
-
-> Admin-managed scheduled shuttle trips.
-
-### `GET /api/trips` *(Admin)*
-List all trips.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `status`, `routeId`, `driverId`, `date`
-
-**Response `200`:** Paginated trip objects.
-
----
-
-### `GET /api/trips/:id` *(Admin)*
-Get a single trip.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Trip object with route, bus, driver, booking count, and station progress.
-
----
-
-### `POST /api/trips` *(Admin)*
-Create a scheduled trip.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "routeId": 1,
-  "busId": 3,
-  "driverId": 10,
-  "departureTime": "2026-07-01T08:00:00.000Z",
-  "arrivalTime": "2026-07-01T12:00:00.000Z",
-  "price": 75.00,
-  "totalSeats": 45
-}
-```
-
-**Response `201`:** Trip object. Status defaults to `scheduled` or `waiting_driver` if no driver assigned.
-
----
-
-### `PATCH /api/trips/:id` *(Admin)*
-Update a trip.
-
-**Auth:** Bearer token — `admin`
-
-**Request body (all optional):**
-```json
-{
-  "driverId": 10,
-  "busId": 3,
-  "departureTime": "2026-07-01T09:00:00.000Z",
-  "arrivalTime": "2026-07-01T13:00:00.000Z",
-  "status": "scheduled | waiting_driver | driver_assigned | boarding | active | completed | cancelled",
-  "price": 80.00,
-  "totalSeats": 45,
-  "cancelReason": "string"
-}
-```
-
-**Response `200`:** Updated trip object.
-
----
-
-### `DELETE /api/trips/:id` *(Admin)*
-Delete a trip.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-### `PATCH /api/trips/:id/assign-driver` *(Admin)*
-Assign a driver to a trip.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{ "driverId": 10 }
-```
-
-**Response `200`:** Updated trip object (status → `driver_assigned`).
-
-**Side effects:** Emits `trip:assigned` to `driver:{driverId}` socket room.
-
----
-
-### `GET /api/trips/:id/events` *(Admin)*
-Get all event history for a trip.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** `{ "data": [...eventObjects] }`
-
----
-
-### `GET /api/trips/:id/bookings` *(Admin)*
-Get bookings for a trip.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** `{ "data": [...bookingObjects] }`
-
----
-
-## 16. Buses
-
-### `GET /api/buses` *(Admin)*
-List all buses.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `isActive`, `search`
-
-**Response `200`:** Paginated bus objects:
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "plateNumber": "ABC-1234",
-      "model": "Mercedes Sprinter",
-      "capacity": 45,
-      "isActive": true,
-      "createdAt": "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  "total": 5
-}
-```
-
----
-
-### `GET /api/buses/:id` *(Admin)*
-Get a single bus.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Bus object. **Errors:** `404`
-
----
-
-### `POST /api/buses` *(Admin)*
-Create a bus.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
-{
-  "plateNumber": "string",
-  "model": "string",
-  "capacity": 45,
-  "isActive": true
-}
-```
-
-**Response `201`:** Bus object.
-
----
-
-### `PATCH /api/buses/:id` *(Admin)*
-Update a bus.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated bus object.
-
----
-
-### `DELETE /api/buses/:id` *(Admin)*
-Delete a bus.
-
-**Auth:** Bearer token — `admin`
-
-**Response `204`:** No content.
-
----
-
-## 17. Bookings (Shuttle)
-
-### `GET /api/bookings` *(Admin)*
-List all shuttle bookings.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `status`, `tripId`, `userId`
-
-**Response `200`:** Paginated booking objects:
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "tripId": 42,
-      "userId": 5,
-      "seatCount": 2,
-      "totalPrice": 150.00,
-      "status": "pending | confirmed | boarded | completed | cancelled | absent",
-      "boardingStationId": 3,
-      "alightingStationId": 7,
-      "promoCode": null,
-      "createdAt": "2026-06-03T12:00:00.000Z"
-    }
-  ],
-  "total": 100,
+  "total": 50,
   "page": 1,
   "limit": 20
 }
@@ -1828,104 +1013,517 @@ List all shuttle bookings.
 
 ---
 
-### `GET /api/bookings/:id` *(Admin)*
-Get a single booking.
+### `POST /drivers`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
+**Request:**
+```jsonc
+{
+  "userId": 2,
+  "name": "Ahmed Ali",
+  "phone": "+966501234567",
+  "status": "active",          // optional
+  "isActive": true             // optional
+}
+```
 
-**Response `200`:** Booking object. **Errors:** `404`
+**Response `201`:** Driver object.
 
 ---
 
-### `PATCH /api/bookings/:id` *(Admin)*
-Update a booking (e.g., manually change status).
+### `GET /drivers/:id`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated booking object.
+**Response `200`:** Full driver object.
 
 ---
 
-### `DELETE /api/bookings/:id` *(Admin)*
-Delete a booking.
+### `PATCH /drivers/:id`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "Updated Name",
+  "phone": "...",
+  "status": "suspended",
+  "isActive": false,
+  "assignedBusId": 5
+}
+```
+
+**Response `200`:** Updated driver object.
+
+---
+
+### `DELETE /drivers/:id`
+**Auth:** Required (role: admin)
 
 **Response `204`:** No content.
 
 ---
 
-## 18. Driver Documents
+### `PATCH /drivers/:id/status`
+**Auth:** Required (role: admin)
 
-### `GET /api/driver-documents`
-List documents for the authenticated driver (or all documents for admin with query param).
+**Request:**
+```jsonc
+{
+  "status": "active",       // "pending" | "active" | "suspended" | "rejected"
+  "reason": "Approved"      // optional
+}
+```
 
-**Auth:** Bearer token — `driver` or `admin`
+**Response `200`:** Updated driver object.
 
-**Query params:** `driverId` (admin only), `type`, `verificationStatus`
+---
+
+### `GET /drivers/:id/history`
+**Auth:** Required (role: admin)
+
+**Response `200`:** List of completed trips/rides for the driver.
+
+---
+
+### `GET /drivers/:id/earnings`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Earnings summary and history for driver.
+
+---
+
+### `GET /drivers/:id/current-trip`
+**Auth:** Required (role: admin)
 
 **Response `200`:**
-```json
+```jsonc
+{
+  "trip": {
+    "id": 10,
+    "status": "active",
+    "routeName": "City Center → Airport",
+    ...
+  }
+}
+// or { "trip": null } if no active trip
+```
+
+---
+
+### `GET /drivers/:id/location`
+**Auth:** Required (role: admin)
+
+**Response `200`:**
+```jsonc
+{
+  "driverId": 1,
+  "latitude": "24.7100",
+  "longitude": "46.6800",
+  "updatedAt": "2026-06-03T10:05:00.000Z"
+}
+```
+
+---
+
+### `POST /drivers/location`
+**Auth:** Required (role: driver)
+
+Updates the authenticated driver's current GPS coordinates.
+
+**Request:**
+```jsonc
+{
+  "latitude": 24.7136,
+  "longitude": 46.6753,
+  "accuracy": 10.5,      // optional, meters
+  "heading": 90.0,       // optional, degrees
+  "speed": 60.0          // optional, km/h
+}
+```
+
+**Response `200`:**
+```jsonc
+{ "ok": true }
+```
+
+---
+
+## 9. Driver — Self-Service (role: driver)
+
+All endpoints in this section require `Authorization: Bearer <token>` with `role = "driver"`.
+
+### `GET /driver/profile`
+
+**Response `200`:**
+```jsonc
+{
+  "id": 1,
+  "userId": 2,
+  "name": "Ahmed Ali",
+  "phone": "+966501234567",
+  "email": "ahmed@example.com",
+  "status": "active",
+  "isOnline": false,
+  "rating": 4.8,
+  "totalRides": 152,
+  "assignedBusId": 3,
+  "currentLatitude": "24.7136",
+  "currentLongitude": "46.6753",
+  "vehicle": { "plateNumber": "ABC-1234", "make": "Toyota", "model": "Camry", "year": 2020, "color": "White" }
+}
+```
+
+---
+
+### `PATCH /driver/profile`
+
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "Ahmed Ali Updated",
+  "phone": "+966507654321",
+  "profilePhoto": "https://..."
+}
+```
+
+**Response `200`:** Updated driver profile object.
+
+---
+
+### `GET /driver/status`
+
+**Response `200`:**
+```jsonc
+{
+  "isOnline": true,
+  "status": "active",
+  "currentLatitude": "24.7136",
+  "currentLongitude": "46.6753"
+}
+```
+
+---
+
+### `POST /driver/status`
+
+**Request:**
+```jsonc
+{
+  "isOnline": true,
+  "latitude": 24.7136,    // required when going online
+  "longitude": 46.6753    // required when going online
+}
+```
+
+**Response `200`:**
+```jsonc
+{ "isOnline": true, "status": "active" }
+```
+
+---
+
+### `GET /driver/rides`
+
+**Query params:** `status`, `page`, `limit`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [ { "id": 42, "status": "completed", "actualPrice": 25.50, ... } ],
+  "total": 152,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `GET /driver/trips`
+
+**Query params:** `status`, `page`, `limit`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [ { "id": 10, "status": "completed", "routeName": "...", ... } ],
+  "total": 80,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `GET /driver/earnings`
+
+Returns paginated earnings records for the authenticated driver.
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `status` | string | `pending` \| `confirmed` \| `paid` |
+| `page` | int | Page |
+| `limit` | int | Per page |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 100,
+      "driverId": 1,
+      "tripId": 10,
+      "amount": 12.75,
+      "status": "confirmed",
+      "date": "2026-06-03",
+      "createdAt": "..."
+    }
+  ],
+  "total": 80,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `GET /driver/earnings/history`
+
+Alias / filtered version of driver earnings. Same query params and response shape as `GET /driver/earnings`.
+
+---
+
+### `GET /driver/notifications`
+
+**Response `200`:**
+```jsonc
 {
   "data": [
     {
       "id": 1,
-      "driverId": 10,
-      "type": "national_id_front",
-      "fileUrl": "https://...",
-      "verificationStatus": "pending | approved | rejected",
-      "rejectionReason": null,
-      "uploadedAt": "2026-06-01T00:00:00.000Z"
+      "userId": 2,
+      "title": "New Ride Request",
+      "body": "Passenger is waiting...",
+      "type": "ride_request",
+      "isRead": false,
+      "createdAt": "..."
+    }
+  ]
+}
+```
+_(Returns up to 50 most recent notifications)_
+
+---
+
+### `GET /driver/wallet/balance`
+
+**Response `200`:**
+```jsonc
+{
+  "balance": 145.50,       // confirmed earnings
+  "totalPaid": 800.00,
+  "totalPending": 30.00
+}
+```
+
+---
+
+### `GET /driver/settings`
+
+**Response `200`:**
+```jsonc
+{
+  "notifications": true,
+  "language": "en"
+}
+```
+
+---
+
+### `PATCH /driver/settings`
+
+**Request (all fields optional):**
+```jsonc
+{
+  "notifications": false,
+  "language": "ar"
+}
+```
+
+**Response `200`:** Same shape as `GET /driver/settings`.
+
+---
+
+### `GET /driver/reviews`
+
+**Query params:** `page`, `limit`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "rideId": 42,
+      "rating": 5,
+      "comment": "Excellent driver",
+      "passengerId": 10,
+      "createdAt": "..."
+    }
+  ],
+  "total": 45,
+  "page": 1,
+  "limit": 20,
+  "averageRating": 4.8
+}
+```
+
+---
+
+### `GET /driver/promotions`
+
+Returns currently active promotions available to drivers (static data).
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": "promo_peak_hours",
+      "title": "Peak Hours Bonus",
+      "description": "Earn 20% extra during rush hours (7–9 am, 5–7 pm)",
+      "bonusPercentage": 20,
+      "validUntil": "2026-06-10T00:00:00.000Z",
+      "isActive": true,
+      "conditions": { "timeRanges": ["07:00-09:00", "17:00-19:00"] }
+    },
+    {
+      "id": "promo_weekend",
+      "title": "Weekend Warrior",
+      "description": "Complete 10 rides this weekend for a bonus",
+      "bonusAmount": 500,
+      "targetRides": 10,
+      "validUntil": "2026-06-05T00:00:00.000Z",
+      "isActive": true,
+      "conditions": { "daysOfWeek": ["saturday", "sunday"] }
     }
   ]
 }
 ```
 
-**Document types:** `national_id_front` · `national_id_back` · `driving_license_front` · `driving_license_back` · `vehicle_license_front` · `vehicle_license_back` · `vehicle_photo` · `profile_photo` · `trip_selfie` · `criminal_record`
-
 ---
 
-### `POST /api/driver-documents/upload/:driverId`
-Upload a driver document (file upload).
+## 10. Driver Documents
 
-**Auth:** Bearer token — `driver` or `admin`
+Document types: `national_id_front`, `national_id_back`, `driving_license_front`, `driving_license_back`, `vehicle_license_front`, `vehicle_license_back`, `vehicle_photo`, `profile_photo`, `trip_selfie`, `criminal_record`
 
-**Content-Type:** `multipart/form-data`
+### `GET /driver-documents`
+**Auth:** Required (role: admin)
 
-**Form fields:**
-| Field | Type | Constraints |
+**Query params:**
+
+| Param | Type | Description |
 |-------|------|-------------|
-| `file` | File | Required. JPEG/PNG/WebP only. Max **10 MB**. |
-| `type` | string | One of the 10 document types above. |
+| `verificationStatus` | string | `pending` \| `approved` \| `rejected` |
+| `type` | string | Document type (see list above) |
+| `page` | int | Page |
+| `limit` | int | Per page (default 50, max 100) |
 
-**Response `201`:**
-```json
+**Response `200`:**
+```jsonc
 {
-  "id": 1,
-  "driverId": 10,
-  "type": "national_id_front",
-  "fileUrl": "https://supabase-storage-url/...",
-  "verificationStatus": "pending",
-  "uploadedAt": "2026-06-03T12:00:00.000Z"
+  "data": [
+    {
+      "id": 1,
+      "driverId": 1,
+      "type": "national_id_front",
+      "fileUrl": "https://storage.supabase.co/...",
+      "mimeType": "image/jpeg",
+      "verificationStatus": "pending",
+      "adminNotes": null,
+      "uploadedAt": "...",
+      "driver": { "name": "Ahmed Ali", "phone": "+966501234567" }
+    }
+  ],
+  "total": 25,
+  "page": 1,
+  "limit": 50
 }
 ```
 
-**Errors:** `400` unsupported file type · `400` file too large · `404` driver not found
+---
 
-**Storage:** Supabase Storage bucket. File path: `driver-documents/{driverId}/{type}/{timestamp}.{ext}`
+### `GET /driver-documents/by-driver/:driverId`
+**Auth:** Required (role: admin)
+
+**Response `200`:**
+```jsonc
+{
+  "driver": { "id": 1, "name": "Ahmed Ali", "phone": "+966501234567" },
+  "documents": [
+    {
+      "id": 1,
+      "type": "national_id_front",
+      "fileUrl": "https://...",
+      "verificationStatus": "approved",
+      ...
+    }
+  ]
+}
+```
 
 ---
 
-### `PATCH /api/driver-documents/:id/verify` *(Admin)*
-Approve or reject a document.
+### `GET /driver-documents/stats`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
+**Response `200`:**
+```jsonc
 {
-  "verificationStatus": "approved | rejected",
-  "rejectionReason": "string (required if rejected)"
+  "pending": 12,
+  "approved": 87,
+  "rejected": 5
+}
+```
+
+---
+
+### `POST /driver-documents/upload/:driverId`
+**Auth:** Required (any authenticated user)  
+**Content-Type:** `multipart/form-data`
+
+**Form fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `file` | binary | Yes | Image file (JPEG, PNG, WebP; max 10 MB) |
+| `type` | string | Yes | Document type (see list above) |
+
+**Response `201`:**
+```jsonc
+{
+  "id": 15,
+  "driverId": 1,
+  "type": "profile_photo",
+  "fileUrl": "https://storage.supabase.co/...",
+  "mimeType": "image/jpeg",
+  "verificationStatus": "pending",
+  "adminNotes": null,
+  "uploadedAt": "2026-06-03T09:00:00.000Z"
+}
+```
+
+---
+
+### `PATCH /driver-documents/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "verificationStatus": "approved",   // "pending" | "approved" | "rejected"
+  "adminNotes": "Looks good"
 }
 ```
 
@@ -1933,101 +1531,96 @@ Approve or reject a document.
 
 ---
 
-### `DELETE /api/driver-documents/:id`
-Delete a document.
+## 11. Users — Admin Management
 
-**Auth:** Bearer token — `driver` (own) or `admin`
+### `GET /users`
+**Auth:** Required (role: admin)
 
-**Response `204`:** No content.
+**Query params:**
 
----
-
-## 19. Vehicles
-
-### `GET /api/vehicles`
-List vehicles for the authenticated driver.
-
-**Auth:** Bearer token — `driver`
-
-**Response `200`:** `{ "data": [...vehicleObjects] }`
-
-Vehicle object:
-```json
-{
-  "id": 1,
-  "driverId": 10,
-  "type": "car | bike",
-  "make": "Toyota",
-  "model": "Corolla",
-  "year": 2022,
-  "color": "White",
-  "plateNumber": "ABC-123",
-  "isActive": true
-}
-```
-
----
-
-### `POST /api/vehicles`
-Add a vehicle.
-
-**Auth:** Bearer token — `driver`
-
-**Request body:**
-```json
-{
-  "type": "car | bike",
-  "make": "string",
-  "model": "string",
-  "year": 2022,
-  "color": "string",
-  "plateNumber": "string"
-}
-```
-
-**Response `201`:** Vehicle object.
-
----
-
-### `PATCH /api/vehicles/:id`
-Update a vehicle.
-
-**Auth:** Bearer token — `driver` (own) or `admin`
-
-**Response `200`:** Updated vehicle object.
-
----
-
-### `DELETE /api/vehicles/:id`
-Delete a vehicle.
-
-**Auth:** Bearer token — `driver` (own) or `admin`
-
-**Response `204`:** No content.
-
----
-
-## 20. Locations
-
-### `GET /api/user/locations`
-Get the authenticated user's saved locations.
-
-**Auth:** Bearer token — `user`
+| Param | Type | Description |
+|-------|------|-------------|
+| `search` | string | Search name/phone/email |
+| `role` | string | `passenger` \| `driver` \| `admin` |
+| `isBlocked` | bool | Filter blocked users |
+| `page` | int | Page |
+| `limit` | int | Per page |
 
 **Response `200`:**
-```json
+```jsonc
 {
   "data": [
     {
       "id": 1,
-      "userId": 5,
-      "label": "home | work | other",
-      "name": "My Home",
-      "address": "123 Main St, Cairo",
-      "latitude": 30.0444,
-      "longitude": 31.2357,
+      "name": "Jane Doe",
+      "email": "jane@example.com",
+      "phone": "+1234567890",
+      "role": "passenger",
+      "walletBalance": "150.00",
+      "isBlocked": false,
+      "createdAt": "..."
+    }
+  ],
+  "total": 200,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `GET /users/:id`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Full user object (no password).
+
+---
+
+### `PATCH /users/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "Jane Smith",
+  "phone": "...",
+  "isBlocked": true,
+  "role": "admin"
+}
+```
+
+**Response `200`:** Updated user object.
+
+---
+
+### `DELETE /users/:id`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+## 12. User Locations
+
+### `GET /user/locations`
+**Auth:** Required
+
+Returns saved locations for the authenticated user.
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "userId": 1,
+      "label": "home",
+      "name": "My House",
+      "address": "123 Main St",
+      "latitude": 24.7136,
+      "longitude": 46.6753,
       "isDefault": true,
-      "createdAt": "2026-01-01T00:00:00.000Z"
+      "createdAt": "..."
     }
   ],
   "total": 2
@@ -2036,177 +1629,124 @@ Get the authenticated user's saved locations.
 
 ---
 
-### `POST /api/user/locations`
-Save a new location.
+### `POST /user/locations`
+**Auth:** Required
 
-**Auth:** Bearer token — `user`
-
-**Request body:**
-```json
+**Request:**
+```jsonc
 {
-  "label": "home | work | other (default: other)",
-  "name": "string",
-  "address": "string",
-  "latitude": 30.0444,
-  "longitude": 31.2357,
-  "isDefault": false
+  "label": "home",         // "home" | "work" | "other"
+  "name": "My House",
+  "address": "123 Main St",
+  "latitude": 24.7136,
+  "longitude": 46.6753,
+  "isDefault": true        // optional, default false
 }
 ```
 
 **Response `201`:** Location object.
 
-**Note:** If `isDefault: true`, all other locations for this user are set to `isDefault: false` first.
+---
+
+### `PATCH /user/locations/:id`
+**Auth:** Required
+
+**Request (all fields optional):** Same fields as POST.
+
+**Response `200`:** Updated location object.
 
 ---
 
-### `PATCH /api/user/locations/:id`
-Update a saved location.
+### `DELETE /user/locations/:id`
+**Auth:** Required
 
-**Auth:** Bearer token — `user`
-
-**Request body:** Any fields from the create body (all optional).
-
-**Response `200`:** Updated location object. **Errors:** `404`
+**Response `204`:** No content.
 
 ---
 
-### `DELETE /api/user/locations/:id`
-Delete a saved location.
-
-**Auth:** Bearer token — `user`
-
-**Response `204`:** No content. **Errors:** `404`
-
----
-
-### `GET /api/admin/driver-locations` *(Admin)*
-Paginated GPS location history for a driver.
-
-**Auth:** Bearer token — `admin`
+### `GET /admin/user-locations`
+**Auth:** Required (role: admin)
 
 **Query params:**
-| Param | Type | Required | Default |
-|-------|------|----------|---------|
-| `driverId` | int | ✓ | — |
-| `page` | int | — | 1 |
-| `limit` | int | — | 50 (max 200) |
 
-**Response `200`:** Paginated location records ordered by `recordedAt` descending.
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `userId` | int | Yes | User ID to query |
 
----
-
-### `GET /api/admin/driver-locations/:driverId/latest` *(Admin)*
-Get the latest GPS location for a driver.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Single location record. **Errors:** `404`
+**Response `200`:**
+```jsonc
+{ "data": [...], "total": 3 }
+```
 
 ---
 
-### `GET /api/admin/user-locations` *(Admin)*
-Get saved locations for a specific user.
+### `GET /admin/driver-locations`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
+Returns paginated location history for a driver.
 
-**Query params:** `userId` (required, int)
+**Query params:**
 
-**Response `200`:** `{ "data": [...locationObjects], "total": 3 }`
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `driverId` | int | Yes | Driver ID |
+| `page` | int | No | Page (default 1) |
+| `limit` | int | No | Per page (max 200, default 50) |
+
+**Response `200`:**
+```jsonc
+{ "data": [...], "total": 1000, "page": 1, "limit": 50 }
+```
 
 ---
 
-## 21. Route Suggestions
+### `GET /admin/driver-locations/:driverId/latest`
+**Auth:** Required (role: admin)
 
-### `POST /api/suggestions`
-Submit a route suggestion (public — no auth required).
+**Response `200`:** Single latest location record.  
+**Response `404`:** `{ "error": "No location history found for this driver" }`
 
-**Auth:** None
+---
 
-**Request body:**
-```json
+## 13. Ratings
+
+### `POST /ratings`
+**Auth:** Required (passenger)
+
+**Request:**
+```jsonc
 {
-  "type": "new_route | new_station | route_edit",
-  "title": "string",
-  "description": "string",
-  "startLocation": "string (optional)",
-  "endLocation": "string (optional)",
-  "userId": 5,
-  "driverId": 10
+  "rideId": 42,
+  "driverId": 1,
+  "rating": 5,             // 1–5 integer
+  "comment": "Great!"      // optional
 }
 ```
 
-**Response `201`:** Suggestion object.
-
----
-
-### `GET /api/suggestions` *(Admin)*
-List all suggestions with user/driver info.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:**
-| Param | Type |
-|-------|------|
-| `page` | int (default 1) |
-| `limit` | int (default 20, max 100) |
-| `status` | `pending\|approved\|rejected` |
-| `type` | `new_route\|new_station\|route_edit` |
-| `search` | string (title filter) |
-
-**Response `200`:** Paginated suggestion objects with embedded `user` and `driver` sub-objects.
-
----
-
-### `GET /api/suggestions/:id` *(Admin)*
-Get a single suggestion.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Suggestion object. **Errors:** `404`
-
----
-
-### `PATCH /api/suggestions/:id` *(Admin)*
-Update suggestion status or add admin notes.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
+**Response `201`:**
+```jsonc
 {
-  "status": "pending | approved | rejected",
-  "adminNotes": "string (optional)"
+  "ok": true,
+  "rating": 5,
+  "newDriverAverage": 4.82
 }
 ```
 
-**Response `200`:** Updated suggestion object.
-
 ---
 
-## 22. Audit Logs
+### `GET /ratings/driver/:driverId`
+**Auth:** Required
 
-### `GET /api/audit-logs` *(Admin)*
-List admin audit logs.
+**Query params:** `page`, `limit`
 
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `action`, `adminId`, `startDate`, `endDate`
-
-**Response `200`:** Paginated audit log objects:
-```json
+**Response `200`:**
+```jsonc
 {
   "data": [
-    {
-      "id": 1,
-      "adminId": 2,
-      "action": "UPDATE_TRIP",
-      "entityType": "trip",
-      "entityId": 42,
-      "changes": {},
-      "createdAt": "2026-06-03T12:00:00.000Z"
-    }
+    { "rideId": 42, "rating": 5, "comment": "Great!", "createdAt": "..." }
   ],
-  "total": 150,
+  "total": 45,
+  "average": 4.82,
   "page": 1,
   "limit": 20
 }
@@ -2214,286 +1754,1305 @@ List admin audit logs.
 
 ---
 
-## 23. Staff
+## 14. Payments
 
-### `GET /api/staff` *(Admin)*
-List all staff/admin accounts.
+### `POST /payments/intent`
+**Auth:** Required
 
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `search`
-
-**Response `200`:** Paginated staff objects.
-
----
-
-### `POST /api/staff` *(Admin)*
-Create a staff account.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
+**Request:**
+```jsonc
 {
-  "name": "string",
-  "email": "string",
-  "password": "string",
-  "role": "admin"
+  "amount": 25.50,
+  "currency": "SAR",
+  "rideId": 42           // optional
 }
 ```
 
-**Response `201`:** Staff user object.
+**Response `201`:**
+```jsonc
+{
+  "clientSecret": "pi_xxx_secret_yyy",
+  "paymentIntentId": "pi_xxx"
+}
+```
 
 ---
 
-### `PATCH /api/staff/:id` *(Admin)*
-Update a staff member.
+### `POST /payments/confirm`
+**Auth:** Required
 
-**Auth:** Bearer token — `admin`
+**Request:**
+```jsonc
+{
+  "paymentIntentId": "pi_xxx",
+  "rideId": 42           // optional
+}
+```
 
-**Response `200`:** Updated staff object.
+**Response `200`:**
+```jsonc
+{ "ok": true, "status": "succeeded" }
+```
 
 ---
 
-### `DELETE /api/staff/:id` *(Admin)*
-Remove a staff member.
+### `GET /payments/history`
+**Auth:** Required
 
-**Auth:** Bearer token — `admin`
+**Query params:** `page`, `limit`
 
-**Response `204`:** No content.
-
----
-
-## 24. Earnings (Admin)
-
-### `GET /api/earnings` *(Admin)*
-List all driver earnings records.
-
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `driverId`, `status`
-
-**Response `200`:** Paginated earning objects:
-```json
+**Response `200`:**
+```jsonc
 {
   "data": [
     {
       "id": 1,
-      "driverId": 10,
-      "tripId": 42,
-      "amount": 48.75,
-      "status": "pending | confirmed | paid",
-      "date": "2026-06-03"
+      "amount": 25.50,
+      "currency": "SAR",
+      "status": "succeeded",
+      "rideId": 42,
+      "createdAt": "..."
     }
   ],
-  "total": 200
+  "total": 20,
+  "page": 1,
+  "limit": 20
 }
 ```
 
 ---
 
-### `GET /api/earnings/summary` *(Admin)*
-Earnings summary totals.
+## 15. Wallet
 
-**Auth:** Bearer token — `admin`
+### `GET /wallet/balance`
+**Auth:** Required
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "totalEarned": 50000.00,
-  "totalPaid": 40000.00,
-  "totalPending": 10000.00,
-  "driverCount": 15
+  "balance": 150.00,
+  "currency": "SAR"
 }
 ```
 
 ---
 
-## 25. Drivers (Admin)
+### `POST /wallet/topup`
+**Auth:** Required
 
-### `GET /api/drivers` *(Admin)*
-List all driver profiles.
+**Request:**
+```jsonc
+{
+  "amount": 100.00,
+  "paymentMethod": "card"   // "card" | "bank_transfer"
+}
+```
 
-**Auth:** Bearer token — `admin`
-
-**Query params:** `page`, `limit`, `status`, `isOnline`, `isActive`, `search`
-
-**Response `200`:** Paginated driver objects.
-
----
-
-### `GET /api/drivers/:id` *(Admin)*
-Get a single driver profile.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Driver object. **Errors:** `404`
-
----
-
-### `PATCH /api/drivers/:id` *(Admin)*
-Update a driver profile.
-
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** Updated driver object.
+**Response `200`:**
+```jsonc
+{
+  "ok": true,
+  "newBalance": 250.00,
+  "transactionId": "txn_xxx"
+}
+```
 
 ---
 
-### `DELETE /api/drivers/:id` *(Admin)*
-Delete a driver profile.
+### `GET /wallet/transactions`
+**Auth:** Required
 
-**Auth:** Bearer token — `admin`
+**Query params:** `page`, `limit`, `type`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "type": "debit",
+      "amount": 30.00,
+      "description": "Booking #55",
+      "balanceBefore": 180.00,
+      "balanceAfter": 150.00,
+      "createdAt": "..."
+    }
+  ],
+  "total": 50,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /wallet/transfer` _(Admin)_
+**Auth:** Required (role: admin)
+
+Admin-initiated wallet credit/debit.
+
+**Request:**
+```jsonc
+{
+  "userId": 1,
+  "amount": 50.00,
+  "type": "credit",        // "credit" | "debit"
+  "description": "Refund"
+}
+```
+
+**Response `200`:**
+```jsonc
+{ "ok": true, "newBalance": 200.00 }
+```
+
+---
+
+## 16. Notifications
+
+### `GET /notifications`
+**Auth:** Required
+
+**Query params:** `page`, `limit`, `isRead`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "userId": 1,
+      "title": "Booking Confirmed",
+      "body": "Your booking for trip #10 is confirmed.",
+      "type": "booking_confirmed",
+      "isRead": false,
+      "createdAt": "..."
+    }
+  ],
+  "total": 12,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /notifications/:id/read`
+**Auth:** Required
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "ok": true, "id": 1, "isRead": true }
+```
+
+---
+
+### `POST /notifications/read-all`
+**Auth:** Required
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "ok": true, "updatedCount": 5 }
+```
+
+---
+
+## 17. Support Tickets
+
+Ticket types: `complaint`, `inquiry`, `suggestion`, `technical`  
+Ticket statuses: `open`, `pending`, `resolved`, `closed`  
+Priorities: `low`, `medium`, `high`, `urgent`
+
+### `POST /support/tickets`
+**Auth:** Required
+
+**Request:**
+```jsonc
+{
+  "subject": "Overcharged for ride",
+  "description": "I was charged twice for ride #42.",
+  "type": "complaint",
+  "priority": "high",        // optional, default "medium"
+  "rideId": 42               // optional
+}
+```
+
+**Response `201`:**
+```jsonc
+{
+  "id": 7,
+  "userId": 1,
+  "subject": "Overcharged for ride",
+  "description": "...",
+  "type": "complaint",
+  "status": "open",
+  "priority": "high",
+  "createdAt": "..."
+}
+```
+
+---
+
+### `GET /support/tickets`
+**Auth:** Required  
+**Note:** Passengers see own tickets; admins see all.
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `status` | string | Filter by status |
+| `type` | string | Filter by type |
+| `priority` | string | Filter by priority |
+| `search` | string | Search subject |
+| `page` | int | Page |
+| `limit` | int | Per page |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [ { "id": 7, "subject": "...", "status": "open", ... } ],
+  "total": 15,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `GET /support/tickets/:id`
+**Auth:** Required
+
+**Response `200`:** Full ticket object with messages.
+
+---
+
+### `POST /support/tickets/:id/messages`
+**Auth:** Required
+
+**Request:**
+```jsonc
+{
+  "message": "Please process my refund.",
+  "attachmentUrl": "https://..."   // optional
+}
+```
+
+**Response `201`:**
+```jsonc
+{
+  "id": 20,
+  "ticketId": 7,
+  "userId": 1,
+  "message": "Please process my refund.",
+  "isStaff": false,
+  "createdAt": "..."
+}
+```
+
+---
+
+### `GET /support/tickets/:id/messages`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "data": [ { "id": 20, "message": "...", "isStaff": false, ... } ],
+  "total": 3
+}
+```
+
+---
+
+### `PATCH /support/tickets/:id` _(Admin)_
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "status": "resolved",
+  "priority": "low",
+  "assignedTo": 5   // admin user ID
+}
+```
+
+**Response `200`:** Updated ticket object.
+
+---
+
+## 18. Chat
+
+In-trip chat between driver and passenger.
+
+### `GET /chat/ride/:rideId`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "rideId": 42,
+      "senderId": 1,
+      "senderRole": "passenger",
+      "message": "I'm at the front door.",
+      "createdAt": "..."
+    }
+  ],
+  "total": 5
+}
+```
+
+---
+
+### `POST /chat/ride/:rideId`
+**Auth:** Required
+
+**Request:**
+```jsonc
+{ "message": "I'm at the front door." }
+```
+
+**Response `201`:**
+```jsonc
+{
+  "id": 5,
+  "rideId": 42,
+  "senderId": 1,
+  "senderRole": "passenger",
+  "message": "I'm at the front door.",
+  "createdAt": "..."
+}
+```
+
+---
+
+## 19. Zones
+
+### `GET /zones`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Riyadh North",
+      "description": "Northern district",
+      "coordinates": [[24.7, 46.6], [24.8, 46.7], ...],
+      "isActive": true,
+      "createdAt": "..."
+    }
+  ],
+  "total": 8
+}
+```
+
+---
+
+### `POST /zones`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "name": "Riyadh South",
+  "description": "...",
+  "coordinates": [[24.6, 46.5], ...],
+  "isActive": true
+}
+```
+
+**Response `201`:** Zone object.
+
+---
+
+### `GET /zones/:id`
+**Auth:** Required
+
+**Response `200`:** Single zone object.
+
+---
+
+### `PATCH /zones/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):** Same as POST.
+
+**Response `200`:** Updated zone object.
+
+---
+
+### `DELETE /zones/:id`
+**Auth:** Required (role: admin)
 
 **Response `204`:** No content.
 
 ---
 
-### `GET /api/drivers/me` *(Deprecated — use `GET /api/driver/me`)*
-### `PATCH /api/drivers/me/location` *(Deprecated — use `PATCH /api/driver/location`)*
+## 20. Zone Pricing
 
----
+### `GET /admin/zone-pricing`
+**Auth:** Required (role: admin)
 
-## 26. Admin General
+**Query params:**
 
-### `GET /api/admin/settings`
-Get all application settings.
+| Param | Type | Description |
+|-------|------|-------------|
+| `vehicleType` | string | `car` \| `bike` |
 
-**Auth:** Bearer token — `admin`
-
-**Response `200`:** `{ "data": [{ "key": "string", "value": "string" }] }`
-
----
-
-### `PATCH /api/admin/settings`
-Update one or more settings keys.
-
-**Auth:** Bearer token — `admin`
-
-**Request body:**
-```json
+**Response `200`:**
+```jsonc
 {
-  "driver_commission_rate": "0.15",
-  "surge_multiplier_max": "3.0"
+  "data": [
+    {
+      "id": 1,
+      "zoneId": 1,
+      "zoneName": "Riyadh North",
+      "vehicleType": "car",
+      "baseFare": 8.00,
+      "perKmRate": 1.50,
+      "minimumFare": 10.00,
+      "isActive": true,
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ]
 }
 ```
 
-**Response `200`:** Updated settings array.
+---
+
+### `POST /admin/zone-pricing`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "zoneId": 1,
+  "vehicleType": "car",       // "car" | "bike"
+  "baseFare": 8.00,
+  "perKmRate": 1.50,
+  "minimumFare": 10.00,
+  "isActive": true             // optional, default true
+}
+```
+
+**Response `201`:** Zone pricing object.  
+**Error `409`:** Duplicate zone + vehicleType combination.
 
 ---
 
-### `GET /api/admin/overview`
-Platform-wide stats overview.
+### `PATCH /admin/zone-pricing/:id`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
+**Request (all fields optional):**
+```jsonc
+{
+  "baseFare": 9.00,
+  "perKmRate": 1.75,
+  "minimumFare": 12.00,
+  "isActive": false
+}
+```
 
-**Response `200`:** Counts of users, drivers, rides, bookings, revenue, etc.
+**Response `200`:** Updated zone pricing object.
 
 ---
 
-## 27. Dashboard (Admin)
+### `DELETE /admin/zone-pricing/:id`
+**Auth:** Required (role: admin)
 
-### `GET /api/dashboard/summary` *(Admin)*
-Complete platform summary with live counts.
+**Response `204`:** No content.
 
-**Auth:** Bearer token — `admin`
+---
+
+## 21. Promo Codes
+
+### `GET /promo/codes`
+**Auth:** Required (role: admin)
+
+**Query params:** `page`, `limit`, `isActive`, `search`
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "routes": { "total": 12, "active": 10, "inactive": 2 },
-  "stations": { "total": 80 },
+  "data": [
+    {
+      "id": 1,
+      "code": "SAVE10",
+      "discountType": "percentage",   // "percentage" | "fixed"
+      "discountValue": 10.00,
+      "minOrderAmount": 20.00,
+      "maxUses": 100,
+      "usedCount": 34,
+      "isActive": true,
+      "expiresAt": "2026-12-31T23:59:59.000Z",
+      "createdAt": "..."
+    }
+  ],
+  "total": 5,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /promo/codes`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "code": "SUMMER20",
+  "discountType": "percentage",
+  "discountValue": 20.00,
+  "minOrderAmount": 15.00,     // optional
+  "maxUses": 500,              // optional
+  "expiresAt": "2026-09-01T00:00:00.000Z"  // optional
+}
+```
+
+**Response `201`:** Promo code object.
+
+---
+
+### `GET /promo/codes/:id`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Single promo code object.
+
+---
+
+### `PATCH /promo/codes/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):** Same as POST.
+
+**Response `200`:** Updated promo code object.
+
+---
+
+### `DELETE /promo/codes/:id`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+### `POST /promo/validate`
+**Auth:** Required
+
+**Request:**
+```jsonc
+{
+  "code": "SAVE10",
+  "orderAmount": 30.00
+}
+```
+
+**Response `200`:**
+```jsonc
+{
+  "valid": true,
+  "discountAmount": 3.00,
+  "finalAmount": 27.00,
+  "promo": { "code": "SAVE10", "discountType": "percentage", "discountValue": 10 }
+}
+```
+
+**Response `400`:**
+```jsonc
+{ "valid": false, "error": "Code expired" }
+```
+
+---
+
+## 22. Shuttle
+
+Shuttle-specific endpoints for lines (routes), stops (stations), and boarding management.
+
+### `GET /shuttle/lines`
+**Auth:** None (public)
+
+Returns all **active** shuttle routes enriched with station counts and trip statistics.
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "City Center → Airport",
+      "fromLocation": "City Center",
+      "toLocation": "Airport",
+      "estimatedDuration": 45,
+      "basePrice": 15.00,
+      "isActive": true,
+      "stationCount": 8,
+      "totalTrips": 3,
+      "scheduledTrips": 2,
+      "activeTrips": 1,
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ],
+  "total": 4
+}
+```
+
+---
+
+### `GET /shuttle/lines/:id`
+**Auth:** None (public)
+
+Returns a single shuttle line with its stations and up to 10 upcoming/active trips.
+
+**Response `200`:**
+```jsonc
+{
+  "data": {
+    "id": 1,
+    "name": "City Center → Airport",
+    "basePrice": 15.00,
+    "stationCount": 8,
+    "stations": [ { "id": 1, "name": "Main Station", "order": 1, ... } ],
+    "activeTrips": [
+      {
+        "id": 10,
+        "status": "boarding",
+        "departureTime": "...",
+        "arrivalTime": "...",
+        "availableSeats": 12,
+        "totalSeats": 20
+      }
+    ]
+  }
+}
+```
+
+---
+
+### `GET /shuttle/assignments`
+**Auth:** None (public)
+
+Returns all active drivers with a bus assigned, including their bus details and current/nearest trip.
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "driverId": 1,
+      "driverName": "Ahmed Ali",
+      "driverPhone": "+966501234567",
+      "driverStatus": "active",
+      "isOnline": true,
+      "rating": 4.8,
+      "userId": 2,
+      "bus": {
+        "id": 3,
+        "plateNumber": "BUS-001",
+        "model": "Hyundai County",
+        "capacity": 25,
+        "isActive": true
+      },
+      "currentTrip": {
+        "id": 10,
+        "routeId": 1,
+        "routeName": "City Center → Airport",
+        "fromLocation": "City Center",
+        "toLocation": "Airport",
+        "status": "boarding",
+        "departureTime": "...",
+        "arrivalTime": "...",
+        "availableSeats": 12,
+        "totalSeats": 25
+      }
+    }
+  ],
+  "total": 5
+}
+```
+
+---
+
+### `POST /shuttle/lines/:id/activate`
+**Auth:** Required (role: admin)
+
+Activates a shuttle line and advances its next scheduled trip to `"boarding"` status.
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{
+  "data": { "id": 1, "isActive": true, "basePrice": 15.00, ... },
+  "boardingTrip": { "id": 10, "status": "boarding", ... }
+}
+```
+
+---
+
+### `POST /shuttle/lines/:id/complete`
+**Auth:** Required (role: admin)
+
+Completes all active/boarding trips for a line and marks confirmed/boarded bookings as completed.
+
+**Request:** _(empty body)_
+
+**Response `200`:**
+```jsonc
+{ "ok": true, "completedTrips": 2 }
+```
+
+---
+
+### `POST /shuttle/lines/:id/book`
+**Auth:** Required (role: driver — must have an assigned bus)
+
+Allows a driver to book a weekly recurring slot on a shuttle line.
+
+**Request:**
+```jsonc
+{
+  "weekStart": "2026-06-08",
+  "weekEnd": "2026-06-12",
+  "departureTime": "07:00"    // must be one of: "07:00","08:00","09:00","10:00","13:00","14:00","15:00","16:00"
+}
+```
+
+**Response `201`:**
+```jsonc
+{
+  "ok": true,
+  "booking": {
+    "id": 10,
+    "routeId": 1,
+    "routeName": "City Center → Airport",
+    "fromLocation": "City Center",
+    "toLocation": "Airport",
+    "departureTime": "2026-06-08T07:00:00.000Z",
+    "arrivalTime": "2026-06-08T07:45:00.000Z",
+    "weekStart": "2026-06-08",
+    "weekEnd": "2026-06-12",
+    "departureSlot": "07:00",
+    "status": "scheduled",
+    "availableSeats": 25,
+    "totalSeats": 25,
+    "bus": { "id": 3, "plateNumber": "BUS-001", "model": "Hyundai County", "capacity": 25 }
+  }
+}
+```
+
+**Error `409`:** Slot already taken by this driver or another driver.  
+**Error `422`:** No bus assigned to driver.
+
+---
+
+### `GET /shuttle/lines/:id/passengers`
+**Auth:** Required
+
+Resolves the most recent active/boarding trip for the given route and returns its passenger list.
+
+**Response `200`:** Same shape as `GET /shuttle/trips/:id/passengers`.
+
+---
+
+### `GET /shuttle/trips/:id/passengers`
+**Auth:** Required
+
+**Response `200`:**
+```jsonc
+{
+  "tripId": 10,
+  "tripStatus": "active",
+  "data": [
+    {
+      "bookingId": 55,
+      "userId": 1,
+      "seatCount": 2,
+      "totalPrice": 30.00,
+      "status": "boarded",
+      "paymentStatus": "paid",
+      "boarded": true,
+      "userName": "Jane Doe",
+      "userPhone": "+1234567890",
+      "userEmail": "jane@example.com",
+      "createdAt": "..."
+    }
+  ],
+  "total": 18
+}
+```
+
+---
+
+### `POST /shuttle/stops/:id/board`
+**Auth:** Required
+
+Marks a station as "arrived" and logs the boarding event for a trip.
+
+**Request:**
+```jsonc
+{ "tripId": 10 }
+```
+
+**Response `200`:**
+```jsonc
+{
+  "ok": true,
+  "stationId": 3,
+  "tripId": 10,
+  "progress": {
+    "tripId": 10,
+    "stationId": 3,
+    "status": "arrived",
+    "arrivedAt": "2026-06-03T07:20:00.000Z"
+  }
+}
+```
+
+---
+
+### `POST /shuttle/trips/:id/board-stop`
+**Auth:** Required
+
+Marks a trip as having reached a given station and logs the event.
+
+**Request:**
+```jsonc
+{ "stationId": 4 }
+```
+
+**Response `200`:**
+```jsonc
+{
+  "ok": true,
+  "tripId": 10,
+  "stationId": 4,
+  "stationName": "Stop 4",
+  "progress": { "tripId": 10, "stationId": 4, "status": "arrived", "arrivedAt": "..." },
+  "boardedPassengers": 15
+}
+```
+
+---
+
+## 23. Buses
+
+### `GET /buses`
+**Auth:** Required (role: admin)
+
+**Query params:** `page`, `limit`
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "plateNumber": "BUS-001",
+      "model": "Hyundai County",
+      "capacity": 25,
+      "isActive": true,
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ],
+  "total": 12,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /buses`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "plateNumber": "BUS-002",
+  "model": "Toyota Coaster",
+  "capacity": 30,
+  "isActive": true     // optional
+}
+```
+
+**Response `201`:** Bus object.
+
+---
+
+### `GET /buses/:id`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Single bus object.  
+**Response `404`:** `{ "error": "Bus not found" }`
+
+---
+
+### `PATCH /buses/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):** Same as POST.
+
+**Response `200`:** Updated bus object.
+
+---
+
+### `DELETE /buses/:id`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+## 24. Vehicles
+
+Vehicle types: `car`, `motorcycle`, `van`, `minibus`  
+Vehicle statuses: `pending`, `verified`, `rejected`, `suspended`
+
+### `GET /vehicles`
+**Auth:** Required (role: admin)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `search` | string | Search plate/make/model |
+| `status` | string | Vehicle status filter |
+| `vehicleType` | string | Type filter |
+| `page` | int | Page |
+| `limit` | int | Per page |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "driverId": 1,
+      "plateNumber": "ABC-1234",
+      "make": "Toyota",
+      "model": "Camry",
+      "year": 2020,
+      "color": "White",
+      "vehicleType": "car",
+      "status": "verified",
+      "isActive": true,
+      "driverName": "Ahmed Ali",
+      "driverPhone": "+966501234567",
+      "createdAt": "...",
+      "updatedAt": "..."
+    }
+  ],
+  "total": 30,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /vehicles`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "driverId": 1,
+  "plateNumber": "XYZ-9999",
+  "make": "Honda",
+  "model": "Civic",
+  "year": 2022,
+  "color": "Blue",
+  "vehicleType": "car",
+  "status": "pending",   // optional
+  "isActive": true       // optional
+}
+```
+
+**Response `201`:** Vehicle object.
+
+---
+
+### `GET /vehicles/:id`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Vehicle object with `driverName` and `driverPhone`.
+
+---
+
+### `PATCH /vehicles/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "plateNumber": "...",
+  "make": "...",
+  "model": "...",
+  "year": 2023,
+  "color": "Red",
+  "vehicleType": "motorcycle",
+  "status": "verified",
+  "isActive": true
+}
+```
+
+**Response `200`:** Updated vehicle object.
+
+---
+
+### `DELETE /vehicles/:id`
+**Auth:** Required (role: admin)
+
+**Response `204`:** No content.
+
+---
+
+## 25. Earnings
+
+Earning statuses: `pending`, `confirmed`, `paid`
+
+### `GET /earnings/summary`
+**Auth:** Required (admin or driver)
+
+**Admin response `200`:**
+```jsonc
+{
+  "summary": {
+    "totalEarnings": 15000.00,
+    "totalPaid": 12000.00,
+    "totalPending": 1500.00,
+    "totalConfirmed": 1500.00,
+    "totalRecords": 850
+  },
+  "byStatus": [
+    { "status": "paid", "count": 700, "total": 12000.00 }
+  ],
+  "topDrivers": [
+    { "driverId": 1, "driverName": "Ahmed Ali", "tripCount": 152, "totalEarned": 2280.00, "totalPaid": 2000.00 }
+  ]
+}
+```
+
+**Driver response `200`:**
+```jsonc
+{
+  "driverId": 1,
+  "summary": {
+    "totalEarnings": 2280.00,
+    "totalPaid": 2000.00,
+    "totalPending": 150.00,
+    "totalConfirmed": 130.00,
+    "totalRecords": 152
+  },
+  "byStatus": [ { "status": "paid", "count": 133, "total": 2000.00 } ],
+  "recentEarnings": [
+    { "id": 100, "amount": 15.00, "status": "confirmed", "date": "2026-06-03", "tripId": 10, "createdAt": "..." }
+  ]
+}
+```
+
+---
+
+### `GET /earnings/weekly`
+**Auth:** Required (admin or driver)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `weeks` | int | Past weeks to include (1–52, default 8) |
+| `driverId` | int | Admin only — filter to specific driver |
+
+**Response `200`:**
+```jsonc
+{
+  "weeks": 8,
+  "driverId": null,
+  "weeklyBreakdown": [
+    {
+      "week_start": "2026-04-06",
+      "trip_count": 48,
+      "total_earned": 720.00,
+      "paid": 600.00,
+      "pending": 60.00,
+      "confirmed": 60.00
+    }
+  ],
+  "driverBreakdown": [            // admin only when no driverId filter
+    { "driverId": 1, "driverName": "Ahmed Ali", "totalEarned": 720.00, "tripCount": 48 }
+  ]
+}
+```
+
+---
+
+### `GET /earnings`
+**Auth:** Required (role: admin)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `driverId` | int | Filter by driver |
+| `status` | string | `pending` \| `confirmed` \| `paid` |
+| `page` | int | Page |
+| `limit` | int | Per page |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 100,
+      "driverId": 1,
+      "tripId": 10,
+      "amount": 15.00,
+      "status": "confirmed",
+      "date": "2026-06-03",
+      "createdAt": "...",
+      "driverName": "Ahmed Ali",
+      "driverPhone": "+966501234567"
+    }
+  ],
+  "total": 850,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `PATCH /earnings/:id/status`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{ "status": "paid" }    // "confirmed" | "paid"
+```
+
+**Response `200`:** Updated earning record.
+
+---
+
+## 26. Dashboard
+
+All dashboard endpoints require `role: admin`.
+
+### `GET /dashboard/summary`
+**Auth:** Required (role: admin)
+
+**Response `200`:**
+```jsonc
+{
+  "routes": { "total": 10, "active": 8, "inactive": 2 },
+  "stations": { "total": 65 },
   "trips": {
-    "total": 500,
+    "total": 1200,
     "active": 3,
     "scheduled": 15,
-    "boarding": 1,
+    "boarding": 2,
     "upcoming": 18,
-    "cancelled": 12
+    "cancelled": 45
   },
   "fleet": {
-    "totalBuses": 20,
-    "activeBuses": 18,
+    "totalBuses": 12,
+    "activeBuses": 10,
     "totalDrivers": 35,
-    "onlineDrivers": 12
+    "onlineDrivers": 8
   },
-  "support": { "openTickets": 5, "pendingTickets": 3, "totalMessages": 120 },
-  "verifications": { "pending": 7 },
-  "suggestions": { "pending": 4 },
-  "users": { "total": 800, "passengers": 765, "drivers": 35 },
+  "support": {
+    "openTickets": 7,
+    "pendingTickets": 3,
+    "totalMessages": 142
+  },
+  "verifications": { "pending": 5 },
+  "suggestions": { "pending": 3 },
+  "users": { "total": 500, "passengers": 465, "drivers": 35 },
   "generatedAt": "2026-06-03T12:00:00.000Z"
 }
 ```
 
 ---
 
-### `GET /api/dashboard/activity` *(Admin)*
-Recent platform activity snapshot (up to 8 items each).
+### `GET /dashboard/activity`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
+Returns recent activity feed (up to 8 items per category).
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "recentTickets": [...],
-  "pendingDocuments": [...],
-  "recentSuggestions": [...],
-  "upcomingDepartures": [...],
-  "activeTrips": [...],
-  "recentBookings": [...]
+  "recentTickets": [ { "id": 7, "subject": "...", "status": "open", "priority": "high", "type": "complaint", "createdAt": "..." } ],
+  "pendingDocuments": [ { "id": 1, "driverId": 1, "type": "national_id_front", "verificationStatus": "pending", "driverName": "Ahmed Ali", "uploadedAt": "..." } ],
+  "recentSuggestions": [ { "id": 1, "title": "...", "type": "new_route", "status": "pending", "startLocation": "...", "endLocation": "...", "createdAt": "..." } ],
+  "upcomingDepartures": [ { "id": 10, "departureTime": "...", "routeName": "...", "driverName": "...", "availableSeats": 12, "totalSeats": 20, ... } ],
+  "activeTrips": [ { ... } ],
+  "recentBookings": [ { "id": 55, "status": "confirmed", "totalPrice": 30.00, "seatCount": 2, "userName": "Jane Doe", "userEmail": "...", "createdAt": "..." } ]
 }
 ```
 
 ---
 
-### `GET /api/dashboard/analytics` *(Admin)*
-Aggregated analytics for the past 30 days.
+### `GET /dashboard/analytics`
+**Auth:** Required (role: admin)
 
-**Auth:** Bearer token — `admin`
+Returns analytics data for the past 30 days.
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "tripsPerDay": [{ "date": "2026-06-01", "trips": 12, "completed": 11, "cancelled": 1 }],
-  "routePopularity": [{ "id": 1, "name": "Cairo–Alex", "tripCount": 45, "activeCount": 2 }],
-  "tripStatusBreakdown": [{ "status": "completed", "count": 300 }],
-  "driverActivity": [{ "id": 10, "name": "Ahmed", "tripCount": 22, "rating": 4.8 }],
-  "busiestStations": [{ "name": "Tahrir", "routeName": "Cairo–Alex", "tripCount": 45 }],
-  "bookingsPerDay": [{ "date": "2026-06-01", "bookings": 35, "revenue": 2625.00 }]
+  "tripsPerDay": [ { "date": "2026-06-01", "trips": 12, "completed": 10, "cancelled": 2 } ],
+  "routePopularity": [ { "id": 1, "name": "...", "fromLocation": "...", "toLocation": "...", "tripCount": 45, "activeCount": 2 } ],
+  "tripStatusBreakdown": [ { "status": "completed", "count": 800 } ],
+  "driverActivity": [ { "id": 1, "name": "Ahmed Ali", "tripCount": 152, "rating": 4.8, "isOnline": true, "status": "active" } ],
+  "busiestStations": [ { "name": "Main Station", "routeName": "...", "tripCount": 45 } ],
+  "bookingsPerDay": [ { "date": "2026-06-01", "bookings": 25, "revenue": 375.00 } ]
 }
 ```
 
 ---
 
-### `GET /api/dashboard/today` *(Admin)*
-Today's KPIs vs yesterday, live trip map data.
-
-**Auth:** Bearer token — `admin`
+### `GET /dashboard/today`
+**Auth:** Required (role: admin)
 
 **Response `200`:**
-```json
+```jsonc
 {
   "tripsToday": 8,
   "tripsYesterday": 6,
-  "revenueToday": 600.00,
-  "revenueYesterday": 450.00,
-  "driversOnline": 12,
-  "passengersActive": 30,
-  "last7DaysTrips": [{ "date": "2026-05-28", "trips": 7 }],
-  "last7DaysRevenue": [{ "date": "2026-05-28", "revenue": 525.00 }],
+  "revenueToday": 1200.00,
+  "revenueYesterday": 900.00,
+  "driversOnline": 5,
+  "passengersActive": 18,
+  "last7DaysTrips": [ { "date": "2026-05-28", "trips": 6 } ],
+  "last7DaysRevenue": [ { "date": "2026-05-28", "revenue": 900.00 } ],
   "activeTrips": [
     {
-      "id": 1,
+      "id": 10,
       "status": "active",
       "departureTime": "...",
       "arrivalTime": "...",
-      "routeName": "Cairo–Alex",
-      "fromLocation": "Cairo",
-      "toLocation": "Alexandria",
-      "driverName": "Ahmed",
-      "latitude": 30.05,
-      "longitude": 31.25,
-      "driverStatus": "busy"
+      "routeName": "...",
+      "fromLocation": "...",
+      "toLocation": "...",
+      "driverName": "Ahmed Ali",
+      "latitude": "24.7100",
+      "longitude": "46.6800",
+      "driverStatus": "active"
     }
   ],
   "generatedAt": "2026-06-03T12:00:00.000Z"
@@ -2502,135 +3061,556 @@ Today's KPIs vs yesterday, live trip map data.
 
 ---
 
-## 28. Health Check
+## 27. Service Controls
 
-### `GET /api/health`
-Server liveness probe.
+Service types: `shuttle`, `car`, `motorcycle`, `delivery`  
+Display modes: `live`, `coming_soon`, `unavailable`, `maintenance`  
+Unavailable actions: `none`, `show_message`, `hide_service`
 
-**Auth:** None
+### `GET /services/control`
+**Auth:** Required (any role)
+
+Returns controls for all four service types.
 
 **Response `200`:**
-```json
+```jsonc
 {
-  "status": "ok",
-  "timestamp": "2026-06-03T12:00:00.000Z"
+  "data": [
+    {
+      "serviceType": "car",
+      "isEnabled": true,
+      "displayMode": "live",
+      "unavailableMessage": null,
+      "unavailableAction": "none",
+      "activeZoneIds": [1, 2, 3],
+      "maintenanceEta": null
+    }
+  ]
 }
 ```
 
 ---
 
-## 29. WebSocket Events
+### `GET /services/:type/control`
+**Auth:** Required (any role)
 
-**Connection:** `io("wss://<host>", { path: "/api/socket.io", auth: { token: "<jwt>" } })`
+Returns control for a single service type. Returns public fields only (no logs).
 
-On connect the server resolves the JWT, identifies the user role, and auto-joins rooms.
-
-### Auto-joined Rooms
-
-| Room | Who joins |
-|------|-----------|
-| `passenger:{userId}` | Authenticated passengers |
-| `driver:{userId}` | Authenticated drivers |
-| `drivers:available:{vehicleType}` | Online drivers (joined/left when `isOnline` changes) |
-| `admin:room` | Admin users |
-| `trip:{tripId}` | Joined manually via `trip:join` event |
+**Response `200`:** Single service control object (same fields as above).
 
 ---
+
+### `GET /admin/services/:type/control`
+**Auth:** Required (role: admin)
+
+Returns full control record including the last 10 change logs.
+
+**Response `200`:**
+```jsonc
+{
+  "id": 1,
+  "serviceType": "car",
+  "isEnabled": true,
+  "displayMode": "live",
+  "unavailableMessage": null,
+  "unavailableAction": "none",
+  "activeZoneIds": [1, 2, 3],
+  "maintenanceEta": null,
+  "maxActiveRides": null,
+  "updatedBy": 5,
+  "updatedAt": "...",
+  "logs": [
+    {
+      "id": 1,
+      "serviceType": "car",
+      "changedBy": 5,
+      "changedAt": "...",
+      "changes": { "isEnabled": { "before": false, "after": true } }
+    }
+  ]
+}
+```
+
+---
+
+### `PATCH /admin/services/:type/control`
+**Auth:** Required (role: admin)
+
+Updates a service control setting. Emits `service:control:changed` socket event to all clients and the admin room.
+
+**Request (all fields optional):**
+```jsonc
+{
+  "isEnabled": false,
+  "displayMode": "maintenance",
+  "unavailableMessage": "Service is down for maintenance",
+  "unavailableAction": "show_message",
+  "activeZoneIds": [1, 2],
+  "maintenanceEta": "2026-06-03T18:00:00.000Z",
+  "maxActiveRides": 50
+}
+```
+
+**Response `200`:** Updated service control + last 10 logs.
+
+---
+
+### `POST /admin/services/:type/control/reset`
+**Auth:** Required (role: admin)
+
+Resets a service control to defaults (`isEnabled: true`, `displayMode: "live"`, all nulls). Emits socket event.
+
+**Request:** _(empty body)_
+
+**Response `200`:** Reset service control + last 10 logs.
+
+---
+
+## 28. Staff & Roles
+
+### `GET /admin/permissions/all`
+**Auth:** Required (role: admin)
+
+**Response `200`:**
+```jsonc
+{
+  "permissions": [
+    "view_dashboard", "view_routes", "edit_routes",
+    "view_trips", "edit_trips", "view_drivers", "edit_drivers",
+    "view_buses", "edit_buses", "view_passengers", "edit_passengers",
+    "view_bookings", "edit_bookings", "view_wallet", "edit_wallet",
+    "view_support", "edit_support", "view_suggestions",
+    "view_verification", "edit_verification", "view_analytics",
+    "view_staff", "edit_staff", "view_settings", "edit_settings",
+    "view_promo", "edit_promo", "view_live_tracking",
+    "view_driver_analytics", "view_notifications"
+  ]
+}
+```
+
+---
+
+### `GET /admin/roles`
+**Auth:** Required (role: admin)
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "name": "Support Agent",
+      "description": "Handles support tickets",
+      "permissions": ["view_support", "edit_support"],
+      "createdAt": "..."
+    }
+  ],
+  "total": 3
+}
+```
+
+---
+
+### `POST /admin/roles`
+**Auth:** Required (role: admin)
+
+**Request:**
+```jsonc
+{
+  "name": "Support Agent",
+  "description": "Handles support tickets",   // optional
+  "permissions": ["view_support", "edit_support"]
+}
+```
+
+**Response `201`:** Role object.
+
+---
+
+### `PATCH /admin/roles/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "Senior Support Agent",
+  "description": "...",
+  "permissions": ["view_support", "edit_support", "view_bookings"]
+}
+```
+
+**Response `200`:** Updated role object.
+
+---
+
+### `DELETE /admin/roles/:id`
+**Auth:** Required (role: admin)
+
+Removes the role and clears `staffRoleId` from all users holding that role.
+
+**Response `200`:**
+```jsonc
+{ "success": true }
+```
+
+---
+
+### `GET /admin/staff`
+**Auth:** Required (role: admin)
+
+**Query params:** `search` (name ILIKE)
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 5,
+      "name": "Admin User",
+      "email": "admin@example.com",
+      "phone": "...",
+      "role": "admin",
+      "staffRoleId": 1,
+      "staffRole": { "id": 1, "name": "Support Agent", "permissions": [...] },
+      "isBlocked": false,
+      "createdAt": "..."
+    }
+  ],
+  "total": 4
+}
+```
+
+---
+
+### `POST /admin/staff`
+**Auth:** Required (role: admin)
+
+Creates a new admin/staff user.
+
+**Request:**
+```jsonc
+{
+  "name": "New Staff",
+  "email": "staff@example.com",
+  "phone": "+1234567890",
+  "password": "securepass123",
+  "staffRoleId": 1    // optional
+}
+```
+
+**Response `201`:** Staff user object (no `password` or `refreshToken`).
+
+---
+
+### `PATCH /admin/staff/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "name": "...",
+  "email": "...",
+  "phone": "...",
+  "staffRoleId": 2,
+  "isBlocked": true,
+  "password": "newpass123"
+}
+```
+
+**Response `200`:** Updated staff user object.
+
+---
+
+## 29. Suggestions
+
+Route suggestion types: `new_route`, `new_station`, `route_edit`  
+Statuses: `pending`, `approved`, `rejected`
+
+### `GET /suggestions`
+**Auth:** Required (role: admin)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `status` | string | Filter by status |
+| `type` | string | Filter by type |
+| `search` | string | Search title (ILIKE) |
+| `page` | int | Page |
+| `limit` | int | Per page |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "type": "new_route",
+      "title": "New route to university",
+      "description": "...",
+      "startLocation": "Downtown",
+      "endLocation": "University",
+      "status": "pending",
+      "user": { "name": "Jane Doe", "email": "jane@example.com" },
+      "driver": null,
+      "createdAt": "..."
+    }
+  ],
+  "total": 12,
+  "page": 1,
+  "limit": 20
+}
+```
+
+---
+
+### `POST /suggestions`
+**Auth:** None (public — no authentication required)
+
+**Request:**
+```jsonc
+{
+  "type": "new_route",
+  "title": "New route to university",
+  "description": "Students need a direct route.",
+  "startLocation": "Downtown",    // optional
+  "endLocation": "University",    // optional
+  "userId": 1,                    // optional
+  "driverId": 1                   // optional
+}
+```
+
+**Response `201`:** Suggestion object.
+
+---
+
+### `GET /suggestions/:id`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Full suggestion object with user and driver details.
+
+---
+
+### `PATCH /suggestions/:id`
+**Auth:** Required (role: admin)
+
+**Request (all fields optional):**
+```jsonc
+{
+  "status": "approved",
+  "adminNotes": "Will be added next quarter"
+}
+```
+
+**Response `200`:** Updated suggestion object.
+
+---
+
+## 30. Audit Logs
+
+Logs of admin CREATE/UPDATE/DELETE operations on entities.
+
+### `GET /admin/audit-logs`
+**Auth:** Required (role: admin)
+
+**Query params:**
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `action` | string | `CREATE` \| `UPDATE` \| `DELETE` |
+| `entityType` | string | e.g. `vehicle`, `bus`, `driver` |
+| `userId` | int | Filter by admin user who made the change |
+| `from` | ISO datetime | Earliest timestamp |
+| `to` | ISO datetime | Latest timestamp |
+| `page` | int | Page |
+| `limit` | int | Per page (max 100, default 25) |
+
+**Response `200`:**
+```jsonc
+{
+  "data": [
+    {
+      "id": 1,
+      "userId": 5,
+      "action": "UPDATE",
+      "entityType": "vehicle",
+      "entityId": 3,
+      "oldData": { "status": "pending" },
+      "newData": { "status": "verified" },
+      "ipAddress": "192.168.1.1",
+      "userAgent": "Mozilla/5.0...",
+      "createdAt": "...",
+      "adminName": "Admin User",
+      "adminEmail": "admin@example.com"
+    }
+  ],
+  "total": 200,
+  "page": 1,
+  "limit": 25
+}
+```
+
+---
+
+### `GET /admin/audit-logs/:id`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Single audit log entry (same shape as above).
+
+---
+
+### `GET /admin/audit-logs/distinct/actions`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Array of distinct action strings used in logs:
+```jsonc
+["CREATE", "DELETE", "UPDATE"]
+```
+
+---
+
+### `GET /admin/audit-logs/distinct/entity-types`
+**Auth:** Required (role: admin)
+
+**Response `200`:** Array of distinct entity type strings:
+```jsonc
+["bus", "driver", "route", "vehicle"]
+```
+
+---
+
+## 31. Admin Analytics
+
+Located in `admin.ts`. All require `role: admin`.
+
+### `GET /admin/analytics/drivers`
+
+**Query params:** `page`, `limit`, `search`, `status`
+
+**Response `200`:** Paginated driver analytics including ride counts and ratings.
+
+---
+
+### `GET /admin/analytics/passengers`
+
+**Query params:** `page`, `limit`, `search`, `status`
+
+**Response `200`:** Paginated passenger analytics including booking history.
+
+---
+
+### `GET /admin/analytics/complaints`
+
+**Response `200`:**
+```jsonc
+{
+  "typeBreakdown": [ { "type": "complaint", "status": "open", "count": 5 } ],
+  "avgResolutionHours": 24.5,
+  "priorityBreakdown": [ { "priority": "high", "count": 8 } ],
+  "trend": [
+    { "date": "2026-06-01", "opened": 3, "resolved": 2 }
+  ]
+}
+```
+
+---
+
+## 32. WebSocket Events
+
+### Connection
+
+```
+URL: wss://0f7ebc97-871a-44da-9afe-1004df3f3f52-00-etsuj4iud2kt.worf.replit.dev
+Path: /api/socket.io
+Auth: { auth: { token: "<accessToken>" } }
+```
+
+### Rooms
+
+| Room | Description |
+|------|-------------|
+| `passenger:{userId}` | Private room for a passenger |
+| `driver:{userId}` | Private room for a driver |
+| `drivers:available:{vehicleType}` | Pool of available drivers by vehicle type |
+| `trip:{tripId}` | All participants of a shuttle trip |
+| `admin` | Admin dashboard room |
+
+### Server → Client Events
+
+#### On-demand Ride Events
+
+| Event | Room | Payload |
+|-------|------|---------|
+| `ride:driver_assigned` | `passenger:{userId}` | `{ rideId, driverId, driverName, driverPhone, vehiclePlate, vehicleModel, vehicleColor, estimatedArrival }` |
+| `ride:driver_arrived` | `passenger:{userId}` | `{ rideId, driverId, message }` |
+| `ride:arrived` | `passenger:{userId}` | _Alias for `ride:driver_arrived`_ |
+| `ride:started` | `passenger:{userId}` | `{ rideId, startedAt }` |
+| `ride:completed` | `passenger:{userId}` | `{ rideId, actualPrice, completedAt }` |
+| `ride:cancelled` | `passenger:{userId}` | `{ rideId, cancelledBy, reason }` |
+| `ride:driver_location` | `passenger:{userId}` | `{ rideId, driverId, latitude, longitude, heading, speed }` |
+| `ride:new_request` | `drivers:available:{vehicleType}` | `{ rideId, pickupAddress, dropoffAddress, pickupLatitude, pickupLongitude, estimatedPrice, passengerName }` |
+| `ride:offer` | `driver:{userId}` | `{ rideId, ... }` |
+
+#### Shuttle / Trip Events
+
+| Event | Room | Payload |
+|-------|------|---------|
+| `booking:boarded` | `trip:{tripId}` | `{ tripId, bookingId, userId, stationId }` |
+| `trip:chat:message` | `trip:{tripId}` | `{ tripId, senderId, senderRole, message, createdAt }` |
+
+#### Notification Events
+
+| Event | Room | Payload |
+|-------|------|---------|
+| `notification:new` | `passenger:{userId}` or `driver:{userId}` | `{ id, title, body, type, createdAt }` |
+
+#### Service Control Events
+
+| Event | Room | Payload |
+|-------|------|---------|
+| `service:control:changed` | broadcast (all + admin room) | `{ serviceType, isEnabled, displayMode, unavailableMessage, unavailableAction, activeZoneIds, maintenanceEta, changedBy, changedAt }` |
 
 ### Client → Server Events
 
 | Event | Payload | Description |
 |-------|---------|-------------|
-| `trip:join` | `{ tripId: number }` | Join a specific trip room for live updates |
-| `trip:leave` | `{ tripId: number }` | Leave a trip room |
-| `driver:location` | `{ latitude, longitude, heading?, speed? }` | Push live driver location (drivers only) |
-| `ride:accept` | `{ rideId: number }` | Driver accepts a ride (alternative to REST) |
-| `ride:update_status` | `{ rideId, status }` | Driver updates ride status |
-| `message:send` | `{ ticketId, body }` | Send a support chat message |
+| `driver:location` | `{ latitude, longitude, heading?, speed?, accuracy? }` | Driver sends GPS update; server broadcasts to relevant ride |
+| `driver:online` | `{ latitude, longitude, vehicleType }` | Driver goes online |
+| `driver:offline` | `{}` | Driver goes offline |
+| `trip:chat` | `{ tripId, message }` | Send message in trip chat room |
+| `join:trip` | `{ tripId }` | Join a trip room |
+| `leave:trip` | `{ tripId }` | Leave a trip room |
 
 ---
 
-### Server → Client Events
+## Appendix: Status Reference
 
-#### Ride Events (emitted to `passenger:{userId}`)
+### Ride Statuses
+`searching` → `driver_assigned` → `driver_arrived` → `active` → `completed` | `cancelled`
 
-| Event | Payload |
-|-------|---------|
-| `ride:new_request` | New ride broadcast to `drivers:available:{type}` |
-| `ride:accepted` | `{ rideId, driver: { id, name, phone, location } }` |
-| `ride:driver_arrived` | `{ rideId, timestamp }` |
-| `ride:started` | `{ rideId, timestamp }` |
-| `ride:completed` | `{ rideId, fare, timestamp }` |
-| `ride:cancelled` | `{ rideId, reason, timestamp }` |
+### Trip Statuses
+`scheduled` → `driver_assigned` | `boarding` → `active` → `completed` | `cancelled`
 
-#### Driver Events
+### Booking Statuses
+`confirmed` → `boarded` → `completed` | `cancelled` | `absent`
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `ride:new_request` | `drivers:available:{vehicleType}` | Full ride request object |
-| `trip:assigned` | `driver:{driverId}` | `{ tripId, trip: {...} }` |
-| `driver:location_updated` | `drivers:available:{vehicleType}`, `admin:room` | `{ driverId, latitude, longitude, heading, speed }` |
+### Driver Statuses
+`pending` | `active` | `suspended` | `rejected`
 
-#### Booking Events
+### Vehicle Statuses
+`pending` | `verified` | `rejected` | `suspended`
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `booking:boarded` | `passenger:{userId}` | `{ bookingId, tripId, timestamp }` |
+### Document Verification Statuses
+`pending` | `approved` | `rejected`
 
-#### Trip Events (emitted to `trip:{tripId}`)
+### Earning Statuses
+`pending` | `confirmed` | `paid`
 
-| Event | Payload |
-|-------|---------|
-| `trip:status_changed` | `{ tripId, status, timestamp }` |
-| `trip:station_arrived` | `{ tripId, stationId, timestamp }` |
-| `trip:station_completed` | `{ tripId, stationId, timestamp }` |
+### Support Ticket Statuses
+`open` | `pending` | `resolved` | `closed`
 
-#### Notification Events
+### Suggestion Statuses
+`pending` | `approved` | `rejected`
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `notification:new` | `passenger:{userId}` | `{ id, title, body, type, createdAt }` |
-
-#### Support / Chat Events
-
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `message:new` | `ticket:{ticketId}` room | `{ id, ticketId, body, sender, createdAt }` |
-
----
-
-## 30. Push Notifications
-
-Push notifications are delivered in two ways:
-
-1. **In-app (Socket.IO):** `notification:new` event emitted to `passenger:{userId}` room whenever `POST /api/notifications/send` is called or an automatic trigger fires (e.g., ride accepted, booking confirmed).
-
-2. **Push notification record:** A row is persisted in the `notifications` table so it appears in `GET /api/notifications` / `GET /api/driver/notifications` even when the client was offline.
-
-**Automatic notification triggers:**
-
-| Trigger | Recipient | Title |
-|---------|-----------|-------|
-| Ride accepted by driver | Passenger | "Driver on the way" |
-| Driver arrived at pickup | Passenger | "Driver has arrived" |
-| Ride started | Passenger | "Your ride has started" |
-| Ride completed | Passenger | "Ride completed" |
-| Booking boarded | Passenger | "You're on board!" |
-| Trip assigned to driver | Driver | "New trip assigned" |
-| Admin manual send | Any user | Custom title |
-
----
-
-## 31. Deprecated Aliases
-
-The following routes still work but are deprecated. Use the recommended replacements.
-
-| Deprecated | Recommended |
-|-----------|-------------|
-| `GET /api/auth/me` | `GET /api/users/me` |
-| `GET /api/drivers/me` | `GET /api/driver/me` |
-| `PATCH /api/drivers/me/location` | `PATCH /api/driver/location` |
-
----
-
-*Last updated: 2026-06-03. Reflects actual implemented code in `artifacts/api-server/src/`.*
+### Service Display Modes
+`live` | `coming_soon` | `unavailable` | `maintenance`
