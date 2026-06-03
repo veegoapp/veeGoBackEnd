@@ -3,21 +3,13 @@ import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
-import path from "path";
-import fs from "fs";
 import swaggerUi from "swagger-ui-express";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import swaggerSpec from "./lib/swagger";
-import { authenticate } from "./middlewares/auth";
 import { traceMiddleware } from "./lib/trace";
 
 const app: Express = express();
-
-const uploadsDir = path.join(process.cwd(), "uploads");
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
 
 // ─── CORS whitelist ────────────────────────────────────────────────────────────
 const allowedOrigins: string[] = [
@@ -94,22 +86,6 @@ app.use("/api", apiLimiter);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(traceMiddleware);
-
-// ─── Protected file serving (driver documents) ────────────────────────────────
-app.use(
-  "/api/uploads",
-  (req: Request, res: Response, next: NextFunction) => {
-    authenticate(req, res, next);
-  },
-  (req: Request, res: Response, next: NextFunction): void => {
-    if (!req.user) { res.status(401).json({ error: "Unauthorized" }); return; }
-    if (req.user.role !== "admin" && req.user.role !== "driver") {
-      res.status(403).json({ error: "Forbidden" }); return;
-    }
-    next();
-  },
-  express.static(uploadsDir),
-);
 
 app.use("/api", router);
 

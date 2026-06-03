@@ -26,3 +26,10 @@ externalPort = 3000
 
 [agent]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+SUPABASE_URL = "https://kefoiokfzygggetpsxmm.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlZm9pb2tmenlnZ2dldHBzeG1tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ0NTg1MiwiZXhwIjoyMDk2MDIxODUyfQ.caG0LKiLMprpNBcp6DhodBEHnimZcQS_jeE3hLUkq-E"
+SUPABASE_BUCKET = "uploads"

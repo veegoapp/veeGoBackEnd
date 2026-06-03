@@ -5,29 +5,22 @@ import { authenticate, requireRole } from "../middlewares/auth";
 import { z } from "zod";
 import multer from "multer";
 import path from "path";
-import fs from "fs";
 import crypto from "crypto";
+import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
 
 const router = Router();
 
-const UPLOADS_DIR = path.join(process.cwd(), "uploads", "drivers");
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { realtime: { transport: ws } },
+);
 
-const storage = multer.diskStorage({
-  destination: (req, _file, cb) => {
-    const driverId = req.params.driverId || req.body.driverId || "unknown";
-    const type = req.body.type || "misc";
-    const dir = path.join(UPLOADS_DIR, `driver_${driverId}`, type);
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase() || ".jpg";
-    cb(null, `${Date.now()}_${crypto.randomBytes(6).toString("hex")}${ext}`);
-  },
-});
+const BUCKET = process.env.SUPABASE_BUCKET ?? "uploads";
 
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
@@ -121,8 +114,27 @@ router.post("/driver-documents/upload/:driverId",
     ]).safeParse(req.body.type);
     if (!typeValidation.success) { res.status(400).json({ error: "Invalid document type" }); return; }
 
-    const relativePath = path.relative(process.cwd(), req.file.path).replace(/\\/g, "/");
-    const fileUrl = `/api/uploads/${relativePath.replace(/^uploads\//, "")}`;
+    const ext = path.extname(req.file.originalname).toLowerCase() || ".jpg";
+    const filename = `${Date.now()}_${crypto.randomBytes(6).toString("hex")}${ext}`;
+    const storagePath = `drivers/driver_${driverId}/${typeValidation.data}/${filename}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET)
+      .upload(storagePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      res.status(500).json({ error: "Failed to upload file to storage", detail: uploadError.message });
+      return;
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(storagePath);
+
+    const fileUrl = urlData.publicUrl;
 
     const [doc] = await db.insert(driverDocumentsTable).values({
       driverId,
