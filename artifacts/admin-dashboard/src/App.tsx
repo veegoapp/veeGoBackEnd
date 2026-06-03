@@ -123,6 +123,7 @@ function Router() {
         <Route path="/live-tracking" component={() => <ProtectedRoute component={LiveTracking} />} />
         <Route path="/support" component={() => <ProtectedRoute component={Support} />} />
         <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
+        <Route path="/reports/:type" component={() => <ProtectedRoute component={Reports} />} />
         <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
         <Route path="/staff" component={() => <ProtectedRoute component={Staff} />} />
         <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
