@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, ratingsTable, usersTable, driversTable } from "@workspace/db";
 import { eq, desc, and, sql, gte, lte, avg } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
-import { writeAuditLog } from "../lib/auditLog";
+import { writeAuditLog, getClientIp } from "../lib/auditLog";
 import { z } from "zod";
 
 const router = Router();
@@ -143,14 +143,47 @@ router.delete("/admin/ratings/:id", authenticate, requireRole("admin"), async (r
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid rating ID" }); return; }
 
-  const [deleted] = await db
-    .delete(ratingsTable)
-    .where(eq(ratingsTable.id, id))
-    .returning();
+  // Delete the rating and recompute the affected driver's average in one
+  // transaction so the driver's rating column never holds a stale value.
+  const deleted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .delete(ratingsTable)
+      .where(eq(ratingsTable.id, id))
+      .returning();
+
+    if (!row) return null;
+
+    // Recompute from the remaining ratings for this driver.
+    const [avgResult] = await tx
+      .select({
+        newRating: sql<string | null>`ROUND(AVG(${ratingsTable.score}::numeric), 2)`,
+      })
+      .from(ratingsTable)
+      .where(eq(ratingsTable.driverId, row.driverId));
+
+    // If no ratings remain, fall back to the schema default of 5.00.
+    const newRating = avgResult?.newRating ?? "5.00";
+
+    await tx
+      .update(driversTable)
+      .set({ rating: newRating })
+      .where(eq(driversTable.id, row.driverId));
+
+    return row;
+  });
 
   if (!deleted) { res.status(404).json({ error: "Rating not found" }); return; }
 
-  void writeAuditLog(req, "DELETE", "rating", id, deleted, null);
+  void writeAuditLog({
+    userId:     req.user?.id,
+    action:     "DELETE",
+    entityType: "rating",
+    entityId:   id,
+    oldData:    deleted as unknown as Record<string, unknown>,
+    newData:    null,
+    ipAddress:  getClientIp(req),
+    userAgent:  typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null,
+  });
 
   res.sendStatus(204);
 });
