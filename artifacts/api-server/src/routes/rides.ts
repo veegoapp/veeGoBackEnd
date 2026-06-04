@@ -14,6 +14,7 @@ import {
   settingsTable,
   paymentsTable,
   ratingsTable,
+  promoCodesTable,
 } from "@workspace/db";
 import { jobQueue } from "../lib/jobQueue";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -352,6 +353,7 @@ const RequestRideBody = z.object({
   dropoffLatitude: z.number().min(-90).max(90),
   dropoffLongitude: z.number().min(-180).max(180),
   dropoffAddress: z.string().min(1),
+  promoCode: z.string().optional(),
 });
 
 router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimiter, async (req, res): Promise<void> => {
@@ -369,6 +371,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       dropoffLatitude,
       dropoffLongitude,
       dropoffAddress,
+      promoCode,
     } = parsed.data;
     const userId = req.user!.id;
 
@@ -465,16 +468,71 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
     const isSurge = surgeEnabled && surgeMultiplier > 1;
     if (isSurge) estimatedPrice = estimatedPrice * surgeMultiplier;
 
-    if (parseFloat(user.walletBalance as string) < estimatedPrice) {
+    // ── Promo code validation & discount ──────────────────────────────────────
+    let promoId: number | null = null;
+    let discountAmount = 0;
+    let discountedPrice = estimatedPrice;
+
+    if (promoCode) {
+      const [promo] = await db
+        .select()
+        .from(promoCodesTable)
+        .where(eq(promoCodesTable.code, promoCode));
+
+      if (!promo || !promo.isActive) {
+        res.status(400).json({ error: "Promo code not found or inactive" });
+        return;
+      }
+      if (promo.expiryDate && new Date(promo.expiryDate) < new Date()) {
+        res.status(400).json({ error: "Promo code has expired" });
+        return;
+      }
+      if (promo.maxUsage !== null && promo.usedCount >= promo.maxUsage) {
+        res.status(400).json({ error: "Promo code usage limit reached" });
+        return;
+      }
+
+      const discountValue = parseFloat(promo.discountValue as string);
+      if (promo.discountType === "percentage") {
+        discountAmount = parseFloat(((estimatedPrice * discountValue) / 100).toFixed(2));
+      } else {
+        discountAmount = parseFloat(Math.min(discountValue, estimatedPrice).toFixed(2));
+      }
+      discountedPrice = parseFloat((estimatedPrice - discountAmount).toFixed(2));
+      promoId = promo.id;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    if (parseFloat(user.walletBalance as string) < discountedPrice) {
       res.status(402).json({
         error: "Insufficient wallet balance",
-        required: parseFloat(estimatedPrice.toFixed(2)),
+        required: parseFloat(discountedPrice.toFixed(2)),
         balance: parseFloat(user.walletBalance as string),
       });
       return;
     }
 
     const [ride] = await db.transaction(async (tx) => {
+      // Atomically increment usedCount only if under the limit.
+      // This prevents a race condition where two concurrent requests both
+      // pass the pre-check and then both increment past maxUsage.
+      if (promoId !== null) {
+        const updated = await tx
+          .update(promoCodesTable)
+          .set({ usedCount: sql`used_count + 1` })
+          .where(
+            and(
+              eq(promoCodesTable.id, promoId),
+              sql`(max_usage IS NULL OR used_count < max_usage)`,
+            ),
+          )
+          .returning({ id: promoCodesTable.id });
+
+        if (updated.length === 0) {
+          throw Object.assign(new Error("Promo code usage limit reached"), { code: "PROMO_LIMIT_REACHED" });
+        }
+      }
+
       const [r] = await tx
         .insert(ridesTable)
         .values({
@@ -488,21 +546,25 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
           dropoffAddress,
           distanceKm: distanceKm.toFixed(3),
           estimatedDurationMinutes,
-          estimatedPrice: estimatedPrice.toFixed(2),
+          estimatedPrice: discountedPrice.toFixed(2),
           status: "searching",
         })
         .returning();
 
       await tx
         .update(usersTable)
-        .set({ walletBalance: sql`wallet_balance - ${estimatedPrice}` })
+        .set({ walletBalance: sql`wallet_balance - ${discountedPrice}` })
         .where(eq(usersTable.id, userId));
+
+      const txDescription = promoCode
+        ? `Ride #${r.id} — payment held (promo ${promoCode}: -${discountAmount.toFixed(2)})`
+        : `Ride #${r.id} — payment held`;
 
       await tx.insert(walletTransactionsTable).values({
         userId,
-        amount: estimatedPrice.toFixed(2),
+        amount: discountedPrice.toFixed(2),
         type: "payment",
-        description: `Ride #${r.id} — payment held`,
+        description: txDescription,
       });
 
       return [r];
@@ -517,6 +579,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         pricingSource,
         surgeActive:     isSurge,
         surgeMultiplier: isSurge ? surgeMultiplier : 1,
+        ...(promoCode ? { promoCode, discountAmount } : {}),
       },
     });
 
@@ -532,12 +595,16 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         pickupAddress,
         dropoffAddress,
         distanceKm:     parseFloat(distanceKm.toFixed(3)),
-        estimatedPrice: parseFloat(estimatedPrice.toFixed(2)),
+        estimatedPrice: discountedPrice,
       },
     ).catch((err) => console.error("Dispatch start error", err));
 
     res.status(201).json({ data: parseRide(ride as unknown as Record<string, unknown>) });
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && (err as NodeJS.ErrnoException & { code?: string }).code === "PROMO_LIMIT_REACHED") {
+      res.status(409).json({ error: "Promo code usage limit reached" });
+      return;
+    }
     res.status(500).json({ error: "Failed to create ride request" });
   }
 });
