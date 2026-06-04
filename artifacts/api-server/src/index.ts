@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
+import { initSurgePricing, startSurgePricingJob } from "./lib/surge-pricing";
 import { warmupFaceDetection } from "./lib/face-detection";
 import { registerDefaultHandlers } from "./lib/jobQueue";
 import { recoverActiveDispatches } from "./lib/dispatch-manager";
@@ -85,11 +86,16 @@ async function main() {
   await verifyDatabaseConnection();
   await verifyCoreTables();
   await registerDefaultHandlers();
+  // Seed in-memory surge map from DB before the socket server starts accepting
+  // connections — passengers receive an accurate snapshot immediately on connect.
+  await initSurgePricing();
 
   const httpServer = http.createServer(app);
   initSocket(httpServer);
   startRideTimeoutJob();
   startCheckinMonitor();
+  // Start after initSocket so the first tick's WebSocket emit has a live server.
+  startSurgePricingJob();
 
   // Pre-warm face-detection models in the background (non-blocking)
   warmupFaceDetection().catch((err) =>

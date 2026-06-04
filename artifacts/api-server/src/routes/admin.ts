@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable } from "@workspace/db";
 import { loadSetting, saveSetting } from "../lib/settings";
+import { getAllSurgeStates } from "../lib/surge-pricing";
 import { eq, sql, and, or, ilike, desc, asc, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { z } from "zod";
@@ -116,8 +117,14 @@ router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"
 
 // ─── Surge pricing settings ────────────────────────────────────────────────────
 router.get("/admin/surge-settings", authenticate, requireRole("admin"), async (_req, res): Promise<void> => {
-  const settings = await loadSetting<SurgeSettings>("surge", defaultSurge);
-  res.json(settings);
+  const config = await loadSetting<SurgeSettings>("surge", defaultSurge);
+  res.json({
+    ...config,
+    // Live automatic surge state per vehicle type — read from the in-memory
+    // store kept current by the background job (no DB round-trip).
+    intervalMs: parseInt(process.env.SURGE_INTERVAL_MS ?? "300000", 10),
+    liveState:  getAllSurgeStates(),
+  });
 });
 
 router.patch("/admin/surge-settings", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
@@ -126,7 +133,11 @@ router.patch("/admin/surge-settings", authenticate, requireRole("admin"), async 
   const current = await loadSetting<SurgeSettings>("surge", defaultSurge);
   const updated = { ...current, ...parsed.data };
   await saveSetting("surge", updated);
-  res.json(updated);
+  res.json({
+    ...updated,
+    intervalMs: parseInt(process.env.SURGE_INTERVAL_MS ?? "300000", 10),
+    liveState:  getAllSurgeStates(),
+  });
 });
 
 function safeUser(user: Record<string, unknown>) {

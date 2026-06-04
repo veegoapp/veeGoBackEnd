@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { verifyAccessToken } from "./lib/jwt";
 import { logger } from "./lib/logger";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./lib/socket-events";
+import { getAllSurgeStates } from "./lib/surge-pricing";
 
 export interface LocationPayload {
   latitude: number;
@@ -87,9 +88,31 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
     }
 
     if (role === "user") {
+      // Personal room — ride-specific events (assigned, cancelled, etc.)
       const room = SOCKET_ROOMS.PASSENGER(userId);
       socket.join(room);
       logger.info({ socketId: socket.id, userId, room }, "Socket joined room");
+
+      // Broadcast room — receives real-time surge updates as multipliers change.
+      socket.join(SOCKET_ROOMS.PASSENGERS_ALL);
+      logger.info(
+        { socketId: socket.id, userId, room: SOCKET_ROOMS.PASSENGERS_ALL },
+        "Socket joined passengers:all room",
+      );
+
+      // Emit the current surge snapshot immediately so the client does not have
+      // to wait up to SURGE_INTERVAL_MS before seeing accurate pricing.
+      const surgeStates = getAllSurgeStates();
+      for (const [vehicleType, state] of Object.entries(surgeStates)) {
+        socket.emit(SOCKET_EVENTS.SURGE_UPDATED, {
+          vehicleType,
+          multiplier:         state.multiplier,
+          previousMultiplier: state.multiplier,
+          tier:               state.tier,
+          ratio:              parseFloat(state.ratio.toFixed(2)),
+          isActive:           state.isActive,
+        });
+      }
     }
 
     if (role === "driver") {

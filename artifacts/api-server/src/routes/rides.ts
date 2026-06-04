@@ -17,6 +17,7 @@ import {
   promoCodesTable,
 } from "@workspace/db";
 import { jobQueue } from "../lib/jobQueue";
+import { getCurrentSurge } from "../lib/surge-pricing";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
@@ -320,13 +321,11 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
       distanceKm,
     );
 
-    // FIXED: apply surge pricing multiplier when enabled
-    const surgeSettings = await db.select().from(settingsTable)
-      .where(sql`${settingsTable.key} IN ('surge_enabled', 'surge_multiplier')`);
-    const surgeMap = Object.fromEntries(surgeSettings.map(s => [s.key, s.value]));
-    const surgeEnabled = surgeMap["surge_enabled"] === "true";
-    const surgeMultiplier = surgeEnabled ? parseFloat(surgeMap["surge_multiplier"] ?? "1") : 1;
-    const isSurge = surgeEnabled && surgeMultiplier > 1;
+    // Automatic surge pricing — O(1) read from the in-memory store kept current
+    // by the background job; no DB round-trip required here.
+    const surge = getCurrentSurge(vehicleType);
+    const surgeMultiplier = surge.multiplier;
+    const isSurge = surge.isActive;
     if (isSurge) estimatedPrice = estimatedPrice * surgeMultiplier;
 
     res.json({
@@ -396,7 +395,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       return;
     }
 
-    const [[user], zonePricings, surgeSettings] = await Promise.all([
+    const [[user], zonePricings] = await Promise.all([
       db
         .select({ walletBalance: usersTable.walletBalance })
         .from(usersTable)
@@ -418,10 +417,6 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
           eq(zonePricingTable.isActive, true),
           eq(zonesTable.isActive, true),
         )),
-      db
-        .select()
-        .from(settingsTable)
-        .where(sql`${settingsTable.key} IN ('surge_enabled', 'surge_multiplier')`),
     ]);
 
     if (!user) {
@@ -463,10 +458,10 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       distanceKm,
     );
 
-    const surgeMap = Object.fromEntries(surgeSettings.map((s) => [s.key, s.value]));
-    const surgeEnabled = surgeMap["surge_enabled"] === "true";
-    const surgeMultiplier = surgeEnabled ? parseFloat(surgeMap["surge_multiplier"] ?? "1") : 1;
-    const isSurge = surgeEnabled && surgeMultiplier > 1;
+    // Automatic surge pricing — O(1) in-memory read; no extra DB round-trip.
+    const surge = getCurrentSurge(vehicleType);
+    const surgeMultiplier = surge.multiplier;
+    const isSurge = surge.isActive;
     if (isSurge) estimatedPrice = estimatedPrice * surgeMultiplier;
 
     // ── Promo code validation & discount ──────────────────────────────────────
