@@ -20,6 +20,7 @@ import { jobQueue } from "../lib/jobQueue";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
+import { SOCKET_EVENTS } from "../lib/socket-events";
 import { z } from "zod";
 import * as dispatchManager from "../lib/dispatch-manager";
 import rateLimit from "express-rate-limit";
@@ -812,7 +813,7 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
     // Notify the driver via WebSocket.
     const io = getIO();
     if (io && driverUserId !== null) {
-      io.to(`driver:${driverUserId}`).emit("ride:cancelled", {
+      io.to(`driver:${driverUserId}`).emit(SOCKET_EVENTS.RIDE_CANCELLED, {
         rideId:          id,
         cancelledBy:     "passenger",
         reason:          "passenger_cancelled",
@@ -917,7 +918,7 @@ router.patch("/driver/rides/:id/accept", authenticate, requireRole("driver"), as
 
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit("ride:driver_assigned", {
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_DRIVER_ASSIGNED, {
         rideId,
         driverId: driver.id,
         driverName: driver.name,
@@ -980,8 +981,7 @@ router.patch("/driver/rides/:id/arrived", authenticate, requireRole("driver"), a
 
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit("ride:driver_arrived", { rideId, driverId: driver.id });
-      io.to(`passenger:${ride.passengerId}`).emit("ride:arrived", { rideId, driverId: driver.id });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_DRIVER_ARRIVED, { rideId, driverId: driver.id });
     }
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
@@ -1033,7 +1033,7 @@ router.patch("/driver/rides/:id/start", authenticate, requireRole("driver"), asy
 
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit("ride:started", { rideId, driverId: driver.id });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STARTED, { rideId, driverId: driver.id });
     }
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
@@ -1122,7 +1122,7 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
 
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit("ride:completed", { rideId, finalPrice, fare: finalPrice });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice });
     }
 
     res.json({ data: { rideId, finalPrice, driverCut } });
@@ -1158,7 +1158,7 @@ router.post("/driver/rides/:id/start", authenticate, requireRole("driver"), asyn
     await db.insert(rideEventsTable).values({ rideId, type: "RIDE_STARTED", metadata: { driverId: driver.id } });
 
     const io = getIO();
-    if (io) io.to(`passenger:${ride.passengerId}`).emit("ride:started", { rideId, driverId: driver.id });
+    if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STARTED, { rideId, driverId: driver.id });
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
   } catch {
@@ -1223,7 +1223,7 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
     await db.insert(rideEventsTable).values({ rideId, type: "RIDE_COMPLETED", metadata: { driverId: driver.id, finalPrice } });
 
     const io = getIO();
-    if (io) io.to(`passenger:${ride.passengerId}`).emit("ride:completed", { rideId, finalPrice, fare: finalPrice });
+    if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice });
 
     res.json({ data: { rideId, finalPrice, driverCut } });
   } catch {
@@ -1262,7 +1262,7 @@ router.post("/driver/rides/:id/decline", authenticate, requireRole("driver"), as
 
     const io = getIO();
     if (io) {
-      io.to(`drivers:available:${ride.vehicleType}`).emit("ride:new_request", {
+      io.to(`drivers:available:${ride.vehicleType}`).emit(SOCKET_EVENTS.RIDE_NEW_REQUEST, {
         rideId,
         vehicleType: ride.vehicleType,
         pickupAddress: ride.pickupAddress,
@@ -1453,7 +1453,7 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
     // Notify passenger before re-dispatch so they know what's happening.
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit("ride:driver_cancelled", {
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_DRIVER_CANCELLED, {
         rideId,
         message: "Your driver cancelled. Finding you a new driver...",
       });

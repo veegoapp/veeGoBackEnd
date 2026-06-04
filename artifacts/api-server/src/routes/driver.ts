@@ -87,7 +87,7 @@ router.post("/driver/auth/register", async (req, res): Promise<void> => {
       return;
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
     const [user] = await db.insert(usersTable).values({
       name,

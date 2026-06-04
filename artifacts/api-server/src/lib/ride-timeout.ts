@@ -1,6 +1,7 @@
 import { db, ridesTable, rideEventsTable, usersTable, walletTransactionsTable } from "@workspace/db";
 import { eq, and, lt, sql } from "drizzle-orm";
 import { getIO } from "../socket";
+import { SOCKET_EVENTS } from "./socket-events";
 import { logger } from "./logger";
 
 const TIMEOUT_MINUTES = parseInt(process.env.RIDE_TIMEOUT_MINUTES ?? "5", 10);
@@ -59,7 +60,7 @@ async function cancelTimedOutRides(): Promise<void> {
 
       const io = getIO();
       if (io) {
-        io.to(`passenger:${ride.passengerId}`).emit("ride:status_update", {
+        io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_UPDATE, {
           rideId: ride.id,
           status: "cancelled",
           reason: "timeout",
