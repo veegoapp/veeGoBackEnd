@@ -56,6 +56,8 @@ async function buildAll() {
       "protobufjs",
       "onnxruntime-node",
       "@tensorflow/*",
+      "@vladmandic/face-api",
+      "@vladmandic/face-api/*",
       "@prisma/client",
       "@mikro-orm/*",
       "@grpc/*",

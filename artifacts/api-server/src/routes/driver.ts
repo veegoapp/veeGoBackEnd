@@ -372,13 +372,17 @@ router.patch("/driver/me/settings", authenticate, requireRole("driver"), async (
 // ─── DRIVER STATUS ────────────────────────────────────────────────────────────
 
 router.patch("/driver/status/online", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
-  const [driver] = await db.select({ id: driversTable.id, status: driversTable.status })
+  const [driver] = await db.select({ id: driversTable.id, status: driversTable.status, onlineSince: driversTable.onlineSince })
     .from(driversTable).where(eq(driversTable.userId, req.user!.id));
   if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
   if (driver.status === "suspended") { res.status(403).json({ error: "Account suspended" }); return; }
 
+  // Set onlineSince only when transitioning from offline (not from busy→online mid-shift)
+  const now = new Date();
+  const onlineSince = driver.status === "offline" ? now : (driver.onlineSince ?? now);
+
   const [updated] = await db.update(driversTable)
-    .set({ isOnline: true, status: "online" })
+    .set({ isOnline: true, status: "online", onlineSince })
     .where(eq(driversTable.id, driver.id))
     .returning();
   res.json(fmtDriver(updated as Record<string, unknown>));
@@ -390,7 +394,13 @@ router.patch("/driver/status/offline", authenticate, requireRole("driver"), asyn
   if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
 
   const [updated] = await db.update(driversTable)
-    .set({ isOnline: false, status: "offline" })
+    .set({
+      isOnline:        false,
+      status:          "offline",
+      onlineSince:     null,
+      checkInRequired: false,
+      checkInDeadline: null,
+    })
     .where(eq(driversTable.id, driver.id))
     .returning();
   res.json(fmtDriver(updated as Record<string, unknown>));
@@ -559,6 +569,28 @@ router.patch("/driver/trips/:id/start", authenticate, requireRole("driver"), asy
   if (!assignedTrip) { res.status(404).json({ error: "Trip not assigned to you" }); return; }
   if (!["driver_assigned", "boarding"].includes(assignedTrip.status)) {
     res.status(400).json({ error: `Cannot start trip in status: ${assignedTrip.status}` });
+    return;
+  }
+
+  // ── Check-in gate: require a face-detected selfie for this trip ──────────────
+  const { driverCheckInsTable } = await import("@workspace/db");
+  const [checkin] = await db
+    .select({ id: driverCheckInsTable.id })
+    .from(driverCheckInsTable)
+    .where(
+      and(
+        eq(driverCheckInsTable.driverId, driver.id),
+        eq(driverCheckInsTable.tripId,   tripId),
+        eq(driverCheckInsTable.faceDetected, true),
+      ),
+    )
+    .limit(1);
+
+  if (!checkin) {
+    res.status(403).json({
+      error: "Selfie check-in required",
+      message: "You must complete a face-detected selfie check-in for this trip before starting it.",
+    });
     return;
   }
 

@@ -37,6 +37,11 @@ export const SOCKET_EVENTS = {
   // ── Server → All authenticated clients (broadcast) ───────────────────────────
   SERVICE_CONTROL_CHANGED: "service:control:changed",
 
+  // ── Server → Driver (check-in) ───────────────────────────────────────────────
+  DRIVER_CHECKIN_REQUIRED: "driver:checkin:required",
+  DRIVER_CHECKIN_APPROVED: "driver:checkin:approved",
+  DRIVER_CHECKIN_REJECTED: "driver:checkin:rejected",
+
   // ── Server → Socket direct ───────────────────────────────────────────────────
   DRIVER_LOCATION_ACK:   "driver:location:ack",
   ERROR:                 "error",

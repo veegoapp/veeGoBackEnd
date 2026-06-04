@@ -4,6 +4,8 @@ import { initSocket } from "./socket";
 import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
+import { startCheckinMonitor } from "./lib/checkin-monitor";
+import { warmupFaceDetection } from "./lib/face-detection";
 import { registerDefaultHandlers } from "./lib/jobQueue";
 import { recoverActiveDispatches } from "./lib/dispatch-manager";
 
@@ -87,6 +89,12 @@ async function main() {
   const httpServer = http.createServer(app);
   initSocket(httpServer);
   startRideTimeoutJob();
+  startCheckinMonitor();
+
+  // Pre-warm face-detection models in the background (non-blocking)
+  warmupFaceDetection().catch((err) =>
+    logger.error({ err }, "Face-detection warmup failed on startup"),
+  );
 
   httpServer.listen(port, () => {
     recoverActiveDispatches().catch((err) =>

@@ -45,6 +45,7 @@ async function findNextBatch(
     eq(driversTable.isOnline, true),
     eq(driversTable.status, "online"),
     eq(driversTable.vehicleType, vehicleType),
+    eq(driversTable.checkInRequired, false),
     sql`${driversTable.currentLatitude} IS NOT NULL`,
     sql`${driversTable.currentLongitude} IS NOT NULL`,
     sql`${driversTable.locationUpdatedAt} > ${stalenessCutoff}`,
