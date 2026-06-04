@@ -398,6 +398,150 @@ router.get("/admin/drivers/live", authenticate, requireRole("admin"), async (req
   });
 });
 
+// ─── Driver dispatch stats ────────────────────────────────────────────────────
+
+/**
+ * GET /admin/drivers/dispatch-stats
+ * Returns every driver's smart-dispatch metrics: offer counts, acceptance rate,
+ * consecutive-rejection streak, and live cooldown status.
+ * Supports ?search=name|phone and ?status=online|offline|… filters + pagination.
+ */
+router.get("/admin/drivers/dispatch-stats", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const page   = Math.max(1, parseInt((req.query.page  as string) ?? "1")   || 1);
+    const limit  = Math.min(200, Math.max(1, parseInt((req.query.limit as string) ?? "50") || 50));
+    const offset = (page - 1) * limit;
+    const search = (req.query.search as string | undefined)?.trim() ?? "";
+    const status = req.query.status as string | undefined;
+
+    const conditions = [eq(driversTable.isActive, true)];
+    if (search) {
+      conditions.push(
+        or(
+          ilike(driversTable.name,  `%${search}%`),
+          ilike(driversTable.phone, `%${search}%`),
+        )!,
+      );
+    }
+    if (status && ["online", "offline", "busy", "suspended"].includes(status)) {
+      conditions.push(eq(driversTable.status, status as "online" | "offline" | "busy" | "suspended"));
+    }
+
+    const where = conditions.length > 1 ? and(...conditions) : conditions[0];
+
+    const [rows, [{ total }]] = await Promise.all([
+      db.select({
+        id:                    driversTable.id,
+        name:                  driversTable.name,
+        phone:                 driversTable.phone,
+        status:                driversTable.status,
+        rating:                driversTable.rating,
+        totalDispatched:       driversTable.totalDispatched,
+        totalAccepted:         driversTable.totalAccepted,
+        consecutiveRejections: driversTable.consecutiveRejections,
+        cooldownUntil:         driversTable.cooldownUntil,
+      })
+        .from(driversTable)
+        .where(where)
+        .orderBy(desc(driversTable.totalDispatched))
+        .limit(limit)
+        .offset(offset),
+
+      db.select({ total: sql<number>`count(*)::int` }).from(driversTable).where(where),
+    ]);
+
+    const now = Date.now();
+
+    res.json({
+      data: rows.map((d) => {
+        const dispatched       = d.totalDispatched ?? 0;
+        const accepted         = d.totalAccepted   ?? 0;
+        const acceptanceRate   = dispatched === 0 ? null : parseFloat((accepted / dispatched).toFixed(4));
+        const cooldownUntilMs  = d.cooldownUntil ? new Date(d.cooldownUntil).getTime() : null;
+        const cooldownActive   = cooldownUntilMs !== null && cooldownUntilMs > now;
+        const cooldownRemainingSeconds = cooldownActive ? Math.ceil((cooldownUntilMs! - now) / 1000) : 0;
+
+        return {
+          id:                      d.id,
+          name:                    d.name,
+          phone:                   d.phone,
+          status:                  d.status,
+          rating:                  parseFloat(d.rating as string),
+          totalDispatched:         dispatched,
+          totalAccepted:           accepted,
+          acceptanceRate,
+          consecutiveRejections:   d.consecutiveRejections ?? 0,
+          cooldownUntil:           d.cooldownUntil ?? null,
+          cooldownActive,
+          cooldownRemainingSeconds,
+        };
+      }),
+      total,
+      page,
+      limit,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch driver dispatch stats" });
+  }
+});
+
+/**
+ * POST /admin/drivers/:id/clear-cooldown
+ * Manually lifts a driver's cooldown and resets their consecutive-rejection streak.
+ * Use when a driver contacts support to explain a legitimate reason for ignoring offers.
+ */
+router.post("/admin/drivers/:id/clear-cooldown", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const driverId = parseInt(req.params.id as string);
+    if (isNaN(driverId)) { res.status(400).json({ error: "Invalid driver id" }); return; }
+
+    const [driver] = await db.select({ id: driversTable.id, name: driversTable.name, cooldownUntil: driversTable.cooldownUntil })
+      .from(driversTable).where(eq(driversTable.id, driverId));
+    if (!driver) { res.status(404).json({ error: "Driver not found" }); return; }
+
+    await db.update(driversTable)
+      .set({ cooldownUntil: null, consecutiveRejections: 0 })
+      .where(eq(driversTable.id, driverId));
+
+    res.json({
+      success: true,
+      message: `Cooldown cleared for driver ${driver.name}`,
+      driverId,
+      hadActiveCooldown: driver.cooldownUntil !== null && new Date(driver.cooldownUntil).getTime() > Date.now(),
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to clear driver cooldown" });
+  }
+});
+
+/**
+ * POST /admin/drivers/:id/reset-dispatch-stats
+ * Resets totalDispatched, totalAccepted, and consecutiveRejections to 0.
+ * Useful when onboarding a driver to a new region or after a data-quality fix.
+ */
+router.post("/admin/drivers/:id/reset-dispatch-stats", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const driverId = parseInt(req.params.id as string);
+    if (isNaN(driverId)) { res.status(400).json({ error: "Invalid driver id" }); return; }
+
+    const [driver] = await db.select({ id: driversTable.id, name: driversTable.name })
+      .from(driversTable).where(eq(driversTable.id, driverId));
+    if (!driver) { res.status(404).json({ error: "Driver not found" }); return; }
+
+    await db.update(driversTable)
+      .set({ totalDispatched: 0, totalAccepted: 0, consecutiveRejections: 0, cooldownUntil: null })
+      .where(eq(driversTable.id, driverId));
+
+    res.json({
+      success: true,
+      message: `Dispatch stats reset for driver ${driver.name}`,
+      driverId,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to reset dispatch stats" });
+  }
+});
+
 // Shuttle trips by driver (for DriverDetailPanel activity tab)
 router.get("/admin/trips", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const driverId = req.query.driverId ? parseInt(req.query.driverId as string) : null;
