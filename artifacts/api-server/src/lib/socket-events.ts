@@ -17,8 +17,11 @@ export const SOCKET_EVENTS = {
   BOOKING_BOARDED:       "booking:boarded",
 
   // ── Server → Available Drivers ───────────────────────────────────────────────
-  RIDE_OFFER:            "ride:offer",
-  RIDE_NEW_REQUEST:      "ride:new_request",
+  RIDE_OFFER:                  "ride:offer",
+  RIDE_NEW_REQUEST:            "ride:new_request",
+  RIDE_OFFER_EXPIRED:          "ride:offer_expired",
+  RIDE_NO_LONGER_AVAILABLE:    "ride:no_longer_available",
+  RIDE_STATUS_UPDATE:          "ride:status_update",
 
   // ── Server → Admin room ──────────────────────────────────────────────────────
   ADMIN_TRACK_TRIP:      "admin:track:trip",

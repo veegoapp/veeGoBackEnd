@@ -28,3 +28,4 @@ export * from "./userLocations";
 export * from "./auditLogs";
 export * from "./chatMessages";
 export * from "./serviceControls";
+export * from "./rideDispatchState";

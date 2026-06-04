@@ -23,6 +23,7 @@ export const driversTable = pgTable("drivers", {
   isOnline: boolean("is_online").notNull().default(false),
   status: driverStatusEnum("status").notNull().default("offline"),
   isActive: boolean("is_active").notNull().default(true),
+  locationUpdatedAt: timestamp("location_updated_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [

@@ -19,6 +19,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { z } from "zod";
+import * as dispatchManager from "../lib/dispatch-manager";
 
 const router = Router();
 
@@ -349,6 +350,26 @@ router.post("/rides/request", authenticate, requireRole("user"), async (req, res
     } = parsed.data;
     const userId = req.user!.id;
 
+    const [activeRide] = await db
+      .select({ id: ridesTable.id, status: ridesTable.status })
+      .from(ridesTable)
+      .where(
+        and(
+          eq(ridesTable.passengerId, userId),
+          sql`${ridesTable.status} IN ('searching', 'driver_assigned')`,
+        ),
+      )
+      .limit(1);
+
+    if (activeRide) {
+      res.status(409).json({
+        error: "You already have an active ride request",
+        activeRideId: activeRide.id,
+        activeStatus: activeRide.status,
+      });
+      return;
+    }
+
     const [[user], [pricing]] = await Promise.all([
       db
         .select({ walletBalance: usersTable.walletBalance })
@@ -411,20 +432,21 @@ router.post("/rides/request", authenticate, requireRole("user"), async (req, res
       metadata: { passengerId: userId, vehicleType },
     });
 
-    const io = getIO();
-    if (io) {
-      const rideOffer = {
-        rideId: ride.id,
+    dispatchManager.startDispatch(
+      ride.id,
+      userId,
+      pickupLatitude,
+      pickupLongitude,
+      vehicleType,
+      {
+        rideId:         ride.id,
         vehicleType,
         pickupAddress,
         dropoffAddress,
-        distanceKm: parseFloat(distanceKm.toFixed(3)),
+        distanceKm:     parseFloat(distanceKm.toFixed(3)),
         estimatedPrice: parseFloat(estimatedPrice.toFixed(2)),
-      };
-      const rideOfferWithId = { ...rideOffer, id: String(ride.id) };
-      io.to(`drivers:available:${vehicleType}`).emit("ride:new_request", rideOfferWithId);
-      io.to(`drivers:available:${vehicleType}`).emit("ride:offer", rideOfferWithId);
-    }
+      },
+    ).catch((err) => console.error("Dispatch start error", err));
 
     res.status(201).json({ data: parseRide(ride as unknown as Record<string, unknown>) });
   } catch {
@@ -553,6 +575,8 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       metadata: { cancelledBy: "passenger" },
     });
 
+    dispatchManager.onCancelled(id).catch((err) => console.error("Dispatch onCancelled error", err));
+
     const io = getIO();
     if (io && ride.driverId) {
       const [driver] = await db
@@ -651,6 +675,7 @@ router.patch("/driver/rides/:id/accept", authenticate, requireRole("driver"), as
         type: "DRIVER_ASSIGNED",
         metadata: { driverId: driver.id, driverName: driver.name },
       }),
+      dispatchManager.onAccepted(rideId, driver.id),
     ]);
 
     const io = getIO();

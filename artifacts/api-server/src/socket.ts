@@ -151,6 +151,7 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
           currentLongitude: longitude,
           currentSpeed: speed,
           currentHeading: heading,
+          locationUpdatedAt: new Date(),
         }).where(eq(driversTable.id, driver.id));
 
         if (driver.assignedBusId) {

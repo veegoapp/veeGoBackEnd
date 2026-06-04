@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { registerDefaultHandlers } from "./lib/jobQueue";
+import { recoverActiveDispatches } from "./lib/dispatch-manager";
 
 const rawPort = process.env["PORT"];
 
@@ -88,6 +89,9 @@ async function main() {
   startRideTimeoutJob();
 
   httpServer.listen(port, () => {
+    recoverActiveDispatches().catch((err) =>
+      logger.error({ err }, "Dispatch recovery failed on startup"),
+    );
     logger.info({ port }, "Server listening");
   });
 

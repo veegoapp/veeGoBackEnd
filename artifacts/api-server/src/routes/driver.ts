@@ -410,6 +410,7 @@ router.patch("/driver/location", authenticate, requireRole("driver"), async (req
     currentLongitude: parsed.data.longitude,
     currentSpeed: parsed.data.speed,
     currentHeading: parsed.data.heading,
+    locationUpdatedAt: new Date(),
   }).where(eq(driversTable.id, driver.id)).returning();
 
   jobQueue.enqueue("driver_location", {
