@@ -1053,13 +1053,12 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
       return;
     }
 
-    const [pricing] = await db.select().from(ridePricingTable).where(eq(ridePricingTable.vehicleType, ride.vehicleType));
     const distanceKm = ride.distanceKm ? parseFloat(ride.distanceKm as string) : 0;
-    const finalPrice = pricing
-      ? calcPrice(parseFloat(pricing.baseFare), parseFloat(pricing.perKmRate), parseFloat(pricing.minimumFare), distanceKm)
-      : ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
 
-    // FIXED: read commission rate from settings instead of hardcoded 0.15
+    // Use the stored estimatedPrice — wallet was escrowed at request time for exactly this
+    // amount, so we must NOT recalculate from ridePricingTable or deduct from wallet again.
+    const finalPrice = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+
     const [commissionSettingPost] = await db
       .select({ value: settingsTable.value })
       .from(settingsTable)
@@ -1071,15 +1070,9 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
       await tx.update(ridesTable)
         .set({ status: "completed", completedAt: new Date(), finalPrice: finalPrice.toFixed(2) })
         .where(eq(ridesTable.id, rideId));
-      await tx.update(usersTable)
-        .set({ walletBalance: sql`wallet_balance - ${finalPrice}` })
-        .where(eq(usersTable.id, ride.passengerId));
-      await tx.insert(walletTransactionsTable).values({
-        userId: ride.passengerId,
-        amount: finalPrice.toFixed(2),
-        type: "payment",
-        description: `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
-      });
+
+      // Wallet was already escrowed at ride request — no deduction here.
+      // The paymentsTable record is the settlement confirmation.
       await tx.insert(paymentsTable).values({
         userId:  ride.passengerId,
         rideId:  rideId,
