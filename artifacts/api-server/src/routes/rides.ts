@@ -953,8 +953,11 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
       .select({ value: settingsTable.value })
       .from(settingsTable)
       .where(eq(settingsTable.key, "driver_commission_rate"));
+    // commissionRate is the PLATFORM cut (e.g. 0.15 = 15%).
+    // Driver receives the remainder: (1 - commissionRate).
     const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) || 0.15 : 0.15;
-    const driverCut = parseFloat((finalPrice * commissionRate).toFixed(2));
+    const platformCut = parseFloat((finalPrice * commissionRate).toFixed(2));
+    const driverCut   = parseFloat((finalPrice - platformCut).toFixed(2));
 
     await db.transaction(async (tx) => {
       await tx
@@ -1063,8 +1066,11 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
       .select({ value: settingsTable.value })
       .from(settingsTable)
       .where(eq(settingsTable.key, "driver_commission_rate"));
+    // commissionRatePost is the PLATFORM cut (e.g. 0.15 = 15%).
+    // Driver receives the remainder: (1 - commissionRatePost).
     const commissionRatePost = commissionSettingPost ? parseFloat(commissionSettingPost.value) || 0.15 : 0.15;
-    const driverCut = parseFloat((finalPrice * commissionRatePost).toFixed(2));
+    const platformCutPost = parseFloat((finalPrice * commissionRatePost).toFixed(2));
+    const driverCut       = parseFloat((finalPrice - platformCutPost).toFixed(2));
 
     await db.transaction(async (tx) => {
       await tx.update(ridesTable)
