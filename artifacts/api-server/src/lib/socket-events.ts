@@ -34,6 +34,9 @@ export const SOCKET_EVENTS = {
   // ── Server → Admin room ──────────────────────────────────────────────────────
   ADMIN_NEW_CHAT_MESSAGE:  "admin:chat:new",
 
+  // ── Server → All passengers (broadcast) ─────────────────────────────────────
+  SURGE_UPDATED:           "surge:updated",
+
   // ── Server → All authenticated clients (broadcast) ───────────────────────────
   SERVICE_CONTROL_CHANGED: "service:control:changed",
 
@@ -63,6 +66,7 @@ export type SocketEventName = (typeof SOCKET_EVENTS)[keyof typeof SOCKET_EVENTS]
 /** Room name builders — always construct room strings through these helpers. */
 export const SOCKET_ROOMS = {
   ADMIN:            "admin:room",
+  PASSENGERS_ALL:   "passengers:all",
   PASSENGER:        (userId: number)      => `passenger:${userId}`,
   DRIVER:           (userId: number)      => `driver:${userId}`,
   DRIVERS_AVAILABLE:(vehicleType: string) => `drivers:available:${vehicleType}`,
