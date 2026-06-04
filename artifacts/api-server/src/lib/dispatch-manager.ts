@@ -307,6 +307,57 @@ export async function onAccepted(rideId: number, winningDriverId: number): Promi
   logger.info({ rideId, winningDriverId }, "Dispatch completed — ride accepted");
 }
 
+/**
+ * Re-dispatch a ride after a driver cancels an accepted ride.
+ * Resets the dispatch state to a fresh cycle (all drivers eligible again)
+ * and starts a new round. The ride must already be set back to "searching"
+ * with driverId cleared before this is called.
+ */
+export async function restartDispatch(
+  rideId:       number,
+  passengerId:  number,
+  pickupLat:    number,
+  pickupLng:    number,
+  vehicleType:  string,
+  offerPayload: Record<string, unknown>,
+): Promise<void> {
+  cancelTimer(rideId);
+
+  // Upsert the dispatch state: reset to a fresh active cycle.
+  // The row will already exist (status="completed") from the original dispatch,
+  // so we update it. The upsert handles the unlikely case where no row exists.
+  await db
+    .insert(rideDispatchStateTable)
+    .values({
+      rideId,
+      currentRound:    1,
+      notifiedIds:     [],
+      currentRoundIds: [],
+      roundStartedAt:  new Date(),
+      status:          "active",
+    })
+    .onConflictDoUpdate({
+      target: rideDispatchStateTable.rideId,
+      set: {
+        currentRound:    1,
+        notifiedIds:     [],
+        currentRoundIds: [],
+        roundStartedAt:  new Date(),
+        status:          "active",
+      },
+    });
+
+  const batch = await findNextBatch(vehicleType, pickupLat, pickupLng, []);
+
+  if (batch.length === 0) {
+    await cancelRideNoDrivers(rideId, passengerId);
+    return;
+  }
+
+  await dispatchBatch(rideId, batch, offerPayload, []);
+  logger.info({ rideId, passengerId }, "Dispatch restarted after driver cancel");
+}
+
 export async function onCancelled(rideId: number): Promise<void> {
   cancelTimer(rideId);
 

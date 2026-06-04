@@ -1295,27 +1295,55 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
       return;
     }
 
-    const [updated] = await db
-      .update(ridesTable)
-      .set({ status: "cancelled", cancelReason: "driver_cancelled", cancelledAt: new Date() })
-      .where(eq(ridesTable.id, rideId))
-      .returning();
+    // Reset ride to searching state — unassign the driver so re-dispatch can
+    // find a new one. The wallet escrow remains intact; no refund is issued.
+    await db.transaction(async (tx) => {
+      await tx
+        .update(ridesTable)
+        .set({ status: "searching", driverId: null })
+        .where(eq(ridesTable.id, rideId));
 
-    await Promise.all([
-      db.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id)),
-      db.insert(rideEventsTable).values({
+      await tx
+        .update(driversTable)
+        .set({ status: "online" })
+        .where(eq(driversTable.id, driver.id));
+
+      await tx.insert(rideEventsTable).values({
         rideId,
-        type: "RIDE_CANCELLED",
-        metadata: { cancelledBy: "driver", driverId: driver.id },
-      }),
-    ]);
+        type:     "DRIVER_CANCELLED",
+        metadata: { driverId: driver.id, previousStatus: ride.status },
+      });
+    });
 
+    // Notify passenger before re-dispatch so they know what's happening.
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit("ride:cancelled", { rideId, cancelledBy: "driver", reason: "driver_cancelled" });
+      io.to(`passenger:${ride.passengerId}`).emit("ride:driver_cancelled", {
+        rideId,
+        message: "Your driver cancelled. Finding you a new driver...",
+      });
     }
 
-    res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
+    // Re-start the dispatch cycle from scratch (all drivers eligible again).
+    const offerPayload = {
+      rideId,
+      vehicleType:    ride.vehicleType,
+      pickupAddress:  ride.pickupAddress,
+      dropoffAddress: ride.dropoffAddress,
+      distanceKm:     Number(ride.distanceKm ?? 0),
+      estimatedPrice: Number(ride.estimatedPrice ?? 0),
+    };
+
+    await dispatchManager.restartDispatch(
+      rideId,
+      ride.passengerId,
+      ride.pickupLatitude,
+      ride.pickupLongitude,
+      ride.vehicleType,
+      offerPayload,
+    );
+
+    res.json({ data: { rideId, status: "searching", message: "Re-dispatching to available drivers" } });
   } catch {
     res.status(500).json({ error: "Failed to cancel ride" });
   }

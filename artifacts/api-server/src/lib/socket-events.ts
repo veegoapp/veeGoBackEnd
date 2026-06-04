@@ -12,7 +12,8 @@ export const SOCKET_EVENTS = {
   RIDE_DRIVER_LOCATION:  "ride:driver_location",
   RIDE_STARTED:          "ride:started",
   RIDE_COMPLETED:        "ride:completed",
-  RIDE_CANCELLED:        "ride:cancelled",
+  RIDE_CANCELLED:         "ride:cancelled",
+  RIDE_DRIVER_CANCELLED:  "ride:driver_cancelled",
   NOTIFICATION_NEW:      "notification:new",
   BOOKING_BOARDED:       "booking:boarded",
 
