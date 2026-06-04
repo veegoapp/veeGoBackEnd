@@ -713,12 +713,39 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    if (!["requested", "searching", "driver_assigned"].includes(ride.status)) {
+    if (!["requested", "searching", "driver_assigned", "active"].includes(ride.status)) {
       res.status(400).json({ error: `Cannot cancel a ride with status '${ride.status}'` });
       return;
     }
 
     const escrowedAmount = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+
+    // ── Cancellation fee — only applies when the trip is already active ────────
+    // The fee is paid to the driver as compensation for the started trip.
+    // Setting key: "active_ride_cancellation_fee" (stored as a numeric string).
+    // Defaults to 0 if the key is absent, meaning full refund outside active rides.
+    let cancellationFee = 0;
+    if (ride.status === "active") {
+      const [feeSetting] = await db
+        .select({ value: settingsTable.value })
+        .from(settingsTable)
+        .where(eq(settingsTable.key, "active_ride_cancellation_fee"));
+      cancellationFee = feeSetting ? parseFloat(feeSetting.value) || 0 : 0;
+    }
+
+    const refundAmount = parseFloat(Math.max(0, escrowedAmount - cancellationFee).toFixed(2));
+    const actualFee    = parseFloat(Math.min(cancellationFee, escrowedAmount).toFixed(2));
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Resolve driver user-ID upfront (needed for both transaction and socket).
+    let driverUserId: number | null = null;
+    if (ride.driverId) {
+      const [drv] = await db
+        .select({ id: driversTable.id, userId: driversTable.userId })
+        .from(driversTable)
+        .where(eq(driversTable.id, ride.driverId));
+      if (drv) driverUserId = drv.userId;
+    }
 
     const [updated] = await db.transaction(async (tx) => {
       const [r] = await tx
@@ -730,41 +757,76 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       await tx.insert(rideEventsTable).values({
         rideId: id,
         type: "RIDE_CANCELLED",
-        metadata: { cancelledBy: "passenger" },
+        metadata: {
+          cancelledBy:     "passenger",
+          escrowedAmount,
+          cancellationFee: actualFee,
+          refundAmount,
+        },
       });
 
-      if (escrowedAmount > 0) {
+      // Refund the passenger (possibly reduced by the cancellation fee).
+      if (refundAmount > 0) {
         await tx
           .update(usersTable)
-          .set({ walletBalance: sql`wallet_balance + ${escrowedAmount}` })
+          .set({ walletBalance: sql`wallet_balance + ${refundAmount}` })
           .where(eq(usersTable.id, ride.passengerId));
 
         await tx.insert(walletTransactionsTable).values({
-          userId: ride.passengerId,
-          amount: escrowedAmount.toFixed(2),
-          type: "refund",
-          description: `Ride #${id} cancelled — payment refunded`,
+          userId:      ride.passengerId,
+          amount:      refundAmount.toFixed(2),
+          type:        "refund",
+          description: actualFee > 0
+            ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (fee ${actualFee.toFixed(2)} retained)`
+            : `Ride #${id} cancelled — payment refunded`,
         });
+      }
+
+      // Credit the cancellation fee to the driver's earnings.
+      if (actualFee > 0 && ride.driverId) {
+        await tx.insert(driverEarningsTable).values({
+          driverId: ride.driverId,
+          amount:   actualFee.toFixed(2),
+          status:   "confirmed",
+        });
+
+        // Free the driver so they can accept new rides.
+        await tx
+          .update(driversTable)
+          .set({ status: "online" })
+          .where(eq(driversTable.id, ride.driverId));
+      } else if (ride.driverId) {
+        // No fee but driver was active — still release them.
+        await tx
+          .update(driversTable)
+          .set({ status: "online" })
+          .where(eq(driversTable.id, ride.driverId));
       }
 
       return [r];
     });
 
+    // Clean up any in-flight dispatch state for this ride.
     dispatchManager.onCancelled(id).catch((err) => console.error("Dispatch onCancelled error", err));
 
+    // Notify the driver via WebSocket.
     const io = getIO();
-    if (io && ride.driverId) {
-      const [driver] = await db
-        .select({ userId: driversTable.userId })
-        .from(driversTable)
-        .where(eq(driversTable.id, ride.driverId));
-      if (driver) {
-        // FIXED: emit to driver's personal room, not a passenger room
-        io.to(`driver:${driver.userId}`).emit("ride:cancelled", { rideId: id, cancelledBy: "passenger", reason: "passenger_cancelled" });
-      }
+    if (io && driverUserId !== null) {
+      io.to(`driver:${driverUserId}`).emit("ride:cancelled", {
+        rideId:          id,
+        cancelledBy:     "passenger",
+        reason:          "passenger_cancelled",
+        cancellationFee: actualFee,
+      });
     }
 
-    res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
+    res.json({
+      data: {
+        ...parseRide(updated as unknown as Record<string, unknown>),
+        refundAmount,
+        cancellationFee: actualFee,
+      },
+    });
   } catch {
     res.status(500).json({ error: "Failed to cancel ride" });
   }
