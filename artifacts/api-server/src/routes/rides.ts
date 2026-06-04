@@ -474,32 +474,48 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       return;
     }
 
-    const [ride] = await db
-      .insert(ridesTable)
-      .values({
-        passengerId: userId,
-        vehicleType,
-        pickupLatitude,
-        pickupLongitude,
-        pickupAddress,
-        dropoffLatitude,
-        dropoffLongitude,
-        dropoffAddress,
-        distanceKm: distanceKm.toFixed(3),
-        estimatedDurationMinutes,
-        estimatedPrice: estimatedPrice.toFixed(2),
-        status: "searching",
-      })
-      .returning();
+    const [ride] = await db.transaction(async (tx) => {
+      const [r] = await tx
+        .insert(ridesTable)
+        .values({
+          passengerId: userId,
+          vehicleType,
+          pickupLatitude,
+          pickupLongitude,
+          pickupAddress,
+          dropoffLatitude,
+          dropoffLongitude,
+          dropoffAddress,
+          distanceKm: distanceKm.toFixed(3),
+          estimatedDurationMinutes,
+          estimatedPrice: estimatedPrice.toFixed(2),
+          status: "searching",
+        })
+        .returning();
+
+      await tx
+        .update(usersTable)
+        .set({ walletBalance: sql`wallet_balance - ${estimatedPrice}` })
+        .where(eq(usersTable.id, userId));
+
+      await tx.insert(walletTransactionsTable).values({
+        userId,
+        amount: estimatedPrice.toFixed(2),
+        type: "payment",
+        description: `Ride #${r.id} — payment held`,
+      });
+
+      return [r];
+    });
 
     await db.insert(rideEventsTable).values({
       rideId: ride.id,
       type: "RIDE_REQUESTED",
       metadata: {
-        passengerId:    userId,
+        passengerId:     userId,
         vehicleType,
         pricingSource,
-        surgeActive:    isSurge,
+        surgeActive:     isSurge,
         surgeMultiplier: isSurge ? surgeMultiplier : 1,
       },
     });
@@ -635,16 +651,36 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       return;
     }
 
-    const [updated] = await db
-      .update(ridesTable)
-      .set({ status: "cancelled", cancelReason: "passenger_cancelled", cancelledAt: new Date() })
-      .where(eq(ridesTable.id, id))
-      .returning();
+    const escrowedAmount = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
 
-    await db.insert(rideEventsTable).values({
-      rideId: id,
-      type: "RIDE_CANCELLED",
-      metadata: { cancelledBy: "passenger" },
+    const [updated] = await db.transaction(async (tx) => {
+      const [r] = await tx
+        .update(ridesTable)
+        .set({ status: "cancelled", cancelReason: "passenger_cancelled", cancelledAt: new Date() })
+        .where(eq(ridesTable.id, id))
+        .returning();
+
+      await tx.insert(rideEventsTable).values({
+        rideId: id,
+        type: "RIDE_CANCELLED",
+        metadata: { cancelledBy: "passenger" },
+      });
+
+      if (escrowedAmount > 0) {
+        await tx
+          .update(usersTable)
+          .set({ walletBalance: sql`wallet_balance + ${escrowedAmount}` })
+          .where(eq(usersTable.id, ride.passengerId));
+
+        await tx.insert(walletTransactionsTable).values({
+          userId: ride.passengerId,
+          amount: escrowedAmount.toFixed(2),
+          type: "refund",
+          description: `Ride #${id} cancelled — payment refunded`,
+        });
+      }
+
+      return [r];
     });
 
     dispatchManager.onCancelled(id).catch((err) => console.error("Dispatch onCancelled error", err));
@@ -906,24 +942,13 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
       return;
     }
 
-    const [pricing] = await db
-      .select()
-      .from(ridePricingTable)
-      .where(eq(ridePricingTable.vehicleType, ride.vehicleType));
-
     const distanceKm = ride.distanceKm ? parseFloat(ride.distanceKm as string) : 0;
-    const finalPrice = pricing
-      ? calcPrice(
-          parseFloat(pricing.baseFare),
-          parseFloat(pricing.perKmRate),
-          parseFloat(pricing.minimumFare),
-          distanceKm,
-        )
-      : ride.estimatedPrice
-        ? parseFloat(ride.estimatedPrice as string)
-        : 0;
 
-    // FIXED: read commission rate from settings instead of hardcoded 0.15
+    // Use the stored estimatedPrice (which already reflects correct zone + surge pricing
+    // applied at request time). The wallet was escrowed for exactly this amount, so we
+    // do NOT deduct from the wallet again here.
+    const finalPrice = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+
     const [commissionSetting] = await db
       .select({ value: settingsTable.value })
       .from(settingsTable)
@@ -937,31 +962,21 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
         .set({ status: "completed", completedAt: new Date(), finalPrice: finalPrice.toFixed(2) })
         .where(eq(ridesTable.id, rideId));
 
-      await tx
-        .update(usersTable)
-        .set({ walletBalance: sql`wallet_balance - ${finalPrice}` })
-        .where(eq(usersTable.id, ride.passengerId));
-
-      await tx.insert(walletTransactionsTable).values({
-        userId: ride.passengerId,
-        amount: finalPrice.toFixed(2),
-        type: "payment",
-        description: `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
-      });
-
+      // Wallet was already escrowed at ride request — no deduction here.
+      // The paymentsTable record below is the settlement confirmation.
       await tx.insert(paymentsTable).values({
-        userId:  ride.passengerId,
-        rideId:  rideId,
-        amount:  finalPrice.toFixed(2),
-        method:  "wallet",
-        status:  "completed",
-        notes:   `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
+        userId: ride.passengerId,
+        rideId: rideId,
+        amount: finalPrice.toFixed(2),
+        method: "wallet",
+        status: "completed",
+        notes:  `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
       });
 
       await tx.insert(driverEarningsTable).values({
         driverId: driver.id,
-        amount: driverCut.toFixed(2),
-        status: "confirmed",
+        amount:   driverCut.toFixed(2),
+        status:   "confirmed",
       });
 
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));

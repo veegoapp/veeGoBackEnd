@@ -1,4 +1,4 @@
-import { db, ridesTable, rideEventsTable } from "@workspace/db";
+import { db, ridesTable, rideEventsTable, usersTable, walletTransactionsTable } from "@workspace/db";
 import { eq, and, lt, sql } from "drizzle-orm";
 import { getIO } from "../socket";
 import { logger } from "./logger";
@@ -11,7 +11,7 @@ async function cancelTimedOutRides(): Promise<void> {
     const cutoff = new Date(Date.now() - TIMEOUT_MINUTES * 60 * 1000);
 
     const timedOut = await db
-      .select({ id: ridesTable.id, passengerId: ridesTable.passengerId })
+      .select({ id: ridesTable.id, passengerId: ridesTable.passengerId, estimatedPrice: ridesTable.estimatedPrice })
       .from(ridesTable)
       .where(
         and(
@@ -23,6 +23,8 @@ async function cancelTimedOutRides(): Promise<void> {
     if (timedOut.length === 0) return;
 
     for (const ride of timedOut) {
+      const escrowed = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+
       await db.transaction(async (tx) => {
         await tx
           .update(ridesTable)
@@ -39,6 +41,20 @@ async function cancelTimedOutRides(): Promise<void> {
           type: "RIDE_CANCELLED",
           metadata: { reason: "timeout", timeoutMinutes: TIMEOUT_MINUTES },
         });
+
+        if (escrowed > 0) {
+          await tx
+            .update(usersTable)
+            .set({ walletBalance: sql`wallet_balance + ${escrowed}` })
+            .where(eq(usersTable.id, ride.passengerId));
+
+          await tx.insert(walletTransactionsTable).values({
+            userId:      ride.passengerId,
+            amount:      escrowed.toFixed(2),
+            type:        "refund",
+            description: `Ride #${ride.id} timed out — payment refunded`,
+          });
+        }
       });
 
       const io = getIO();

@@ -1,4 +1,4 @@
-import { db, ridesTable, driversTable, rideEventsTable, rideDispatchStateTable } from "@workspace/db";
+import { db, ridesTable, driversTable, rideEventsTable, rideDispatchStateTable, usersTable, walletTransactionsTable } from "@workspace/db";
 import { eq, and, sql, not, inArray } from "drizzle-orm";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
@@ -117,6 +117,11 @@ function cancelTimer(rideId: number): void {
 
 async function cancelRideNoDrivers(rideId: number, passengerId: number): Promise<void> {
   await db.transaction(async (tx) => {
+    const [ride] = await tx
+      .select({ estimatedPrice: ridesTable.estimatedPrice })
+      .from(ridesTable)
+      .where(eq(ridesTable.id, rideId));
+
     await tx
       .update(ridesTable)
       .set({ status: "cancelled", cancelReason: "no_drivers", cancelNote: "No available drivers found within 5 km", cancelledAt: new Date() })
@@ -127,6 +132,21 @@ async function cancelRideNoDrivers(rideId: number, passengerId: number): Promise
       type: "RIDE_CANCELLED",
       metadata: { reason: "no_drivers" },
     });
+
+    const escrowed = ride?.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+    if (escrowed > 0) {
+      await tx
+        .update(usersTable)
+        .set({ walletBalance: sql`wallet_balance + ${escrowed}` })
+        .where(eq(usersTable.id, passengerId));
+
+      await tx.insert(walletTransactionsTable).values({
+        userId:      passengerId,
+        amount:      escrowed.toFixed(2),
+        type:        "refund",
+        description: `Ride #${rideId} cancelled (no drivers) — payment refunded`,
+      });
+    }
   });
 
   await db
