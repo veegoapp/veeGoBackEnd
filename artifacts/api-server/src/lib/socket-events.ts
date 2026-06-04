@@ -6,8 +6,10 @@
 
 export const SOCKET_EVENTS = {
   // ── Server → Passenger ──────────────────────────────────────────────────────
-  RIDE_DRIVER_ASSIGNED:  "ride:driver_assigned",
-  RIDE_DRIVER_ARRIVED:   "ride:driver_arrived",
+  RIDE_DRIVER_ASSIGNED:    "ride:driver_assigned",
+  RIDE_DRIVER_ARRIVED:     "ride:driver_arrived",
+  WAITING_CHARGE_STARTED:  "ride:waiting:charge:started",
+  WAITING_CHARGE_UPDATED:  "ride:waiting:charge:updated",
   RIDE_ARRIVED:          "ride:arrived",
   RIDE_DRIVER_LOCATION:  "ride:driver_location",
   RIDE_STARTED:          "ride:started",

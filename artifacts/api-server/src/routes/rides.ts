@@ -18,6 +18,7 @@ import {
 } from "@workspace/db";
 import { jobQueue } from "../lib/jobQueue";
 import { getCurrentSurge } from "../lib/surge-pricing";
+import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
@@ -709,7 +710,7 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    if (!["requested", "searching", "driver_assigned", "active"].includes(ride.status)) {
+    if (!["requested", "searching", "driver_assigned", "driver_arrived", "active"].includes(ride.status)) {
       res.status(400).json({ error: `Cannot cancel a ride with status '${ride.status}'` });
       return;
     }
@@ -729,7 +730,15 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       cancellationFee = feeSetting ? parseFloat(feeSetting.value) || 0 : 0;
     }
 
-    const refundAmount = parseFloat(Math.max(0, escrowedAmount - cancellationFee).toFixed(2));
+    // ── Waiting charge — applies when passenger cancels after the free window ──
+    // The charge is computed from the actual elapsed time and credited to the driver.
+    let waitingChargeAmount = 0;
+    if (ride.status === "driver_arrived") {
+      const { waitingCharge } = stopWaitingTimer(id);
+      waitingChargeAmount = waitingCharge;
+    }
+
+    const refundAmount = parseFloat(Math.max(0, escrowedAmount - cancellationFee - waitingChargeAmount).toFixed(2));
     const actualFee    = parseFloat(Math.min(cancellationFee, escrowedAmount).toFixed(2));
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -746,7 +755,13 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
     const [updated] = await db.transaction(async (tx) => {
       const [r] = await tx
         .update(ridesTable)
-        .set({ status: "cancelled", cancelReason: "passenger_cancelled", cancelledAt: new Date() })
+        .set({
+          status:       "cancelled",
+          cancelReason: "passenger_cancelled",
+          cancelledAt:  new Date(),
+          // Persist the waiting charge so the record is auditable.
+          ...(waitingChargeAmount > 0 ? { waitingCharge: waitingChargeAmount.toFixed(2) } : {}),
+        })
         .where(eq(ridesTable.id, id))
         .returning();
 
@@ -757,11 +772,12 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
           cancelledBy:     "passenger",
           escrowedAmount,
           cancellationFee: actualFee,
+          waitingCharge:   waitingChargeAmount,
           refundAmount,
         },
       });
 
-      // Refund the passenger (possibly reduced by the cancellation fee).
+      // Refund the passenger (reduced by cancellation fee and/or waiting charge).
       if (refundAmount > 0) {
         await tx
           .update(usersTable)
@@ -772,9 +788,11 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
           userId:      ride.passengerId,
           amount:      refundAmount.toFixed(2),
           type:        "refund",
-          description: actualFee > 0
-            ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (fee ${actualFee.toFixed(2)} retained)`
-            : `Ride #${id} cancelled — payment refunded`,
+          description: waitingChargeAmount > 0
+            ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (waiting charge ${waitingChargeAmount.toFixed(2)} retained)`
+            : actualFee > 0
+              ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (fee ${actualFee.toFixed(2)} retained)`
+              : `Ride #${id} cancelled — payment refunded`,
         });
       }
 
@@ -785,14 +803,19 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
           amount:   actualFee.toFixed(2),
           status:   "confirmed",
         });
+      }
 
-        // Free the driver so they can accept new rides.
-        await tx
-          .update(driversTable)
-          .set({ status: "online" })
-          .where(eq(driversTable.id, ride.driverId));
-      } else if (ride.driverId) {
-        // No fee but driver was active — still release them.
+      // Credit the waiting charge to the driver — compensation for their time.
+      if (waitingChargeAmount > 0 && ride.driverId) {
+        await tx.insert(driverEarningsTable).values({
+          driverId: ride.driverId,
+          amount:   waitingChargeAmount.toFixed(2),
+          status:   "confirmed",
+        });
+      }
+
+      // Release the driver so they can accept new rides.
+      if (ride.driverId) {
         await tx
           .update(driversTable)
           .set({ status: "online" })
@@ -979,6 +1002,10 @@ router.patch("/driver/rides/:id/arrived", authenticate, requireRole("driver"), a
       io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_DRIVER_ARRIVED, { rideId, driverId: driver.id });
     }
 
+    // Start server-side waiting timer. Free window begins now; passenger is
+    // notified via WebSocket when it expires and per-minute charging begins.
+    await startWaitingTimer(rideId, ride.passengerId, new Date());
+
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
   } catch {
     res.status(500).json({ error: "Failed to update ride" });
@@ -1014,9 +1041,11 @@ router.patch("/driver/rides/:id/start", authenticate, requireRole("driver"), asy
       return;
     }
 
+    // Waiting ends when the ride starts — lock the charge now and clear all timers.
+    const { waitingCharge: lockedWaitingCharge } = stopWaitingTimer(rideId);
     const [updated] = await db
       .update(ridesTable)
-      .set({ status: "active", startedAt: new Date() })
+      .set({ status: "active", startedAt: new Date(), waitingCharge: lockedWaitingCharge.toFixed(2) })
       .where(eq(ridesTable.id, rideId))
       .returning();
 
@@ -1068,10 +1097,10 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
 
     const distanceKm = ride.distanceKm ? parseFloat(ride.distanceKm as string) : 0;
 
-    // Use the stored estimatedPrice (which already reflects correct zone + surge pricing
-    // applied at request time). The wallet was escrowed for exactly this amount, so we
-    // do NOT deduct from the wallet again here.
-    const finalPrice = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+    // Base fare was escrowed at request time. Waiting charge is an additional
+    // amount locked at ride-start (stored in ride.waitingCharge).
+    const waitingCharge = ride.waitingCharge ? parseFloat(ride.waitingCharge as string) : 0;
+    const finalPrice = (ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0) + waitingCharge;
 
     const [commissionSetting] = await db
       .select({ value: settingsTable.value })
@@ -1089,8 +1118,21 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
         .set({ status: "completed", completedAt: new Date(), finalPrice: finalPrice.toFixed(2) })
         .where(eq(ridesTable.id, rideId));
 
-      // Wallet was already escrowed at ride request — no deduction here.
-      // The paymentsTable record below is the settlement confirmation.
+      // Waiting charge is an extra deduction beyond the escrowed base fare.
+      if (waitingCharge > 0) {
+        await tx
+          .update(usersTable)
+          .set({ walletBalance: sql`wallet_balance - ${waitingCharge}` })
+          .where(eq(usersTable.id, ride.passengerId));
+        await tx.insert(walletTransactionsTable).values({
+          userId:      ride.passengerId,
+          amount:      waitingCharge.toFixed(2),
+          type:        "payment",
+          description: `Ride #${rideId} — waiting charge`,
+        });
+      }
+
+      // Base fare was escrowed at ride request — no additional base deduction here.
       await tx.insert(paymentsTable).values({
         userId: ride.passengerId,
         rideId: rideId,
@@ -1112,15 +1154,15 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
     await db.insert(rideEventsTable).values({
       rideId,
       type: "RIDE_COMPLETED",
-      metadata: { driverId: driver.id, finalPrice },
+      metadata: { driverId: driver.id, finalPrice, waitingCharge },
     });
 
     const io = getIO();
     if (io) {
-      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
     }
 
-    res.json({ data: { rideId, finalPrice, driverCut } });
+    res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {
     res.status(500).json({ error: "Failed to complete ride" });
   }
@@ -1182,9 +1224,9 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
 
     const distanceKm = ride.distanceKm ? parseFloat(ride.distanceKm as string) : 0;
 
-    // Use the stored estimatedPrice — wallet was escrowed at request time for exactly this
-    // amount, so we must NOT recalculate from ridePricingTable or deduct from wallet again.
-    const finalPrice = ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0;
+    // Base fare escrowed at request time; waiting charge locked at ride-start.
+    const waitingCharge = ride.waitingCharge ? parseFloat(ride.waitingCharge as string) : 0;
+    const finalPrice = (ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0) + waitingCharge;
 
     const [commissionSettingPost] = await db
       .select({ value: settingsTable.value })
@@ -1201,8 +1243,19 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
         .set({ status: "completed", completedAt: new Date(), finalPrice: finalPrice.toFixed(2) })
         .where(eq(ridesTable.id, rideId));
 
-      // Wallet was already escrowed at ride request — no deduction here.
-      // The paymentsTable record is the settlement confirmation.
+      if (waitingCharge > 0) {
+        await tx
+          .update(usersTable)
+          .set({ walletBalance: sql`wallet_balance - ${waitingCharge}` })
+          .where(eq(usersTable.id, ride.passengerId));
+        await tx.insert(walletTransactionsTable).values({
+          userId:      ride.passengerId,
+          amount:      waitingCharge.toFixed(2),
+          type:        "payment",
+          description: `Ride #${rideId} — waiting charge`,
+        });
+      }
+
       await tx.insert(paymentsTable).values({
         userId:  ride.passengerId,
         rideId:  rideId,
@@ -1215,12 +1268,12 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));
     });
 
-    await db.insert(rideEventsTable).values({ rideId, type: "RIDE_COMPLETED", metadata: { driverId: driver.id, finalPrice } });
+    await db.insert(rideEventsTable).values({ rideId, type: "RIDE_COMPLETED", metadata: { driverId: driver.id, finalPrice, waitingCharge } });
 
     const io = getIO();
-    if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice });
+    if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
 
-    res.json({ data: { rideId, finalPrice, driverCut } });
+    res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {
     res.status(500).json({ error: "Failed to complete ride" });
   }

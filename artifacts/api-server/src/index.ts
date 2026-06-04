@@ -6,6 +6,7 @@ import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
 import { initSurgePricing, startSurgePricingJob } from "./lib/surge-pricing";
+import { initWaitingTimers } from "./lib/waiting-timer";
 import { warmupFaceDetection } from "./lib/face-detection";
 import { registerDefaultHandlers } from "./lib/jobQueue";
 import { recoverActiveDispatches } from "./lib/dispatch-manager";
@@ -89,6 +90,8 @@ async function main() {
   // Seed in-memory surge map from DB before the socket server starts accepting
   // connections — passengers receive an accurate snapshot immediately on connect.
   await initSurgePricing();
+  // Re-hydrate in-memory waiting timers for any rides already in driver_arrived state.
+  await initWaitingTimers();
 
   const httpServer = http.createServer(app);
   initSocket(httpServer);

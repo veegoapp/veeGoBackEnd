@@ -19,6 +19,7 @@ export const ridesTable = pgTable("rides", {
   estimatedDurationMinutes: integer("estimated_duration_minutes"),
   estimatedPrice: numeric("estimated_price", { precision: 10, scale: 2 }),
   finalPrice: numeric("final_price", { precision: 10, scale: 2 }),
+  waitingCharge: numeric("waiting_charge", { precision: 10, scale: 2 }).default("0.00"),
   status: text("status").notNull().default("requested"),
   cancelReason: text("cancel_reason"),
   cancelNote: text("cancel_note"),
