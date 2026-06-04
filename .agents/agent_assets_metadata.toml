@@ -12,3 +12,9 @@ id = "yEHJuVm4SjBQoGeFCjASF"
 uri = "file://PRODUCTION_READINESS.md"
 type = "text"
 title = "Production Readiness Report"
+
+[[outputs]]
+id = "hLzaSvcs_MbmwJmCwbAll"
+uri = "file://project-status.md"
+type = "text"
+title = "Project Status Report"
