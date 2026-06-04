@@ -392,39 +392,83 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       return;
     }
 
-    const [[user], [pricing]] = await Promise.all([
+    const [[user], zonePricings, surgeSettings] = await Promise.all([
       db
         .select({ walletBalance: usersTable.walletBalance })
         .from(usersTable)
         .where(eq(usersTable.id, userId)),
       db
+        .select({
+          baseFare:    zonePricingTable.baseFare,
+          perKmRate:   zonePricingTable.perKmRate,
+          minimumFare: zonePricingTable.minimumFare,
+          centerLat:   zonesTable.centerLat,
+          centerLng:   zonesTable.centerLng,
+          radiusKm:    zonesTable.radiusKm,
+          zoneName:    zonesTable.name,
+        })
+        .from(zonePricingTable)
+        .innerJoin(zonesTable, eq(zonePricingTable.zoneId, zonesTable.id))
+        .where(and(
+          eq(zonePricingTable.vehicleType, vehicleType),
+          eq(zonePricingTable.isActive, true),
+          eq(zonesTable.isActive, true),
+        )),
+      db
         .select()
-        .from(ridePricingTable)
-        .where(and(eq(ridePricingTable.vehicleType, vehicleType), eq(ridePricingTable.isActive, true))),
+        .from(settingsTable)
+        .where(sql`${settingsTable.key} IN ('surge_enabled', 'surge_multiplier')`),
     ]);
 
     if (!user) {
       res.status(404).json({ error: "User not found" });
       return;
     }
-    if (!pricing) {
-      res.status(404).json({ error: "Pricing not available for this vehicle type" });
-      return;
+
+    let activePricing: { baseFare: string; perKmRate: string; minimumFare: string } | null = null;
+    let pricingSource = "global";
+
+    for (const zp of zonePricings) {
+      const distToCenter = haversineKm(pickupLatitude, pickupLongitude, zp.centerLat, zp.centerLng);
+      if (distToCenter <= zp.radiusKm) {
+        activePricing = { baseFare: zp.baseFare, perKmRate: zp.perKmRate, minimumFare: zp.minimumFare };
+        pricingSource = `zone:${zp.zoneName}`;
+        break;
+      }
+    }
+
+    if (!activePricing) {
+      const [globalPricing] = await db
+        .select()
+        .from(ridePricingTable)
+        .where(and(eq(ridePricingTable.vehicleType, vehicleType), eq(ridePricingTable.isActive, true)));
+      if (!globalPricing) {
+        res.status(404).json({ error: "Pricing not available for this vehicle type" });
+        return;
+      }
+      activePricing = globalPricing;
     }
 
     const distanceKm = haversineKm(pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude);
     const estimatedDurationMinutes = Math.max(1, Math.round((distanceKm / 30) * 60));
-    const estimatedPrice = calcPrice(
-      parseFloat(pricing.baseFare),
-      parseFloat(pricing.perKmRate),
-      parseFloat(pricing.minimumFare),
+
+    let estimatedPrice = calcPrice(
+      parseFloat(activePricing.baseFare),
+      parseFloat(activePricing.perKmRate),
+      parseFloat(activePricing.minimumFare),
       distanceKm,
     );
+
+    const surgeMap = Object.fromEntries(surgeSettings.map((s) => [s.key, s.value]));
+    const surgeEnabled = surgeMap["surge_enabled"] === "true";
+    const surgeMultiplier = surgeEnabled ? parseFloat(surgeMap["surge_multiplier"] ?? "1") : 1;
+    const isSurge = surgeEnabled && surgeMultiplier > 1;
+    if (isSurge) estimatedPrice = estimatedPrice * surgeMultiplier;
 
     if (parseFloat(user.walletBalance as string) < estimatedPrice) {
       res.status(402).json({
         error: "Insufficient wallet balance",
-        required: estimatedPrice,
+        required: parseFloat(estimatedPrice.toFixed(2)),
         balance: parseFloat(user.walletBalance as string),
       });
       return;
@@ -451,7 +495,13 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
     await db.insert(rideEventsTable).values({
       rideId: ride.id,
       type: "RIDE_REQUESTED",
-      metadata: { passengerId: userId, vehicleType },
+      metadata: {
+        passengerId:    userId,
+        vehicleType,
+        pricingSource,
+        surgeActive:    isSurge,
+        surgeMultiplier: isSurge ? surgeMultiplier : 1,
+      },
     });
 
     dispatchManager.startDispatch(
