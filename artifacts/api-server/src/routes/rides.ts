@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Request } from "express";
 import {
   db,
   ridesTable,
@@ -20,6 +21,27 @@ import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { z } from "zod";
 import * as dispatchManager from "../lib/dispatch-manager";
+import rateLimit from "express-rate-limit";
+
+const RIDE_REQUEST_WINDOW_MS = parseInt(process.env.RIDE_REQUEST_RATE_WINDOW_MS ?? "120000", 10);
+const RIDE_REQUEST_MAX       = parseInt(process.env.RIDE_REQUEST_RATE_MAX        ?? "3",      10);
+
+const rideRequestLimiter = rateLimit({
+  windowMs:  RIDE_REQUEST_WINDOW_MS,
+  max:       RIDE_REQUEST_MAX,
+  keyGenerator: (req: Request) => `user:${req.user!.id}`,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  validate:  { xForwardedForHeader: false },
+  handler: (_req, res) => {
+    const retryAfterSeconds = Math.ceil(RIDE_REQUEST_WINDOW_MS / 1000);
+    res.status(429).json({
+      error: `Too many ride requests. You can request at most ${RIDE_REQUEST_MAX} rides per ${retryAfterSeconds / 60} minutes.`,
+      retryAfterSeconds,
+    });
+  },
+  skip: (req: Request) => !req.user,
+});
 
 const router = Router();
 
@@ -332,7 +354,7 @@ const RequestRideBody = z.object({
   dropoffAddress: z.string().min(1),
 });
 
-router.post("/rides/request", authenticate, requireRole("user"), async (req, res): Promise<void> => {
+router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimiter, async (req, res): Promise<void> => {
   try {
     const parsed = RequestRideBody.safeParse(req.body);
     if (!parsed.success) {

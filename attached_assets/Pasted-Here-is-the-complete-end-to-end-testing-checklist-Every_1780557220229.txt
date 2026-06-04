@@ -1,0 +1,267 @@
+Here is the complete end-to-end testing checklist. Every step includes the exact request, what to look for, and the expected result.
+
+End-to-End Dispatch System — Manual Testing Checklist
+Base URL: https://<your-replit-dev-domain>/api
+Tool needed: Postman (REST + WebSocket), or any REST client + a WebSocket client (e.g. Postman's WS tab, wscat, or websocat)
+
+Phase 0 — Create Test Accounts
+Run these once to set up all test users. Save every accessToken returned.
+
+0A — Register passenger
+POST /auth/register
+Content-Type: application/json
+{
+  "name": "Test Passenger",
+  "email": "passenger@test.com",
+  "phone": "+1000000001",
+  "password": "password123"
+}
+✅ Expected: 201 with accessToken. Save as PASSENGER_TOKEN.
+
+0B — Register 5 drivers (repeat 5 times, change name/email/phone each time)
+POST /driver/auth/register
+Content-Type: application/json
+{
+  "name": "Driver One",
+  "email": "driver1@test.com",
+  "phone": "+1000000002",
+  "password": "password123"
+}
+Repeat for Driver Two through Five.
+✅ Expected: 201 with accessToken for each. Save as DRIVER1_TOKEN … DRIVER5_TOKEN.
+
+0C — Fund the passenger's wallet (via admin or DB)
+The passenger must have enough balance to cover the estimated price. If you have an admin account:
+
+POST /admin/wallet/topup
+Authorization: Bearer <ADMIN_TOKEN>
+Content-Type: application/json
+{ "userId": <PASSENGER_USER_ID>, "amount": 500 }
+Or run directly in your DB:
+
+UPDATE users SET wallet_balance = 500 WHERE email = 'passenger@test.com';
+Phase 1 — Set Up Driver Locations & Status
+This is the most important phase. The dispatch selects by GPS distance. Drivers need:
+
+status = 'online', is_online = true
+GPS coordinates within 5 km of your pickup point (or outside it for the edge cases)
+location_updated_at within the last 10 minutes
+Pick a reference pickup point. Example: lat: 40.7128, lng: -74.0060 (New York).
+
+1A — Set 3 drivers online and within 5 km
+For Driver 1, 2, 3 — repeat these two calls for each:
+
+Step 1: Go online
+
+PATCH /driver/status/online
+Authorization: Bearer <DRIVER1_TOKEN>
+✅ Expected: 200, { "status": "online", "isOnline": true }
+
+Step 2: Set GPS location (within 5 km of pickup)
+
+PATCH /driver/location
+Authorization: Bearer <DRIVER1_TOKEN>
+Content-Type: application/json
+{ "latitude": 40.7150, "longitude": -74.0080 }
+Use these coords for each driver (all within ~1–3 km of the pickup):
+
+Driver 1: 40.7150, -74.0080
+Driver 2: 40.7100, -74.0040
+Driver 3: 40.7160, -74.0100
+✅ Expected: 200 with updated driver object.
+
+1B — Set Driver 4 and 5 within 5 km but hold them for the second round
+Same steps as above for Driver 4 and 5:
+
+Driver 4: 40.7200, -74.0120
+Driver 5: 40.7180, -74.0090
+1C — Optionally set their vehicle type to car
+PATCH /driver/me/settings
+Authorization: Bearer <DRIVER1_TOKEN>
+Content-Type: application/json
+{ "vehicleType": "car" }
+Repeat for all 5 drivers.
+
+Phase 2 — Open WebSocket Connections for All 5 Drivers
+Open 5 WebSocket connections — one per driver — so you can see real-time events.
+
+URL: wss://<your-replit-dev-domain>/api/socket.io/?EIO=4&transport=websocket
+Auth: pass the token in the handshake:
+
+In Postman (WS tab) or wscat:
+
+wscat -c "wss://<domain>/api/socket.io/?EIO=4&transport=websocket" \
+  --header "Authorization: Bearer <DRIVER1_TOKEN>"
+Or use Socket.io client auth:
+
+{ "auth": { "token": "<DRIVER1_TOKEN>" } }
+Do the same for the passenger:
+
+wscat -c "..." --header "Authorization: Bearer <PASSENGER_TOKEN>"
+✅ Each connection should receive the Socket.io handshake 0{...} packet.
+
+Test 1 — Duplicate Request Guard
+Goal: Verify a passenger cannot create two simultaneous requests.
+
+Step 1: Create the first ride request.
+
+POST /rides/request
+Authorization: Bearer <PASSENGER_TOKEN>
+Content-Type: application/json
+{
+  "vehicleType": "car",
+  "pickupLatitude": 40.7128,
+  "pickupLongitude": -74.0060,
+  "pickupAddress": "1 Broadway, New York",
+  "dropoffLatitude": 40.7300,
+  "dropoffLongitude": -73.9900,
+  "dropoffAddress": "Central Park South"
+}
+✅ Expected: 201 with ride object { "status": "searching", "id": <RIDE_ID> }.
+👁 On Driver 1, 2, 3 WebSocket connections: you should receive a ride:offer event within ~1 second.
+
+Step 2: Immediately try to create a second ride (same body, same passenger token).
+
+✅ Expected: 409 with:
+
+{
+  "error": "You already have an active ride request",
+  "activeRideId": <RIDE_ID>,
+  "activeStatus": "searching"
+}
+Step 3: Clean up — cancel the ride before proceeding.
+
+PATCH /rides/<RIDE_ID>/cancel
+Authorization: Bearer <PASSENGER_TOKEN>
+✅ Expected: 200, status becomes cancelled.
+
+Test 2 — Only the 3 Nearest Drivers Receive the Offer
+Goal: Confirm Driver 4 and 5 did NOT receive the round-1 offer.
+
+Step 1: Create a fresh ride request (same payload as Test 1).
+
+✅ Expected: 201, status: "searching".
+
+Observe on WebSockets:
+
+✅ Driver 1, 2, 3: receive ride:offer event immediately
+✅ Driver 4, 5: receive nothing (they're farther — the batch only picks 3 nearest)
+✅ Passenger: receives nothing yet (no driver has accepted)
+Note the ride_id — save it as ACTIVE_RIDE_ID.
+
+Do NOT accept yet — let the timer run for the next test.
+
+Test 3 — 15-Second Timer Fires and Moves to Next Round
+Goal: Verify the round expires, drivers 1–3 are told the offer expired, and drivers 4–5 get the next offer.
+
+After creating the ride in Test 2, wait 15 seconds without accepting.
+
+✅ Expected events on WebSockets after 15 seconds:
+
+Driver 1, 2, 3 receive: ride:offer_expired → { "rideId": <RIDE_ID>, "reason": "round_expired" }
+Driver 4, 5 receive: ride:offer → { "rideId": <RIDE_ID>, "vehicleType": "car", "expiresInSeconds": 15, ... }
+Passenger: receives nothing (still searching)
+Verify in DB (optional):
+
+SELECT current_round, notified_ids, current_round_ids 
+FROM ride_dispatch_state 
+WHERE ride_id = <RIDE_ID>;
+✅ Expected: current_round = 2, notified_ids = [1,2,3,4,5] (all 5 drivers), current_round_ids = [4,5] (or whatever 3 nearest from remaining).
+
+Again — do NOT accept yet.
+
+Test 4 — Driver Accepts, Other 2 Get Notified It's Gone
+Goal: Verify atomic accept and notification of the round's other drivers.
+
+Wait for round 2 to start (Driver 4 and 5 have the offer). Then:
+
+Step 1: Accept as Driver 4.
+
+PATCH /driver/rides/<ACTIVE_RIDE_ID>/accept
+Authorization: Bearer <DRIVER4_TOKEN>
+✅ Expected: 200 with ride object, status: "driver_assigned", driverId set to Driver 4's ID.
+
+Observe on WebSockets:
+
+✅ Passenger: receives ride:driver_assigned with driver info and ETA
+✅ Driver 5 (the other driver in round 2): receives ride:no_longer_available → { "rideId": <RIDE_ID>, "reason": "accepted_by_another" }
+✅ Driver 4: gets the 200 REST response (the WebSocket notification goes to others)
+Verify concurrent accept is rejected (race condition test):
+
+In a second Postman tab, simultaneously fire the accept as Driver 5 at the same time as Driver 4's call:
+
+PATCH /driver/rides/<ACTIVE_RIDE_ID>/accept
+Authorization: Bearer <DRIVER5_TOKEN>
+✅ Expected: 409 → { "error": "Ride was just taken by another driver" }
+
+Verify dispatch state cleaned up (DB check):
+
+SELECT status FROM ride_dispatch_state WHERE ride_id = <RIDE_ID>;
+✅ Expected: status = 'completed'
+
+Test 5 — Exhaustion Fallback and Cycle Restart
+Goal: Exhaust all 5 drivers across multiple rounds without any accepting, verify the system restarts from Driver 1.
+
+Setup: You need only 3 drivers within 5 km for simplicity. Set Driver 4 and 5 offline:
+
+PATCH /driver/status/offline
+Authorization: Bearer <DRIVER4_TOKEN>
+PATCH /driver/status/offline
+Authorization: Bearer <DRIVER5_TOKEN>
+Step 1: Create a new ride request.
+
+✅ Expected: 201. Drivers 1, 2, 3 get ride:offer.
+
+Step 2: Wait 15 seconds — let round 1 expire.
+
+✅ Expected:
+
+Drivers 1, 2, 3 get ride:offer_expired
+No more drivers available within 5 km → exhaustion triggers
+System logs: "Dispatch exhaustion — restarting cycle from beginning"
+Drivers 1, 2, 3 get another ride:offer (round restarted from beginning)
+Verify in DB:
+
+SELECT current_round, notified_ids FROM ride_dispatch_state WHERE ride_id = <NEW_RIDE_ID>;
+✅ After restart: notified_ids = [1,2,3] (reset to just the new round), current_round incremented.
+
+Step 3: Wait the full 5-minute timeout without accepting.
+
+✅ Expected: The existing ride-timeout.ts background sweep (runs every 60 seconds) cancels the ride.
+
+Passenger WebSocket receives: ride:status_update → { "status": "cancelled", "reason": "timeout", "message": "No driver was found within 5 minutes..." }
+DB: rides.status = 'cancelled', cancel_reason = 'timeout'
+Test 6 — Edge Case: No Drivers Available At All
+Goal: Verify the ride is immediately cancelled if zero drivers are online within 5 km.
+
+Setup: Set all 5 drivers offline.
+
+Step 1: Create a ride request.
+
+✅ Expected: 201 — ride is created. Then within ~1 second:
+
+Passenger WebSocket receives: ride:status_update → { "status": "cancelled", "reason": "no_drivers", "message": "No available drivers were found nearby..." }
+DB: rides.status = 'cancelled', cancel_reason = 'no_drivers'
+ride_dispatch_state.status = 'cancelled'
+Quick Reference — DB Verification Queries
+-- Check ride status
+SELECT id, status, cancel_reason, driver_id FROM rides WHERE id = <RIDE_ID>;
+-- Check dispatch state
+SELECT ride_id, current_round, notified_ids, current_round_ids, status, round_started_at
+FROM ride_dispatch_state WHERE ride_id = <RIDE_ID>;
+-- Check driver availability/location freshness
+SELECT id, name, status, is_online, vehicle_type,
+       current_latitude, current_longitude, location_updated_at
+FROM drivers ORDER BY id;
+-- See all dispatch events for a ride
+SELECT type, metadata, created_at FROM ride_events
+WHERE ride_id = <RIDE_ID> ORDER BY created_at;
+Expected WebSocket Event Summary
+Event	Who receives it	When
+ride:offer	3 nearest drivers	Each round starts
+ride:offer_expired	Current round's drivers	15s timer fires
+ride:no_longer_available	Losing drivers in the round	Another driver accepted
+ride:driver_assigned	Passenger	Driver accepted
+ride:status_update (cancelled)	Passenger	Timeout or no drivers
+Next, I can add a rate-limit to POST /rides/request so a passenger cannot spam the endpoint repeatedly within a short window (even after their active ride is cancelled). Would you like me to do that?
+
