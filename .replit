@@ -20,10 +20,6 @@ externalPort = 80
 localPort = 8080
 externalPort = 8080
 
-[[ports]]
-localPort = 22133
-externalPort = 3000
-
 [agent]
 expertMode = true
 
@@ -34,3 +30,27 @@ SUPABASE_URL = "https://kefoiokfzygggetpsxmm.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlZm9pb2tmenlnZ2dldHBzeG1tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ0NTg1MiwiZXhwIjoyMDk2MDIxODUyfQ.caG0LKiLMprpNBcp6DhodBEHnimZcQS_jeE3hLUkq-E"
 SUPABASE_BUCKET = "uploads"
 NEON_DATABASE_URL = "postgresql://neondb_owner:npg_Q8bAZKtS6kIo@ep-young-band-aqtvj4to-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "bash scripts/setup.sh"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"

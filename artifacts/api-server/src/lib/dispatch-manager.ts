@@ -4,10 +4,14 @@ import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
 import { logger } from "./logger";
 
-const ROUND_TIMEOUT_MS = 15_000;
-const MAX_RADIUS_KM    = 5;
-const BATCH_SIZE       = 3;
+const ROUND_TIMEOUT_MS           = 15_000;
+const MAX_RADIUS_KM              = 5;
+const BATCH_SIZE                 = 3;
 const LOCATION_STALENESS_MINUTES = 10;
+
+// ── Feature 3: cooldown constants ─────────────────────────────────────────────
+const COOLDOWN_THRESHOLD = 3;   // consecutive rejections before cooldown
+const COOLDOWN_MINUTES   = 10;  // how long the cooldown lasts
 
 const activeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
@@ -32,6 +36,19 @@ interface DriverCandidate {
   distanceKm: number;
 }
 
+/**
+ * Finds the next batch of up to BATCH_SIZE drivers for a dispatch round.
+ *
+ * Feature 2 — Smart Driver Selection:
+ * Instead of ordering purely by distance, each eligible driver is scored using:
+ *   50%  distance       (closer = higher score, normalised over MAX_RADIUS_KM)
+ *   30%  rating         (higher star rating = higher score, normalised 1–5 → 0–1)
+ *   20%  acceptance rate (totalAccepted / totalDispatched; new drivers get 0.5 neutral)
+ *
+ * Feature 3 — Cooldown:
+ * Drivers with cooldownUntil > NOW() are excluded from every batch query.
+ * The cooldown expires automatically — no background job needed.
+ */
 async function findNextBatch(
   vehicleType: string,
   pickupLat: number,
@@ -40,6 +57,19 @@ async function findNextBatch(
 ): Promise<DriverCandidate[]> {
   const stalenessCutoff = new Date(Date.now() - LOCATION_STALENESS_MINUTES * 60 * 1000);
   const distanceExpr = haversineKmSql(pickupLat, pickupLng, driversTable.currentLatitude, driversTable.currentLongitude);
+
+  // Composite score — all dimensions normalised to [0, 1].
+  //   distanceScore    = (MAX_RADIUS_KM - km) / MAX_RADIUS_KM  → 1 at pickup, 0 at radius edge
+  //   ratingScore      = (rating - 1) / 4                       → 0 for 1-star, 1 for 5-star
+  //   acceptanceScore  = accepted / dispatched (0.5 neutral for brand-new drivers; capped at 1.0)
+  const scoreExpr = sql<number>`
+    0.5 * ((${MAX_RADIUS_KM}::float - LEAST(${distanceExpr}, ${MAX_RADIUS_KM}::float)) / ${MAX_RADIUS_KM}::float)
+    + 0.3 * ((COALESCE(${driversTable.rating}::float, 5.0) - 1.0) / 4.0)
+    + 0.2 * (CASE
+               WHEN ${driversTable.totalDispatched} = 0 THEN 0.5
+               ELSE LEAST(${driversTable.totalAccepted}::float / ${driversTable.totalDispatched}::float, 1.0)
+             END)
+  `;
 
   const baseConditions = and(
     eq(driversTable.isOnline, true),
@@ -50,6 +80,8 @@ async function findNextBatch(
     sql`${driversTable.currentLongitude} IS NOT NULL`,
     sql`${driversTable.locationUpdatedAt} > ${stalenessCutoff}`,
     sql`${distanceExpr} <= ${MAX_RADIUS_KM}`,
+    // Feature 3: skip drivers who are in a cooldown period.
+    sql`(${driversTable.cooldownUntil} IS NULL OR ${driversTable.cooldownUntil} <= NOW())`,
   );
 
   const conditions = excludeDriverIds.length > 0
@@ -58,13 +90,14 @@ async function findNextBatch(
 
   const rows = await db
     .select({
-      id:          driversTable.id,
-      userId:      driversTable.userId,
-      distanceKm:  distanceExpr,
+      id:         driversTable.id,
+      userId:     driversTable.userId,
+      distanceKm: distanceExpr,
+      score:      scoreExpr,
     })
     .from(driversTable)
     .where(conditions)
-    .orderBy(distanceExpr)
+    .orderBy(sql`${scoreExpr} DESC`)
     .limit(BATCH_SIZE);
 
   return rows.map((r) => ({
@@ -168,6 +201,13 @@ async function cancelRideNoDrivers(rideId: number, passengerId: number): Promise
   logger.info({ rideId, passengerId }, "Ride cancelled — no drivers within 5 km");
 }
 
+/**
+ * Sends the current batch of offers and schedules the next round timer.
+ *
+ * Feature 2: increments totalDispatched for every driver receiving an offer.
+ * This is a fire-and-forget stat update — a missed increment on crash is
+ * acceptable for a statistical counter.
+ */
 async function dispatchBatch(
   rideId: number,
   batch: DriverCandidate[],
@@ -187,6 +227,14 @@ async function dispatchBatch(
       currentRound:    sql`${rideDispatchStateTable.currentRound} + 1`,
     })
     .where(eq(rideDispatchStateTable.rideId, rideId));
+
+  // Feature 2: track how many times each driver has been offered a ride.
+  if (batchDriverIds.length > 0) {
+    db.update(driversTable)
+      .set({ totalDispatched: sql`${driversTable.totalDispatched} + 1` })
+      .where(inArray(driversTable.id, batchDriverIds))
+      .catch((err) => logger.error({ err, rideId, batchDriverIds }, "Failed to increment totalDispatched"));
+  }
 
   emitOfferToDrivers(batchUserIds, rideId, { ...offerPayload, expiresInSeconds: ROUND_TIMEOUT_MS / 1000 });
   scheduleNextRound(rideId, ROUND_TIMEOUT_MS);
@@ -221,6 +269,14 @@ export async function startDispatch(
   await dispatchBatch(rideId, batch, offerPayload, []);
 }
 
+/**
+ * Called when a round's 15-second timer expires with no acceptance.
+ *
+ * Feature 3: increments consecutiveRejections for every driver in the expired
+ * round. If any driver hits COOLDOWN_THRESHOLD, their counter resets to 0 and
+ * cooldownUntil is set to NOW() + COOLDOWN_MINUTES. A single bulk UPDATE with
+ * CASE expressions handles all drivers atomically.
+ */
 export async function advanceRound(rideId: number): Promise<void> {
   const [ride] = await db
     .select({ id: ridesTable.id, status: ridesTable.status, passengerId: ridesTable.passengerId, vehicleType: ridesTable.vehicleType, pickupLatitude: ridesTable.pickupLatitude, pickupLongitude: ridesTable.pickupLongitude, pickupAddress: ridesTable.pickupAddress, dropoffAddress: ridesTable.dropoffAddress, distanceKm: ridesTable.distanceKm, estimatedPrice: ridesTable.estimatedPrice })
@@ -242,8 +298,34 @@ export async function advanceRound(rideId: number): Promise<void> {
     return;
   }
 
-  const currentRoundUserIds = await resolveUserIds(state.currentRoundIds as number[]);
+  const expiredDriverIds    = state.currentRoundIds as number[];
+  const currentRoundUserIds = await resolveUserIds(expiredDriverIds);
   emitToDrivers(currentRoundUserIds, SOCKET_EVENTS.RIDE_OFFER_EXPIRED, { rideId, reason: "round_expired" });
+
+  // Feature 3: update consecutiveRejections for every driver in the expired round.
+  // If a driver's new count reaches the threshold, lock them out for COOLDOWN_MINUTES
+  // and reset their counter so the cycle starts fresh after the cooldown.
+  if (expiredDriverIds.length > 0) {
+    db.update(driversTable)
+      .set({
+        consecutiveRejections: sql`
+          CASE
+            WHEN ${driversTable.consecutiveRejections} + 1 >= ${COOLDOWN_THRESHOLD}
+            THEN 0
+            ELSE ${driversTable.consecutiveRejections} + 1
+          END
+        `,
+        cooldownUntil: sql`
+          CASE
+            WHEN ${driversTable.consecutiveRejections} + 1 >= ${COOLDOWN_THRESHOLD}
+            THEN NOW() + (${COOLDOWN_MINUTES} || ' minutes')::interval
+            ELSE ${driversTable.cooldownUntil}
+          END
+        `,
+      })
+      .where(inArray(driversTable.id, expiredDriverIds))
+      .catch((err) => logger.error({ err, rideId, expiredDriverIds }, "Failed to update consecutiveRejections"));
+  }
 
   const offerPayload = {
     rideId,
@@ -286,6 +368,13 @@ async function resolveUserIds(driverIds: number[]): Promise<number[]> {
   return rows.map((r) => r.userId);
 }
 
+/**
+ * Called when a driver accepts a ride offer.
+ *
+ * Feature 2: increments totalAccepted for the winning driver.
+ * Feature 3: resets consecutiveRejections to 0 and clears any residual cooldown
+ *            so the driver starts their next dispatch cycle with a clean slate.
+ */
 export async function onAccepted(rideId: number, winningDriverId: number): Promise<void> {
   cancelTimer(rideId);
 
@@ -304,6 +393,17 @@ export async function onAccepted(rideId: number, winningDriverId: number): Promi
       .set({ status: "completed" })
       .where(eq(rideDispatchStateTable.rideId, rideId));
   }
+
+  // Feature 2 + 3: reward the accepting driver — count the acceptance and
+  // clear their rejection streak/cooldown.
+  db.update(driversTable)
+    .set({
+      totalAccepted:         sql`${driversTable.totalAccepted} + 1`,
+      consecutiveRejections: 0,
+      cooldownUntil:         null,
+    })
+    .where(eq(driversTable.id, winningDriverId))
+    .catch((err) => logger.error({ err, rideId, winningDriverId }, "Failed to update driver acceptance stats"));
 
   logger.info({ rideId, winningDriverId }, "Dispatch completed — ride accepted");
 }

@@ -28,6 +28,19 @@ export const driversTable = pgTable("drivers", {
   checkInRequired:  boolean("checkin_required").notNull().default(false),
   checkInDeadline:  timestamp("checkin_deadline",   { withTimezone: true }),
   lastCheckInAt:    timestamp("last_checkin_at",    { withTimezone: true }),
+
+  // ── Smart dispatch stats (Feature 2) ──────────────────────────────────────
+  // Used to compute acceptance rate = totalAccepted / totalDispatched.
+  // Incremented in dispatchBatch() and onAccepted() respectively.
+  totalDispatched: integer("total_dispatched").notNull().default(0),
+  totalAccepted:   integer("total_accepted").notNull().default(0),
+
+  // ── Cooldown after repeated rejections (Feature 3) ────────────────────────
+  // consecutiveRejections counts back-to-back expired-without-accepting rounds.
+  // Resets to 0 on acceptance. At 3 rejections, cooldownUntil is set +10 min.
+  consecutiveRejections: integer("consecutive_rejections").notNull().default(0),
+  cooldownUntil:         timestamp("cooldown_until", { withTimezone: true }),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
@@ -35,6 +48,7 @@ export const driversTable = pgTable("drivers", {
   index("idx_drivers_assigned_bus_id").on(table.assignedBusId),
   index("idx_drivers_status").on(table.status),
   index("idx_drivers_is_online").on(table.isOnline),
+  index("idx_drivers_cooldown_until").on(table.cooldownUntil),
 ]);
 
 export const insertDriverSchema = createInsertSchema(driversTable).omit({ id: true, createdAt: true, updatedAt: true });

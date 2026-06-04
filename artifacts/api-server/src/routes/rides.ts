@@ -730,12 +730,46 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
       cancellationFee = feeSetting ? parseFloat(feeSetting.value) || 0 : 0;
     }
 
-    // ── Waiting charge — applies when passenger cancels after the free window ──
-    // The charge is computed from the actual elapsed time and credited to the driver.
+    // ── Arrived flat fee — charged whenever driver has arrived, regardless of
+    // how long the passenger waited (applies within AND after the free window).
+    // Setting key: "cancellation_fee_arrived" (default: 5.00).
+    // This compensates the driver for travelling to the pickup point.
+    let arrivedFlatFee = 0;
+    if (ride.status === "driver_arrived") {
+      const [arrivedFeeSetting] = await db
+        .select({ value: settingsTable.value })
+        .from(settingsTable)
+        .where(eq(settingsTable.key, "cancellation_fee_arrived"));
+      arrivedFlatFee = arrivedFeeSetting ? parseFloat(arrivedFeeSetting.value) ?? 5.00 : 5.00;
+      if (isNaN(arrivedFlatFee) || arrivedFlatFee < 0) arrivedFlatFee = 5.00;
+      cancellationFee = arrivedFlatFee;
+    }
+
+    // ── Waiting charge — accrued time after the 3-minute free window ──────────
+    // stopWaitingTimer returns 0 if still within the free window, so the rules
+    // collapse naturally:
+    //   within 3 min  → waitingChargeAmount = 0  → total fee = arrivedFlatFee only
+    //   after  3 min  → waitingChargeAmount > 0  → total fee = arrivedFlatFee + accrued
     let waitingChargeAmount = 0;
     if (ride.status === "driver_arrived") {
       const { waitingCharge } = stopWaitingTimer(id);
       waitingChargeAmount = waitingCharge;
+
+      // Fallback: if the in-memory timer was lost (server restart race before
+      // initWaitingTimers finished), recompute directly from the DB timestamp.
+      if (waitingCharge === 0 && ride.driverArrivedAt) {
+        const elapsedMs      = Date.now() - new Date(ride.driverArrivedAt).getTime();
+        const elapsedMinutes = Math.floor(elapsedMs / 60_000);
+        const chargedMinutes = Math.max(0, elapsedMinutes - 3);
+        if (chargedMinutes > 0) {
+          const [rateSetting] = await db
+            .select({ value: settingsTable.value })
+            .from(settingsTable)
+            .where(eq(settingsTable.key, "waiting_charge_per_minute"));
+          const rate = rateSetting ? parseFloat(rateSetting.value) || 2.00 : 2.00;
+          waitingChargeAmount = parseFloat((chargedMinutes * rate).toFixed(2));
+        }
+      }
     }
 
     const refundAmount = parseFloat(Math.max(0, escrowedAmount - cancellationFee - waitingChargeAmount).toFixed(2));
@@ -769,10 +803,12 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
         rideId: id,
         type: "RIDE_CANCELLED",
         metadata: {
-          cancelledBy:     "passenger",
+          cancelledBy:          "passenger",
           escrowedAmount,
-          cancellationFee: actualFee,
-          waitingCharge:   waitingChargeAmount,
+          cancellationFee:      actualFee,
+          arrivedFlatFee,
+          waitingCharge:        waitingChargeAmount,
+          totalDriverCompensation: parseFloat((actualFee + waitingChargeAmount).toFixed(2)),
           refundAmount,
         },
       });
@@ -788,11 +824,15 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
           userId:      ride.passengerId,
           amount:      refundAmount.toFixed(2),
           type:        "refund",
-          description: waitingChargeAmount > 0
-            ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (waiting charge ${waitingChargeAmount.toFixed(2)} retained)`
-            : actualFee > 0
-              ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (fee ${actualFee.toFixed(2)} retained)`
-              : `Ride #${id} cancelled — payment refunded`,
+          description: (arrivedFlatFee > 0 && waitingChargeAmount > 0)
+            ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (arrived fee ${arrivedFlatFee.toFixed(2)} + waiting ${waitingChargeAmount.toFixed(2)} retained)`
+            : arrivedFlatFee > 0
+              ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (arrived fee ${arrivedFlatFee.toFixed(2)} retained)`
+              : waitingChargeAmount > 0
+                ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (waiting charge ${waitingChargeAmount.toFixed(2)} retained)`
+                : actualFee > 0
+                  ? `Ride #${id} cancelled — refund ${refundAmount.toFixed(2)} (fee ${actualFee.toFixed(2)} retained)`
+                  : `Ride #${id} cancelled — payment refunded`,
         });
       }
 
