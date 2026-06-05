@@ -434,6 +434,7 @@ router.get("/admin/drivers/live", authenticate, requireRole("admin"), async (req
     currentSpeed: driversTable.currentSpeed,
     currentHeading: driversTable.currentHeading,
     assignedBusId: driversTable.assignedBusId,
+    vehicleType: driversTable.vehicleType,
     updatedAt: driversTable.updatedAt,
   }).from(driversTable).where(eq(driversTable.isActive, true));
 

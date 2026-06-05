@@ -30,7 +30,7 @@ type LiveDriver = {
   currentSpeed?: number | null;
   currentHeading?: number | null;
   assignedBusId?: number | null;
-  serviceType?: string | null;
+  vehicleType?: string | null;
   updatedAt: string;
   activeTrip?: {
     id: number;
@@ -114,7 +114,7 @@ export default function LiveTracking() {
         if (statusFilter === "suspended" && d.status !== "suspended") return false;
       }
       if (serviceFilter !== "all") {
-        const svc = (d.serviceType ?? "").toLowerCase();
+        const svc = (d.vehicleType ?? "").toLowerCase();
         if (svc !== serviceFilter) return false;
       }
       if (searchQuery.trim()) {

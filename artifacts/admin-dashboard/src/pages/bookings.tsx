@@ -110,13 +110,12 @@ export default function Bookings() {
     limit: "20",
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
-    ...(serviceFilter !== "all" ? { serviceType: serviceFilter } : {}),
     ...(fromDate ? { fromDate } : {}),
     ...(toDate ? { toDate } : {}),
   });
 
   const { data, isLoading } = useQuery<BookingsResponse>({
-    queryKey: ["admin-bookings", page, debouncedSearch, statusFilter, serviceFilter, fromDate, toDate],
+    queryKey: ["admin-bookings", page, debouncedSearch, statusFilter, fromDate, toDate],
     queryFn: () => adminFetch<BookingsResponse>(`/admin/bookings?${queryParams}`),
     placeholderData: (prev) => prev,
   });
@@ -180,7 +179,10 @@ export default function Bookings() {
   };
 
   const hasFilters = search || statusFilter !== "all" || serviceFilter !== "all" || fromDate || toDate;
-  const bookings = data?.data ?? [];
+  const allBookings = data?.data ?? [];
+  const bookings = serviceFilter === "all"
+    ? allBookings
+    : allBookings.filter((b) => (b.serviceType ?? "").toLowerCase() === serviceFilter);
   const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
 
   const handleExport = () => {
