@@ -1367,4 +1367,62 @@ router.get("/admin/sos-events", authenticate, requireRole("admin"), async (req, 
   }
 });
 
+/**
+ * POST /admin/sos-events/:id/resolve
+ * Marks an SOS event as resolved, records which admin resolved it and when.
+ *
+ * Body (optional):
+ *   notes  — free-text resolution notes
+ */
+router.post("/admin/sos-events/:id/resolve", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid SOS event id" });
+      return;
+    }
+
+    const bodySchema = z.object({ notes: z.string().optional() });
+    const parsed = bodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request body", details: parsed.error.flatten() });
+      return;
+    }
+
+    const existing = await db
+      .select({ id: sosEventsTable.id, status: sosEventsTable.status })
+      .from(sosEventsTable)
+      .where(eq(sosEventsTable.id, id))
+      .limit(1);
+
+    if (existing.length === 0) {
+      res.status(404).json({ error: "SOS event not found" });
+      return;
+    }
+
+    if (existing[0].status === "resolved") {
+      res.status(409).json({ error: "SOS event is already resolved" });
+      return;
+    }
+
+    const adminId = (req as any).user?.id as number;
+    const resolvedAt = new Date();
+
+    const [updated] = await db
+      .update(sosEventsTable)
+      .set({
+        status:       "resolved",
+        resolvedById: adminId,
+        resolvedAt,
+        ...(parsed.data.notes !== undefined ? { notes: parsed.data.notes } : {}),
+      })
+      .where(eq(sosEventsTable.id, id))
+      .returning();
+
+    res.json({ data: updated });
+  } catch {
+    res.status(500).json({ error: "Failed to resolve SOS event" });
+  }
+});
+
 export default router;

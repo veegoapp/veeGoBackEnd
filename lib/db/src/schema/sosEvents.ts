@@ -14,6 +14,8 @@ export const sosEventsTable = pgTable("sos_events", {
   triggeredAt:   timestamp("triggered_at", { withTimezone: true }).notNull().defaultNow(),
   status:        text("status").notNull().default("active"),
   notes:         text("notes"),
+  resolvedById:  integer("resolved_by_id").references(() => usersTable.id, { onDelete: "set null" }),
+  resolvedAt:    timestamp("resolved_at", { withTimezone: true }),
 }, (table) => [
   index("idx_sos_events_ride_id").on(table.rideId),
   index("idx_sos_events_user_id").on(table.userId),
