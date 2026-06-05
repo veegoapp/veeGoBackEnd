@@ -91,9 +91,8 @@ export default function Drivers() {
 
   const driversList = data?.data || [];
   const filtered = driversList.filter((d) => {
-    const isDriverActive = d.isActive;
-    if (statusFilter === "online" && !isDriverActive) return false;
-    if (statusFilter === "offline" && isDriverActive) return false;
+    if (statusFilter === "online" && !d.isOnline) return false;
+    if (statusFilter === "offline" && d.isOnline) return false;
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -102,8 +101,8 @@ export default function Drivers() {
     return true;
   });
 
-  const onlineCount = driversList.filter((d) => d.isActive).length;
-  const offlineCount = driversList.filter((d) => !d.isActive).length;
+  const onlineCount = driversList.filter((d) => d.isOnline).length;
+  const offlineCount = driversList.filter((d) => !d.isOnline).length;
 
   return (
     <div className="p-8 space-y-6">
@@ -318,7 +317,7 @@ export default function Drivers() {
                     )}
                   </TableCell>
                   <TableCell>
-                    {driver.isActive ? (
+                    {driver.isOnline ? (
                       <Badge variant="outline" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100">{t("drivers.onDuty", "On Duty")}</Badge>
                     ) : (
                       <Badge variant="outline" className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{t("drivers.offDuty", "Off Duty")}</Badge>
