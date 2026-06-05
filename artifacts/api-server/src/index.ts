@@ -11,6 +11,7 @@ import { initNoShowTimers } from "./lib/no-show-monitor";
 import { warmupFaceDetection } from "./lib/face-detection";
 import { registerDefaultHandlers } from "./lib/jobQueue";
 import { recoverActiveDispatches } from "./lib/dispatch-manager";
+import { seedSuperAdmin } from "./lib/seed";
 
 const rawPort = process.env["PORT"];
 
@@ -87,6 +88,7 @@ async function verifyCoreTables(): Promise<void> {
 async function main() {
   await verifyDatabaseConnection();
   await verifyCoreTables();
+  await seedSuperAdmin();
   await registerDefaultHandlers();
   // Seed in-memory surge map from DB before the socket server starts accepting
   // connections — passengers receive an accurate snapshot immediately on connect.

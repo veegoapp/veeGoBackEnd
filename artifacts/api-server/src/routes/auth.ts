@@ -85,6 +85,59 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
+  if (user.role === "admin") {
+    res.status(403).json({ error: "Admin accounts must use the admin login portal" });
+    return;
+  }
+
+  if (user.isBlocked) {
+    res.status(403).json({ error: "Account is blocked" });
+    return;
+  }
+
+  const payload = { userId: user.id, role: user.role };
+  const accessToken = signAccessToken(payload);
+  const refreshToken = signRefreshToken(payload);
+
+  await db.update(usersTable).set({ refreshToken }).where(eq(usersTable.id, user.id));
+
+  const permissions = await getPermissions(user.staffRoleId);
+  res.status(200).json({
+    accessToken,
+    refreshToken,
+    user: safeUserResponse(user, permissions),
+  });
+});
+
+// ─── POST /auth/admin/login — admin dashboard only ────────────────────────────
+// Accepts only users with role = "admin". Passenger and driver credentials
+// are explicitly rejected to prevent cross-role session confusion.
+router.post("/auth/admin/login", async (req, res): Promise<void> => {
+  const body = req.body ?? {};
+  const normalized = { ...body, credential: body.credential ?? body.email };
+
+  const parsed = LoginBody.safeParse(normalized);
+  if (!parsed.success) {
+    const message = parsed.error.issues.map((i) => i.message).join(", ");
+    res.status(400).json({ error: message });
+    return;
+  }
+
+  const { credential, password } = parsed.data;
+  const [user] = await db.select()
+    .from(usersTable)
+    .where(or(eq(usersTable.email, credential), eq(usersTable.phone, credential)));
+
+  if (!user || !(await bcrypt.compare(password, user.password))) {
+    res.status(401).json({ error: "Invalid credentials" });
+    return;
+  }
+
+  if (user.role !== "admin") {
+    res.status(403).json({ error: "Access denied. Admin accounts only." });
+    return;
+  }
+
   if (user.isBlocked) {
     res.status(403).json({ error: "Account is blocked" });
     return;

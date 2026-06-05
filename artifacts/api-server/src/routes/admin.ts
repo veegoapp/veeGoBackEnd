@@ -280,6 +280,63 @@ router.get("/admin/users", authenticate, requireRole("admin"), async (req, res):
   res.json({ data: data.map(u => safeUser(u as Record<string, unknown>)), total: countResult[0].count, page, limit });
 });
 
+// ─── GET /admin/drivers — list all drivers with user info ────────────────────
+router.get("/admin/drivers", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const page  = Math.max(1, parseInt((req.query.page  as string) ?? "1")  || 1);
+  const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "20") || 20));
+  const offset = (page - 1) * limit;
+
+  const search = req.query.search ? String(req.query.search).trim() : null;
+  const status = req.query.status ? String(req.query.status).trim() : null;
+
+  const conditions = [];
+  if (search) conditions.push(
+    or(
+      ilike(usersTable.name,  `%${search}%`),
+      ilike(usersTable.email, `%${search}%`),
+      ilike(usersTable.phone, `%${search}%`),
+    )
+  );
+  if (status) conditions.push(eq(driversTable.status, status as "offline" | "online" | "busy" | "suspended"));
+
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const [data, countResult] = await Promise.all([
+    db.select({
+      id:               driversTable.id,
+      userId:           driversTable.userId,
+      name:             driversTable.name,
+      phone:            driversTable.phone,
+      email:            usersTable.email,
+      licenseNumber:    driversTable.licenseNumber,
+      nationalId:       driversTable.nationalId,
+      rating:           driversTable.rating,
+      vehicleType:      driversTable.vehicleType,
+      assignedBusId:    driversTable.assignedBusId,
+      isOnline:         driversTable.isOnline,
+      status:           driversTable.status,
+      isActive:         driversTable.isActive,
+      isBlocked:        usersTable.isBlocked,
+      walletBalance:    usersTable.walletBalance,
+      totalDispatched:  driversTable.totalDispatched,
+      totalAccepted:    driversTable.totalAccepted,
+      createdAt:        driversTable.createdAt,
+    })
+      .from(driversTable)
+      .leftJoin(usersTable, eq(driversTable.userId, usersTable.id))
+      .where(where)
+      .limit(limit)
+      .offset(offset)
+      .orderBy(desc(driversTable.createdAt)),
+    db.select({ count: sql<number>`count(*)::int` })
+      .from(driversTable)
+      .leftJoin(usersTable, eq(driversTable.userId, usersTable.id))
+      .where(where),
+  ]);
+
+  res.json({ data, total: countResult[0].count, page, limit });
+});
+
 // ─── Search users by name/phone/email (must come before /:id) ────────────────
 router.get("/admin/users/search", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const q = String(req.query.q ?? "").trim();

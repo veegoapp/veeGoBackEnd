@@ -2,8 +2,9 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useLogin } from "@workspace/api-client-react";
+import { useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { adminFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -26,11 +27,31 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+interface AuthResponse {
+  accessToken: string;
+  refreshToken?: string;
+  user: {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    staffRoleId: number | null;
+    permissions: string[];
+  };
+}
+
 export default function Login() {
   const { login } = useAuth();
   const { toast } = useToast();
   const { t } = useTranslation();
-  const loginMutation = useLogin();
+
+  const loginMutation = useMutation({
+    mutationFn: (data: LoginFormValues) =>
+      adminFetch<AuthResponse>("/auth/admin/login", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+  });
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -41,33 +62,30 @@ export default function Login() {
   });
 
   const onSubmit = (data: LoginFormValues) => {
-    loginMutation.mutate(
-      { data },
-      {
-        onSuccess: (res) => {
-          login(res.accessToken, res.refreshToken ?? "", {
-            id: res.user?.id ?? 0,
-            name: res.user?.name ?? "",
-            email: res.user?.email ?? "",
-            role: res.user?.role ?? "admin",
-            staffRoleId: res.user?.staffRoleId ?? null,
-            permissions: res.user?.permissions ?? [],
-          });
+    loginMutation.mutate(data, {
+      onSuccess: (res) => {
+        login(res.accessToken, res.refreshToken ?? "", {
+          id: res.user?.id ?? 0,
+          name: res.user?.name ?? "",
+          email: res.user?.email ?? "",
+          role: res.user?.role ?? "admin",
+          staffRoleId: res.user?.staffRoleId ?? null,
+          permissions: res.user?.permissions ?? [],
+        });
 
-          toast({
-            title: t("auth.welcomeBack"),
-            description: t("auth.loggedIn"),
-          });
-        },
-        onError: () => {
-          toast({
-            title: t("auth.loginFailed"),
-            description: t("auth.checkCredentials"),
-            variant: "destructive",
-          });
-        },
-      }
-    );
+        toast({
+          title: t("auth.welcomeBack"),
+          description: t("auth.loggedIn"),
+        });
+      },
+      onError: (err: Error) => {
+        toast({
+          title: t("auth.loginFailed"),
+          description: err.message || t("auth.checkCredentials"),
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   return (
