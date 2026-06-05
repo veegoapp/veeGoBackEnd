@@ -22,6 +22,7 @@ import crypto from "crypto";
 import { jobQueue } from "../lib/jobQueue";
 import { getCurrentSurge } from "../lib/surge-pricing";
 import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
+import { startNoShowTimer, stopNoShowTimer } from "../lib/no-show-monitor";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO, clearDeviationState } from "../socket";
@@ -753,6 +754,9 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
     // collapse naturally:
     //   within 3 min  → waitingChargeAmount = 0  → total fee = arrivedFlatFee only
     //   after  3 min  → waitingChargeAmount > 0  → total fee = arrivedFlatFee + accrued
+    // Cancel the no-show timer — passenger is cancelling manually.
+    stopNoShowTimer(id);
+
     let waitingChargeAmount = 0;
     if (ride.status === "driver_arrived") {
       const { waitingCharge } = stopWaitingTimer(id);
@@ -1048,7 +1052,13 @@ router.patch("/driver/rides/:id/arrived", authenticate, requireRole("driver"), a
 
     // Start server-side waiting timer. Free window begins now; passenger is
     // notified via WebSocket when it expires and per-minute charging begins.
-    await startWaitingTimer(rideId, ride.passengerId, new Date());
+    // Start no-show timer in parallel — fires if ride doesn't move to active
+    // within the configured window (default 10 min).
+    const arrivedNow = new Date();
+    await Promise.all([
+      startWaitingTimer(rideId, ride.passengerId, arrivedNow),
+      startNoShowTimer(rideId, arrivedNow),
+    ]);
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
   } catch {
@@ -1086,6 +1096,7 @@ router.patch("/driver/rides/:id/start", authenticate, requireRole("driver"), asy
     }
 
     // Waiting ends when the ride starts — lock the charge now and clear all timers.
+    stopNoShowTimer(rideId);
     const { waitingCharge: lockedWaitingCharge } = stopWaitingTimer(rideId);
     const [updated] = await db
       .update(ridesTable)
@@ -1544,6 +1555,9 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
       });
     });
 
+    // Stop waiting charge and no-show timers — driver cancelled while arrived.
+    stopNoShowTimer(rideId);
+    stopWaitingTimer(rideId);
     clearDeviationState(rideId);
 
     // Notify passenger before re-dispatch so they know what's happening.
