@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO } from "date-fns";
+import { fmtUtcFull, fmtUtcShort } from "@/lib/utils";
 import { formatEGP } from "@/lib/currency";
 import {
   ArrowLeft, MapPin, Clock, Users, Bus, UserCircle, Ban, RefreshCw,
@@ -237,7 +237,7 @@ export default function TripDetail() {
             {!trip.isActive && <Badge variant="secondary" className="text-[10px]">{t("tripDetail.inactive")}</Badge>}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {routeInfo?.name ?? `Route #${trip.routeId}`} · Created {format(parseISO(trip.createdAt), "MMM d, yyyy")}
+            {routeInfo?.name ?? `Route #${trip.routeId}`} · Created {new Date(trip.createdAt).toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
         {canCancel && (
@@ -279,17 +279,17 @@ export default function TripDetail() {
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><CalendarClock className="h-4 w-4" />{t("tripDetail.cardSchedule")}</CardTitle></CardHeader>
           <CardContent>
-            <InfoRow icon={Navigation} label={t("common.departure")} value={format(parseISO(trip.departureTime), "EEE, MMM d yyyy · HH:mm")} />
-            <InfoRow icon={MapPin} label={t("common.arrival")} value={format(parseISO(trip.arrivalTime), "EEE, MMM d yyyy · HH:mm")} />
+            <InfoRow icon={Navigation} label={t("common.departure")} value={fmtUtcFull(trip.departureTime)} />
+            <InfoRow icon={MapPin} label={t("common.arrival")} value={fmtUtcFull(trip.arrivalTime)} />
             <InfoRow icon={Clock} label={t("tripDetail.duration")} value={`${duration} minutes`} />
             <InfoRow icon={RefreshCw} label={t("tripDetail.recurring")} value={
               trip.recurringType === "one_time" ? "One-time" :
               trip.recurringType.charAt(0).toUpperCase() + trip.recurringType.slice(1).replace("_", " ")
             } />
-            {trip.acceptedAt && <InfoRow icon={CheckCircle2} label="Accepted" value={format(parseISO(trip.acceptedAt), "MMM d · HH:mm")} />}
-            {trip.startedAt && <InfoRow icon={CheckCircle2} label="Started" value={format(parseISO(trip.startedAt), "MMM d · HH:mm")} />}
-            {trip.completedAt && <InfoRow icon={CheckCircle2} label="Completed" value={format(parseISO(trip.completedAt), "MMM d · HH:mm")} />}
-            {trip.cancelledAt && <InfoRow icon={XCircle} label="Cancelled" value={format(parseISO(trip.cancelledAt), "MMM d · HH:mm")} />}
+            {trip.acceptedAt && <InfoRow icon={CheckCircle2} label="Accepted" value={fmtUtcShort(trip.acceptedAt)} />}
+            {trip.startedAt && <InfoRow icon={CheckCircle2} label="Started" value={fmtUtcShort(trip.startedAt)} />}
+            {trip.completedAt && <InfoRow icon={CheckCircle2} label="Completed" value={fmtUtcShort(trip.completedAt)} />}
+            {trip.cancelledAt && <InfoRow icon={XCircle} label="Cancelled" value={fmtUtcShort(trip.cancelledAt)} />}
             {trip.cancelReason && <InfoRow icon={AlertCircle} label="Cancel Reason" value={trip.cancelReason} />}
           </CardContent>
         </Card>
@@ -409,7 +409,7 @@ export default function TripDetail() {
                       <Badge variant="outline" className="capitalize text-[10px]">{b.paymentStatus}</Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono font-semibold">{formatEGP(parseFloat(String(b.totalPrice)))}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{format(parseISO(b.createdAt), "MMM d, HH:mm")}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{fmtUtcShort(b.createdAt)}</TableCell>
                     <TableCell className="text-right">
                       {(b.status === "confirmed" || b.status === "completed") && b.paymentStatus !== "refunded" && (
                         <Button

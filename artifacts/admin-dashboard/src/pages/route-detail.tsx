@@ -1007,8 +1007,8 @@ function SchedulesTab({
               ) : oneTime.map(trip => (
                 <TableRow key={trip.id}>
                   <TableCell className="font-mono text-sm">
-                    <div>{new Date(trip.departureTime).toLocaleDateString()}</div>
-                    <div className="text-muted-foreground text-xs">{new Date(trip.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                    <div>{new Date(trip.departureTime).toLocaleDateString([], { timeZone: 'UTC' })}</div>
+                    <div className="text-muted-foreground text-xs">{new Date(trip.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: 'UTC' })}</div>
                   </TableCell>
                   <TableCell>
                     <div className="text-sm">{driverMap[trip.driverId] ?? `#${trip.driverId}`}</div>
@@ -1151,8 +1151,8 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
               <DropdownMenuItem onClick={() => {
                 exportCSV(sorted.map(tr => ({
                   "Trip ID": tr.id, "Route": route?.name ?? "",
-                  "Departure": tr.departureTime ? new Date(tr.departureTime).toLocaleString() : "",
-                  "Arrival": tr.arrivalTime ? new Date(tr.arrivalTime).toLocaleString() : "",
+                  "Departure": tr.departureTime ? new Date(tr.departureTime).toLocaleString([], { timeZone: 'UTC' }) : "",
+                  "Arrival": tr.arrivalTime ? new Date(tr.arrivalTime).toLocaleString([], { timeZone: 'UTC' }) : "",
                   "Driver": driverMap[tr.driverId]?.name ?? `#${tr.driverId}`,
                   "Bus Plate": busMap[tr.busId] ?? `#${tr.busId}`,
                   "Total Seats": tr.totalSeats ?? "",
@@ -1163,8 +1163,8 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
               <DropdownMenuItem onClick={() => {
                 exportExcel(sorted.map(tr => ({
                   "Trip ID": tr.id, "Route": route?.name ?? "",
-                  "Departure": tr.departureTime ? new Date(tr.departureTime).toLocaleString() : "",
-                  "Arrival": tr.arrivalTime ? new Date(tr.arrivalTime).toLocaleString() : "",
+                  "Departure": tr.departureTime ? new Date(tr.departureTime).toLocaleString([], { timeZone: 'UTC' }) : "",
+                  "Arrival": tr.arrivalTime ? new Date(tr.arrivalTime).toLocaleString([], { timeZone: 'UTC' }) : "",
                   "Driver": driverMap[tr.driverId]?.name ?? `#${tr.driverId}`,
                   "Bus Plate": busMap[tr.busId] ?? `#${tr.busId}`,
                   "Total Seats": tr.totalSeats ?? "",
@@ -1202,12 +1202,12 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
               ) : sorted.map(trip => (
                 <TableRow key={trip.id}>
                   <TableCell className="font-mono text-xs">
-                    <div>{new Date(trip.departureTime).toLocaleDateString()}</div>
-                    <div className="text-muted-foreground">{new Date(trip.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                    <div>{new Date(trip.departureTime).toLocaleDateString([], { timeZone: 'UTC' })}</div>
+                    <div className="text-muted-foreground">{new Date(trip.departureTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: 'UTC' })}</div>
                   </TableCell>
                   <TableCell className="font-mono text-xs">
-                    <div>{new Date(trip.arrivalTime).toLocaleDateString()}</div>
-                    <div className="text-muted-foreground">{new Date(trip.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                    <div>{new Date(trip.arrivalTime).toLocaleDateString([], { timeZone: 'UTC' })}</div>
+                    <div className="text-muted-foreground">{new Date(trip.arrivalTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: 'UTC' })}</div>
                   </TableCell>
                   <TableCell className="text-sm">{driverMap[trip.driverId]?.name ?? `#${trip.driverId}`}</TableCell>
                   <TableCell className="text-sm">{busMap[trip.busId] ?? `#${trip.busId}`}</TableCell>
@@ -1244,7 +1244,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
             <DialogDescription className="text-sm text-muted-foreground">
               {t("trips.deleteDesc", "This will permanently delete the trip departing on")}{" "}
               <span className="font-semibold text-foreground">
-                {deleteTrip ? new Date(deleteTrip.departureTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""}
+                {deleteTrip ? new Date(deleteTrip.departureTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short", timeZone: 'UTC' }) : ""}
               </span>
               {". "}{t("trips.deleteWarning", "All bookings will also be removed. This cannot be undone.")}
             </DialogDescription>

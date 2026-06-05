@@ -24,7 +24,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO, addMinutes } from "date-fns";
+import { addMinutes } from "date-fns";
+import { fmtUtcShort, fmtUtcTime } from "@/lib/utils";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { formatEGP } from "@/lib/currency";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -611,8 +612,8 @@ export default function Trips() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm font-medium">{format(parseISO(trip.departureTime), "MMM d, HH:mm")}</div>
-                    <div className="text-xs text-muted-foreground">→ {format(parseISO(trip.arrivalTime), "HH:mm")}</div>
+                    <div className="text-sm font-medium">{fmtUtcShort(trip.departureTime)}</div>
+                    <div className="text-xs text-muted-foreground">→ {fmtUtcTime(trip.arrivalTime)}</div>
                   </TableCell>
                   <TableCell>
                     {(trip as any).recurringType && (trip as any).recurringType !== "one_time" ? (
