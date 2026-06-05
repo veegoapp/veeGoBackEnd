@@ -22,7 +22,8 @@ import {
   getListDriversQueryKey,
   getListBusesQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { adminFetch } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -1046,6 +1047,14 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
 
   const updateMutation = useUpdateTrip();
   const cancelMutation = useCancelTrip();
+  const deleteMutation = useMutation({
+    mutationFn: async (tripId: number) => {
+      const res = await adminFetch(`/api/trips/${tripId}`, { method: "DELETE" });
+      if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || "Failed to delete trip"); }
+    },
+    onSuccess: () => { toast({ title: t("trips.tripDeleted", "Trip deleted") }); invalidate(); },
+    onError: (err: any) => toast({ title: err.message || t("trips.deleteFailed", "Failed to delete trip"), variant: "destructive" }),
+  });
 
   const tripDefaultValues: TripFormValues = {
     busId: 0, driverId: 0, departureTime: "", arrivalTime: "", price: route?.basePrice ?? 0, recurringType: "one_time", weekdays: "", isActive: true,
@@ -1074,6 +1083,12 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
         onSuccess: () => { toast({ title: t("trips.tripCancelled", "Trip cancelled") }); invalidate(); },
         onError: () => toast({ title: t("trips.cancelFailed", "Failed to cancel trip"), variant: "destructive" }),
       });
+    }
+  };
+
+  const handleDelete = (tripId: number) => {
+    if (confirm(t("trips.deleteConfirm", "Permanently delete this trip? This cannot be undone."))) {
+      deleteMutation.mutate(tripId);
     }
   };
 
@@ -1206,6 +1221,9 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(trip)}><Edit className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleCancel(trip.id)} disabled={trip.status === "cancelled"}>
                         <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDelete(trip.id)} disabled={deleteMutation.isPending}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>
