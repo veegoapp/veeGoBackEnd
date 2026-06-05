@@ -1250,14 +1250,29 @@ router.get("/admin/bookings", authenticate, requireRole("admin"), async (req, re
 
   const [data, countResult] = await Promise.all([
     db.execute(sql`
-      SELECT b.id, b.trip_id, b.user_id, b.seat_count, b.total_price::float,
-             b.status, b.payment_status, b.created_at,
-             b.promo_code_id,
-             u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
-             t.recurring_type AS service_type, t.departure_time, t.arrival_time
+      SELECT
+        b.id                          AS "id",
+        b.trip_id                     AS "tripId",
+        b.user_id                     AS "userId",
+        b.seat_count                  AS "seatCount",
+        b.total_price::float          AS "totalPrice",
+        b.status                      AS "status",
+        b.payment_status              AS "paymentStatus",
+        b.created_at                  AS "createdAt",
+        b.promo_code_id               AS "promoCodeId",
+        u.name                        AS "userName",
+        u.email                       AS "userEmail",
+        u.phone                       AS "userPhone",
+        t.recurring_type              AS "serviceType",
+        t.departure_time              AS "departureTime",
+        t.arrival_time                AS "arrivalTime",
+        r.name                        AS "routeName",
+        r.from_location               AS "fromLocation",
+        r.to_location                 AS "toLocation"
       FROM bookings b
-      LEFT JOIN users u ON u.id = b.user_id
-      LEFT JOIN trips t ON t.id = b.trip_id
+      LEFT JOIN users u  ON u.id = b.user_id
+      LEFT JOIN trips t  ON t.id = b.trip_id
+      LEFT JOIN routes r ON r.id = t.route_id
       WHERE (${search} = '' OR u.name ILIKE ${'%' + search + '%'} OR u.phone ILIKE ${'%' + search + '%'} OR CAST(b.id AS text) LIKE ${'%' + search + '%'})
         ${status && status !== "all" ? sql`AND b.status = ${status}` : sql``}
       ORDER BY b.created_at DESC
