@@ -3,6 +3,7 @@ import { db, notificationsTable, usersTable, driversTable, bookingsTable } from 
 import { eq, desc, sql, and } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
+import { SOCKET_EVENTS } from "../lib/socket-events";
 import { z } from "zod";
 import {
   MarkNotificationReadParams,
@@ -128,7 +129,7 @@ router.post("/admin/notifications/broadcast", authenticate, requireRole("admin")
   const io = getIO();
   if (io) {
     for (const notif of inserted) {
-      io.to(`passenger:${notif.userId}`).emit("notification:new", {
+      io.to(`passenger:${notif.userId}`).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
         id: String(notif.id),
         category: "general",
         title: notif.title,

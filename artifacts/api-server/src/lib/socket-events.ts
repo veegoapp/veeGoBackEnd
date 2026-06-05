@@ -11,7 +11,6 @@ export const SOCKET_EVENTS = {
   WAITING_CHARGE_STARTED:  "ride:waiting:charge:started",
   WAITING_CHARGE_UPDATED:  "ride:waiting:charge:updated",
   WAITING_CHARGE_CAPPED:   "ride:waiting:charge:capped",
-  RIDE_ARRIVED:          "ride:arrived",
   RIDE_DRIVER_LOCATION:  "ride:driver_location",
   RIDE_STARTED:          "ride:started",
   RIDE_COMPLETED:        "ride:completed",

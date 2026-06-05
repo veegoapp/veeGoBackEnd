@@ -6,6 +6,7 @@ import { eq, and, or, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { signAccessToken, signRefreshToken } from "../lib/jwt";
 import { getIO } from "../socket";
+import { SOCKET_EVENTS } from "../lib/socket-events";
 import { z } from "zod";
 
 const router = Router();
@@ -816,7 +817,7 @@ router.patch("/driver/bookings/:id/board", authenticate, requireRole("driver"), 
 
   const io = getIO();
   if (io) {
-    io.to(`passenger:${booking.userId}`).emit("booking:boarded", {
+    io.to(`passenger:${booking.userId}`).emit(SOCKET_EVENTS.BOOKING_BOARDED, {
       bookingId: updated.id,
       tripId:    updated.tripId,
       timestamp: new Date().toISOString(),

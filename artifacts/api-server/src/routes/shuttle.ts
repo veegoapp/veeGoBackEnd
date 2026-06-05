@@ -3,6 +3,7 @@ import { db, routesTable, stationsTable, tripsTable, driversTable, busesTable, u
 import { eq, sql, and, inArray, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
+import { SOCKET_EVENTS } from "../lib/socket-events";
 
 const router = Router();
 
@@ -742,7 +743,7 @@ router.post("/shuttle/bookings/:id/board", authenticate, async (req, res): Promi
 
   const io = getIO();
   if (io) {
-    io.to(`passenger:${booking.userId}`).emit("booking:boarded", {
+    io.to(`passenger:${booking.userId}`).emit(SOCKET_EVENTS.BOOKING_BOARDED, {
       bookingId: String(booking.id),
       passengerId: String(booking.userId),
       timestamp,
