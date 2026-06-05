@@ -30,6 +30,7 @@ import ratingsRouter from "./ratings";
 import chatRouter from "./chat";
 import serviceControlsRouter from "./serviceControls";
 import checkinRouter from "./checkin";
+import trackRouter from "./track";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(ratingsRouter);
 router.use(chatRouter);
 router.use(serviceControlsRouter);
 router.use(checkinRouter);
+router.use(trackRouter);
 
 export default router;

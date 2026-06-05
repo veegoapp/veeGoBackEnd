@@ -16,7 +16,9 @@ import {
   ratingsTable,
   promoCodesTable,
   sosEventsTable,
+  rideShareTokensTable,
 } from "@workspace/db";
+import crypto from "crypto";
 import { jobQueue } from "../lib/jobQueue";
 import { getCurrentSurge } from "../lib/surge-pricing";
 import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
@@ -1575,6 +1577,73 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
     res.json({ data: { rideId, status: "searching", message: "Re-dispatching to available drivers" } });
   } catch {
     res.status(500).json({ error: "Failed to cancel ride" });
+  }
+});
+
+/**
+ * POST /rides/:id/share
+ * Generates (or returns an existing valid) shareable tracking link for an active ride.
+ *
+ * Auth: passenger only — caller must be the ride's passenger.
+ * Ride must be in an active state: requested | driver_arrived | in_progress.
+ *
+ * Idempotent: if a non-expired token already exists for this ride, the same
+ * token is returned without creating a duplicate row.
+ *
+ * Returns 201 { token, url, expiresAt }.
+ */
+const SHARE_TTL_MS       = 24 * 60 * 60 * 1000; // 24 h
+const SHAREABLE_STATUSES = ["requested", "driver_arrived", "in_progress"] as const;
+
+router.post("/:id/share", authenticate, async (req: Request, res): Promise<void> => {
+  try {
+    const rideId   = parseInt(req.params.id as string);
+    if (isNaN(rideId)) { res.status(400).json({ error: "Invalid ride id" }); return; }
+
+    const callerId: number = (req as any).user.id;
+
+    const [ride] = await db
+      .select({ passengerId: ridesTable.passengerId, status: ridesTable.status })
+      .from(ridesTable)
+      .where(eq(ridesTable.id, rideId));
+
+    if (!ride) { res.status(404).json({ error: "Ride not found" }); return; }
+    if (ride.passengerId !== callerId) { res.status(403).json({ error: "Forbidden" }); return; }
+    if (!SHAREABLE_STATUSES.includes(ride.status as any)) {
+      res.status(409).json({ error: "Ride is not active", rideStatus: ride.status });
+      return;
+    }
+
+    // Check for an existing valid (non-expired) token for this ride.
+    const now = new Date();
+    const [existing] = await db
+      .select({ token: rideShareTokensTable.token, expiresAt: rideShareTokensTable.expiresAt })
+      .from(rideShareTokensTable)
+      .where(eq(rideShareTokensTable.rideId, rideId))
+      .orderBy(desc(rideShareTokensTable.createdAt))
+      .limit(1);
+
+    if (existing && new Date(existing.expiresAt) > now) {
+      const base = process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : "http://localhost:8080";
+      res.status(201).json({ token: existing.token, url: `${base}/api/track/${existing.token}`, expiresAt: existing.expiresAt });
+      return;
+    }
+
+    // Generate a fresh 192-bit URL-safe token.
+    const token     = crypto.randomBytes(24).toString("base64url");
+    const expiresAt = new Date(now.getTime() + SHARE_TTL_MS);
+
+    await db.insert(rideShareTokensTable).values({ rideId, token, expiresAt });
+
+    const base = process.env.REPLIT_DEV_DOMAIN
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : "http://localhost:8080";
+
+    res.status(201).json({ token, url: `${base}/api/track/${token}`, expiresAt });
+  } catch {
+    res.status(500).json({ error: "Failed to generate share link" });
   }
 });
 

@@ -3,16 +3,70 @@ import { eq, and, sql, not, inArray } from "drizzle-orm";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
 import { logger } from "./logger";
+import { loadSetting } from "./settings";
 
 const ROUND_TIMEOUT_MS           = 15_000;
-const BATCH_SIZE                 = 3;
 const LOCATION_STALENESS_MINUTES = 10;
 
 // ── Feature 5: dynamic radius expansion ───────────────────────────────────────
-// findNextBatch() is tried with each radius in order.
-// The first radius that returns ≥ 1 driver is used; if all fail, existing
-// no-drivers cancellation logic fires unchanged.
-const RADIUS_STEPS_KM = [5, 8, 12] as const;
+// Default values used when DB settings are absent (keeps existing behaviour).
+const DEFAULT_BATCH_SIZE    = 3;
+const DEFAULT_RADIUS_STEPS  = [5, 8, 12] as const;
+
+// ── Feature: Peak hours ────────────────────────────────────────────────────────
+
+/** A single configurable time window (24-h local server time, endHour exclusive). */
+interface PeakWindow { startHour: number; endHour: number; }
+
+/** All peak-hours dispatch settings resolved from the DB (or defaults). */
+interface DispatchSettings {
+  batchSize:   number;
+  radiusSteps: number[];
+  isPeak:      boolean;
+}
+
+/**
+ * Returns true when the current server-local hour falls inside any of the
+ * configured windows. Pure function — no DB call, cheap to invoke.
+ */
+function isPeakHour(windows: PeakWindow[], now = new Date()): boolean {
+  const h = now.getHours();
+  return windows.some((w) => h >= w.startHour && h < w.endHour);
+}
+
+// 1-minute in-memory cache so we don't hit the DB on every dispatch.
+let peakSettingsCache: { value: DispatchSettings; loadedAt: number } | null = null;
+const PEAK_CACHE_TTL_MS = 60_000;
+
+/**
+ * Loads dispatch settings from the DB (with a 1-minute TTL cache).
+ * Falls back to the default constants so existing behaviour is preserved
+ * for deployments that haven't set any peak-hours settings yet.
+ */
+async function getDispatchSettings(): Promise<DispatchSettings> {
+  const now = Date.now();
+  if (peakSettingsCache && now - peakSettingsCache.loadedAt < PEAK_CACHE_TTL_MS) {
+    return peakSettingsCache.value;
+  }
+
+  const [windows, offPeakBatch, peakBatch, offPeakRadius, peakRadius] = await Promise.all([
+    loadSetting<PeakWindow[]>("dispatch_peak_windows",           [{ startHour: 7, endHour: 9 }, { startHour: 17, endHour: 19 }]),
+    loadSetting<number>      ("dispatch_drivers_per_round",      DEFAULT_BATCH_SIZE),
+    loadSetting<number>      ("dispatch_drivers_per_round_peak", 5),
+    loadSetting<number[]>    ("dispatch_radius_steps_km",        [...DEFAULT_RADIUS_STEPS]),
+    loadSetting<number[]>    ("dispatch_radius_steps_km_peak",   [3, 5, 8]),
+  ]);
+
+  const peak = isPeakHour(windows);
+  const value: DispatchSettings = {
+    batchSize:   peak ? peakBatch   : offPeakBatch,
+    radiusSteps: peak ? peakRadius  : offPeakRadius,
+    isPeak:      peak,
+  };
+
+  peakSettingsCache = { value, loadedAt: now };
+  return value;
+}
 
 // ── Feature 3: cooldown constants ─────────────────────────────────────────────
 const COOLDOWN_THRESHOLD = 3;   // consecutive rejections before cooldown
@@ -69,6 +123,7 @@ async function findNextBatch(
   pickupLng: number,
   excludeDriverIds: number[],
   radiusKm: number,
+  batchSize: number,
 ): Promise<DriverCandidate[]> {
   const stalenessCutoff = new Date(Date.now() - LOCATION_STALENESS_MINUTES * 60 * 1000);
   const distanceExpr    = haversineKmSql(pickupLat, pickupLng, driversTable.currentLatitude, driversTable.currentLongitude);
@@ -119,7 +174,7 @@ async function findNextBatch(
     .from(driversTable)
     .where(conditions)
     .orderBy(sql`${scoreExpr} DESC`)
-    .limit(BATCH_SIZE);
+    .limit(batchSize);
 
   return rows.map((r) => ({
     id:         r.id,
@@ -142,17 +197,19 @@ async function findNextBatchWithExpansion(
   pickupLat: number,
   pickupLng: number,
   excludeDriverIds: number[],
+  radiusSteps: number[],
+  batchSize: number,
 ): Promise<{ drivers: DriverCandidate[]; radiusUsedKm: number }> {
-  for (const radiusKm of RADIUS_STEPS_KM) {
-    const drivers = await findNextBatch(vehicleType, pickupLat, pickupLng, excludeDriverIds, radiusKm);
+  for (const radiusKm of radiusSteps) {
+    const drivers = await findNextBatch(vehicleType, pickupLat, pickupLng, excludeDriverIds, radiusKm, batchSize);
     if (drivers.length > 0) {
-      if (radiusKm > RADIUS_STEPS_KM[0]) {
-        logger.info({ radiusKm, driverCount: drivers.length }, "Dispatch radius expanded — drivers found beyond default 5 km");
+      if (radiusKm > radiusSteps[0]) {
+        logger.info({ radiusKm, driverCount: drivers.length }, "Dispatch radius expanded — drivers found beyond first radius step");
       }
       return { drivers, radiusUsedKm: radiusKm };
     }
   }
-  return { drivers: [], radiusUsedKm: RADIUS_STEPS_KM[RADIUS_STEPS_KM.length - 1] };
+  return { drivers: [], radiusUsedKm: radiusSteps[radiusSteps.length - 1] };
 }
 
 function emitOfferToDrivers(
@@ -312,14 +369,15 @@ export async function startDispatch(
     status:          "active",
   });
 
-  const { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, []);
+  const { batchSize, radiusSteps, isPeak } = await getDispatchSettings();
+  const { drivers: batch, radiusUsedKm }   = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, [], radiusSteps, batchSize);
 
   if (batch.length === 0) {
     await cancelRideNoDrivers(rideId, passengerId);
     return;
   }
 
-  logger.info({ rideId, radiusUsedKm }, "Dispatch started");
+  logger.info({ rideId, radiusUsedKm, batchSize, isPeak }, "Dispatch started");
   await dispatchBatch(rideId, batch, offerPayload, []);
 }
 
@@ -390,8 +448,10 @@ export async function advanceRound(rideId: number): Promise<void> {
     estimatedPrice: Number(ride.estimatedPrice ?? 0),
   };
 
+  const { batchSize, radiusSteps, isPeak } = await getDispatchSettings();
+
   let notifiedIds = state.notifiedIds as number[];
-  let { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, notifiedIds);
+  let { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, notifiedIds, radiusSteps, batchSize);
 
   if (batch.length === 0 && notifiedIds.length > 0) {
     logger.info({ rideId }, "Dispatch exhaustion — restarting cycle from beginning");
@@ -402,7 +462,7 @@ export async function advanceRound(rideId: number): Promise<void> {
       .set({ notifiedIds: [] })
       .where(eq(rideDispatchStateTable.rideId, rideId));
 
-    ({ drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, []));
+    ({ drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, [], radiusSteps, batchSize));
   }
 
   if (batch.length === 0) {
@@ -410,7 +470,7 @@ export async function advanceRound(rideId: number): Promise<void> {
     return;
   }
 
-  logger.info({ rideId, radiusUsedKm }, "Dispatch round advanced");
+  logger.info({ rideId, radiusUsedKm, batchSize, isPeak }, "Dispatch round advanced");
   await dispatchBatch(rideId, batch, offerPayload, notifiedIds);
 }
 
@@ -503,7 +563,8 @@ export async function restartDispatch(
       },
     });
 
-  const { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, []);
+  const { batchSize, radiusSteps, isPeak } = await getDispatchSettings();
+  const { drivers: batch, radiusUsedKm }   = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, [], radiusSteps, batchSize);
 
   if (batch.length === 0) {
     await cancelRideNoDrivers(rideId, passengerId);
@@ -511,7 +572,7 @@ export async function restartDispatch(
   }
 
   await dispatchBatch(rideId, batch, offerPayload, []);
-  logger.info({ rideId, passengerId, radiusUsedKm }, "Dispatch restarted after driver cancel");
+  logger.info({ rideId, passengerId, radiusUsedKm, batchSize, isPeak }, "Dispatch restarted after driver cancel");
 }
 
 export async function onCancelled(rideId: number): Promise<void> {

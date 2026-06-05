@@ -1215,6 +1215,88 @@ router.get("/admin/analytics/complaints", authenticate, requireRole("admin"), as
 });
 
 /**
+ * GET /admin/dispatch/peak-settings
+ * Returns the five peak-hours dispatch settings plus a live "isPeak" flag
+ * showing whether peak mode is active at the current server time.
+ */
+router.get("/admin/dispatch/peak-settings", authenticate, requireRole("admin"), async (_req, res): Promise<void> => {
+  try {
+    const [windows, offPeakBatch, peakBatch, offPeakRadius, peakRadius] = await Promise.all([
+      loadSetting("dispatch_peak_windows",           [{ startHour: 7, endHour: 9 }, { startHour: 17, endHour: 19 }]),
+      loadSetting("dispatch_drivers_per_round",      3),
+      loadSetting("dispatch_drivers_per_round_peak", 5),
+      loadSetting("dispatch_radius_steps_km",        [5, 8, 12]),
+      loadSetting("dispatch_radius_steps_km_peak",   [3, 5, 8]),
+    ]);
+
+    const serverHour = new Date().getHours();
+    const isPeak     = (windows as { startHour: number; endHour: number }[])
+      .some((w) => serverHour >= w.startHour && serverHour < w.endHour);
+
+    res.json({
+      isPeak,
+      serverHour,
+      settings: {
+        dispatch_peak_windows:           windows,
+        dispatch_drivers_per_round:      offPeakBatch,
+        dispatch_drivers_per_round_peak: peakBatch,
+        dispatch_radius_steps_km:        offPeakRadius,
+        dispatch_radius_steps_km_peak:   peakRadius,
+      },
+      active: {
+        driversPerRound: isPeak ? peakBatch  : offPeakBatch,
+        radiusSteps:     isPeak ? peakRadius : offPeakRadius,
+      },
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch peak settings" });
+  }
+});
+
+const peakWindowSchema = z.object({ startHour: z.number().int().min(0).max(23), endHour: z.number().int().min(1).max(24) });
+const peakSettingsBodySchema = z.object({
+  dispatch_peak_windows:           z.array(peakWindowSchema).min(0).optional(),
+  dispatch_drivers_per_round:      z.number().int().min(1).max(20).optional(),
+  dispatch_drivers_per_round_peak: z.number().int().min(1).max(20).optional(),
+  dispatch_radius_steps_km:        z.array(z.number().positive()).min(1).optional(),
+  dispatch_radius_steps_km_peak:   z.array(z.number().positive()).min(1).optional(),
+});
+
+/**
+ * PUT /admin/dispatch/peak-settings
+ * Upserts any subset of the five peak-hours settings.
+ * Changes take effect within 60 seconds (the dispatch-manager's cache TTL).
+ */
+router.put("/admin/dispatch/peak-settings", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const parsed = peakSettingsBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
+      return;
+    }
+
+    const updates = parsed.data;
+    const saves: Promise<void>[] = [];
+
+    if (updates.dispatch_peak_windows           !== undefined) saves.push(saveSetting("dispatch_peak_windows",           updates.dispatch_peak_windows));
+    if (updates.dispatch_drivers_per_round      !== undefined) saves.push(saveSetting("dispatch_drivers_per_round",      updates.dispatch_drivers_per_round));
+    if (updates.dispatch_drivers_per_round_peak !== undefined) saves.push(saveSetting("dispatch_drivers_per_round_peak", updates.dispatch_drivers_per_round_peak));
+    if (updates.dispatch_radius_steps_km        !== undefined) saves.push(saveSetting("dispatch_radius_steps_km",        updates.dispatch_radius_steps_km));
+    if (updates.dispatch_radius_steps_km_peak   !== undefined) saves.push(saveSetting("dispatch_radius_steps_km_peak",   updates.dispatch_radius_steps_km_peak));
+
+    await Promise.all(saves);
+
+    res.json({
+      success: true,
+      updated: Object.keys(updates),
+      note:    "Changes take effect within 60 seconds (dispatch cache TTL)",
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to update peak settings" });
+  }
+});
+
+/**
  * GET /admin/sos-events
  * Returns SOS events with ride and user details.
  *
