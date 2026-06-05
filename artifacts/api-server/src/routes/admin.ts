@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable } from "@workspace/db";
+import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable, sosEventsTable, ridesTable } from "@workspace/db";
 import { loadSetting, saveSetting } from "../lib/settings";
 import { getAllSurgeStates } from "../lib/surge-pricing";
 import { eq, sql, and, or, ilike, desc, asc, inArray } from "drizzle-orm";
@@ -1212,6 +1212,77 @@ router.get("/admin/analytics/complaints", authenticate, requireRole("admin"), as
     priorityBreakdown: priorityBreakdown.rows,
     trend: trend.rows,
   });
+});
+
+/**
+ * GET /admin/sos-events
+ * Returns SOS events with ride and user details.
+ *
+ * Query params:
+ *   status   — "active" | "resolved" | omit for all
+ *   from     — ISO date string, inclusive lower bound on triggered_at
+ *   to       — ISO date string, inclusive upper bound on triggered_at
+ *   limit    — default 50, max 200
+ *   offset   — default 0
+ */
+router.get("/admin/sos-events", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const status  = (req.query.status  as string | undefined);
+    const from    = (req.query.from    as string | undefined);
+    const to      = (req.query.to      as string | undefined);
+    const limit   = Math.min(parseInt((req.query.limit  as string) || "50",  10) || 50,  200);
+    const offset  = Math.max(parseInt((req.query.offset as string) || "0",   10) || 0,   0);
+
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (status) conditions.push(eq(sosEventsTable.status, status));
+
+    const rows = await db
+      .select({
+        id:          sosEventsTable.id,
+        userId:      sosEventsTable.userId,
+        rideId:      sosEventsTable.rideId,
+        role:        sosEventsTable.role,
+        latitude:    sosEventsTable.latitude,
+        longitude:   sosEventsTable.longitude,
+        triggeredAt: sosEventsTable.triggeredAt,
+        status:      sosEventsTable.status,
+        notes:       sosEventsTable.notes,
+        userName:    usersTable.name,
+        userPhone:   usersTable.phone,
+        rideStatus:  ridesTable.status,
+        pickupAddress:  ridesTable.pickupAddress,
+        dropoffAddress: ridesTable.dropoffAddress,
+      })
+      .from(sosEventsTable)
+      .leftJoin(usersTable, eq(sosEventsTable.userId, usersTable.id))
+      .leftJoin(ridesTable, eq(sosEventsTable.rideId, ridesTable.id))
+      .where(
+        conditions.length === 0
+          ? undefined
+          : conditions.length === 1
+            ? conditions[0]
+            : and(...conditions),
+      )
+      .orderBy(desc(sosEventsTable.triggeredAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Apply date filters in-process (avoids Drizzle sql-template complexity for
+    // optional timestamp bounds while remaining safe — no raw interpolation).
+    const fromMs = from ? new Date(from).getTime() : null;
+    const toMs   = to   ? new Date(to).getTime()   : null;
+
+    const filtered = rows.filter((r) => {
+      const t = new Date(r.triggeredAt).getTime();
+      if (fromMs !== null && t < fromMs) return false;
+      if (toMs   !== null && t > toMs)   return false;
+      return true;
+    });
+
+    res.json({ data: filtered, meta: { limit, offset, returned: filtered.length } });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch SOS events" });
+  }
 });
 
 export default router;
