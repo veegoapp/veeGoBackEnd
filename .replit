@@ -20,6 +20,10 @@ externalPort = 80
 localPort = 8080
 externalPort = 8080
 
+[[ports]]
+localPort = 22133
+externalPort = 3000
+
 [agent]
 expertMode = true
 stack = "BEST_EFFORT_FALLBACK"
