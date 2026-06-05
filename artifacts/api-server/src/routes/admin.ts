@@ -1264,7 +1264,7 @@ router.get("/admin/bookings", authenticate, requireRole("admin"), async (req, re
         u.name                        AS "userName",
         u.email                       AS "userEmail",
         u.phone                       AS "userPhone",
-        t.recurring_type              AS "serviceType",
+        'shuttle'                     AS "serviceType",
         t.departure_time              AS "departureTime",
         t.arrival_time                AS "arrivalTime",
         r.name                        AS "routeName",
