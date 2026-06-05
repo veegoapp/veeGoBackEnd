@@ -47,6 +47,15 @@ export const SOCKET_EVENTS = {
   DRIVER_CHECKIN_APPROVED: "driver:checkin:approved",
   DRIVER_CHECKIN_REJECTED: "driver:checkin:rejected",
 
+  // ── Server → Driver (dispatch) ───────────────────────────────────────────────
+  // Sent when an admin manually lifts a driver's dispatch cooldown so the driver
+  // app can immediately update its UI without waiting for the next poll.
+  DRIVER_COOLDOWN_CLEARED: "driver:cooldown:cleared",
+
+  // ── Server → Admin + Passenger (safety) ─────────────────────────────────────
+  SOS_TRIGGERED:           "sos:triggered",
+  RIDE_DEVIATION_WARNING:  "ride:deviation:warning",
+
   // ── Server → Socket direct ───────────────────────────────────────────────────
   DRIVER_LOCATION_ACK:   "driver:location:ack",
   ERROR:                 "error",

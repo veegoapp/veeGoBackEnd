@@ -6,6 +6,8 @@ import { eq, sql, and, or, ilike, desc, asc, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { z } from "zod";
 import { jobQueue, type JobType } from "../lib/jobQueue";
+import { getIO } from "../socket";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import {
   ListAdminUsersQueryParams,
   GetAdminUserParams,
@@ -495,19 +497,35 @@ router.post("/admin/drivers/:id/clear-cooldown", authenticate, requireRole("admi
     const driverId = parseInt(req.params.id as string);
     if (isNaN(driverId)) { res.status(400).json({ error: "Invalid driver id" }); return; }
 
-    const [driver] = await db.select({ id: driversTable.id, name: driversTable.name, cooldownUntil: driversTable.cooldownUntil })
+    const [driver] = await db
+      .select({ id: driversTable.id, name: driversTable.name, userId: driversTable.userId, cooldownUntil: driversTable.cooldownUntil })
       .from(driversTable).where(eq(driversTable.id, driverId));
     if (!driver) { res.status(404).json({ error: "Driver not found" }); return; }
+
+    const hadActiveCooldown = driver.cooldownUntil !== null && new Date(driver.cooldownUntil).getTime() > Date.now();
 
     await db.update(driversTable)
       .set({ cooldownUntil: null, consecutiveRejections: 0 })
       .where(eq(driversTable.id, driverId));
 
+    // Notify the driver app immediately so it can update its UI without polling.
+    // The payload tells the app whether this was an active cooldown or a precautionary
+    // reset, so it can show the appropriate message (e.g. "You're back in the pool").
+    const io = getIO();
+    if (io) {
+      io.to(SOCKET_ROOMS.DRIVER(driver.userId)).emit(SOCKET_EVENTS.DRIVER_COOLDOWN_CLEARED, {
+        driverId,
+        hadActiveCooldown,
+        clearedAt:   new Date().toISOString(),
+        clearedBy:   "admin",
+      });
+    }
+
     res.json({
       success: true,
       message: `Cooldown cleared for driver ${driver.name}`,
       driverId,
-      hadActiveCooldown: driver.cooldownUntil !== null && new Date(driver.cooldownUntil).getTime() > Date.now(),
+      hadActiveCooldown,
     });
   } catch {
     res.status(500).json({ error: "Failed to clear driver cooldown" });
