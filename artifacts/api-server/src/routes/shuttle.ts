@@ -11,7 +11,7 @@ const SHUTTLE_TOTAL_SEATS = 14;
 const SHUTTLE_MIN_REQUIRED = 7;
 
 function shuttleStatus(dbStatus: string): "open" | "active" | "cancelled" {
-  if (dbStatus === "active") return "active";
+  if (dbStatus === "active" || dbStatus === "waiting_driver") return "active";
   if (dbStatus === "cancelled") return "cancelled";
   return "open";
 }
@@ -80,14 +80,14 @@ router.get("/shuttle/lines", async (_req, res): Promise<void> => {
       .select({
         routeId: tripsTable.routeId,
         openTrips: sql<number>`count(*) filter (where ${tripsTable.status} = 'scheduled')::int`,
-        activeTrips: sql<number>`count(*) filter (where ${tripsTable.status} = 'active')::int`,
+        activeTrips: sql<number>`count(*) filter (where ${tripsTable.status} in ('active', 'waiting_driver'))::int`,
         totalTrips: sql<number>`count(*)::int`,
       })
       .from(tripsTable)
       .where(
         and(
           inArray(tripsTable.routeId, routeIds),
-          inArray(tripsTable.status, ["scheduled", "active"]),
+          inArray(tripsTable.status, ["scheduled", "active", "waiting_driver"]),
         ),
       )
       .groupBy(tripsTable.routeId),
@@ -250,7 +250,7 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
     }).from(tripsTable)
       .where(and(
         eq(tripsTable.routeId, routeId),
-        inArray(tripsTable.status, ["scheduled", "active"]),
+        inArray(tripsTable.status, ["scheduled", "active", "waiting_driver"]),
       ))
       .orderBy(tripsTable.departureTime)
       .limit(10),
@@ -358,7 +358,7 @@ router.get("/shuttle/lines/:id/passengers", authenticate, async (req, res): Prom
     .where(
       and(
         eq(tripsTable.routeId, routeId),
-        inArray(tripsTable.status, ["active", "scheduled"]),
+        inArray(tripsTable.status, ["active", "scheduled", "waiting_driver"]),
       ),
     )
     .orderBy(tripsTable.departureTime)
