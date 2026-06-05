@@ -113,7 +113,7 @@ function NavItemRow({
     </div>
   );
 
-  const wrappedRow = item.href && !hasSubItems ? (
+  const wrappedRow = item.href ? (
     <Link href={item.href}>{rowInner}</Link>
   ) : (
     rowInner
