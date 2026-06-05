@@ -59,9 +59,17 @@ router.get("/bookings", authenticate, requireRole("admin"), async (req, res): Pr
         createdAt: usersTable.createdAt,
         updatedAt: usersTable.updatedAt,
       },
+      trip: {
+        id: tripsTable.id,
+        status: tripsTable.status,
+        departureTime: tripsTable.departureTime,
+        arrivalTime: tripsTable.arrivalTime,
+        price: tripsTable.price,
+      },
     })
       .from(bookingsTable)
       .leftJoin(usersTable, eq(bookingsTable.userId, usersTable.id))
+      .leftJoin(tripsTable, eq(bookingsTable.tripId, tripsTable.id))
       .where(where)
       .limit(limit)
       .offset(offset)
@@ -96,8 +104,8 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     const tripRow = tripResult.rows[0] as TripRow | undefined;
 
     if (!tripRow) return { error: "Trip not found", status: 404 };
-    // Shuttle: OPEN (scheduled) and ACTIVE trips are bookable
-    if (tripRow.status !== "scheduled" && tripRow.status !== "active") {
+    const BOOKABLE_STATUSES = ["scheduled", "active", "waiting_driver"];
+    if (!BOOKABLE_STATUSES.includes(tripRow.status)) {
       return { error: "Trip is not available for booking", status: 400 };
     }
     if (tripRow.available_seats < seatCount) {
