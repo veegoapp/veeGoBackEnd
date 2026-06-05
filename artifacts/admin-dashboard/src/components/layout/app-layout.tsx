@@ -239,6 +239,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.pricing"), href: "/pricing/delivery", icon: Tag },
           ],
         },
+        { title: t("nav.surge"), href: "/pricing/surge", icon: Zap },
       ],
     },
     {
