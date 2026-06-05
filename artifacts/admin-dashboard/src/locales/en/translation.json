@@ -46,6 +46,8 @@
     "wallet": "Wallet",
     "groupManagement": "MANAGEMENT",
     "groupTransport": "TRANSPORT",
+    "groupService": "SERVICE",
+    "schedules": "Schedules",
     "groupNetwork": "NETWORK",
     "groupFinance": "FINANCE",
     "groupOperations": "OPERATIONS",

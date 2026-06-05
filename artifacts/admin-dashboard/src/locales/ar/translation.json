@@ -46,6 +46,8 @@
     "wallet": "المحفظة",
     "groupManagement": "الإدارة",
     "groupTransport": "النقل",
+    "groupService": "الخدمات",
+    "schedules": "الجداول الزمنية",
     "groupNetwork": "الشبكة",
     "groupFinance": "المالية",
     "groupOperations": "العمليات",

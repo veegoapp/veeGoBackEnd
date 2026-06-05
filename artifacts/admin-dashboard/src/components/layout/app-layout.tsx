@@ -212,26 +212,32 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       ],
     },
     {
-      label: t("nav.groupTransport"),
+      label: t("nav.groupService"),
       items: [
         {
-          title: t("nav.services"), href: "/services", icon: Layers,
+          title: t("nav.cars"), href: "/services/car", icon: Car,
           subItems: [
-            { title: t("nav.cars"), href: "/services/car", icon: Car },
-            { title: t("nav.shuttle"), href: "/services/shuttle", icon: Bus },
-            { title: t("nav.motorcycles"), href: "/services/motorcycle", icon: Bike },
-            { title: t("nav.delivery"), href: "/services/delivery", icon: PackageOpen },
+            { title: t("nav.pricing"), href: "/pricing/car", icon: Tag },
           ],
         },
-        { title: t("nav.routes"), href: "/routes", icon: Map },
-        { title: "Schedules", href: "/schedules", icon: CalendarClock },
         {
-          title: t("nav.pricing"), href: "/pricing", icon: Tag,
+          title: t("nav.shuttle"), href: "/services/shuttle", icon: Bus,
           subItems: [
-            { title: t("nav.cars"), href: "/pricing/car", icon: Car },
-            { title: t("nav.motorcycles"), href: "/pricing/bike", icon: Bike },
-            { title: t("nav.surge"), href: "/pricing/surge", icon: Zap },
-            { title: t("nav.delivery"), href: "/pricing/delivery", icon: PackageOpen },
+            { title: t("nav.pricing"), href: "/pricing/shuttle", icon: Tag },
+            { title: t("nav.routes"), href: "/routes", icon: Map },
+            { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
+          ],
+        },
+        {
+          title: t("nav.motorcycles"), href: "/services/motorcycle", icon: Bike,
+          subItems: [
+            { title: t("nav.pricing"), href: "/pricing/bike", icon: Tag },
+          ],
+        },
+        {
+          title: t("nav.delivery"), href: "/services/delivery", icon: PackageOpen,
+          subItems: [
+            { title: t("nav.pricing"), href: "/pricing/delivery", icon: Tag },
           ],
         },
       ],
