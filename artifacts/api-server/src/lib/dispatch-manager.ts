@@ -5,13 +5,22 @@ import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
 import { logger } from "./logger";
 
 const ROUND_TIMEOUT_MS           = 15_000;
-const MAX_RADIUS_KM              = 5;
 const BATCH_SIZE                 = 3;
 const LOCATION_STALENESS_MINUTES = 10;
+
+// ── Feature 5: dynamic radius expansion ───────────────────────────────────────
+// findNextBatch() is tried with each radius in order.
+// The first radius that returns ≥ 1 driver is used; if all fail, existing
+// no-drivers cancellation logic fires unchanged.
+const RADIUS_STEPS_KM = [5, 8, 12] as const;
 
 // ── Feature 3: cooldown constants ─────────────────────────────────────────────
 const COOLDOWN_THRESHOLD = 3;   // consecutive rejections before cooldown
 const COOLDOWN_MINUTES   = 10;  // how long the cooldown lasts
+
+// ── Feature 4: fair ride distribution ────────────────────────────────────────
+const RECENT_DISPATCH_WINDOW_MINUTES = 10;  // look-back window for the penalty
+const RECENT_DISPATCH_PENALTY        = 0.1; // score deducted for recently offered drivers
 
 const activeTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
@@ -37,38 +46,51 @@ interface DriverCandidate {
 }
 
 /**
- * Finds the next batch of up to BATCH_SIZE drivers for a dispatch round.
+ * Finds up to BATCH_SIZE eligible drivers within the given radiusKm.
  *
  * Feature 2 — Smart Driver Selection:
- * Instead of ordering purely by distance, each eligible driver is scored using:
- *   50%  distance       (closer = higher score, normalised over MAX_RADIUS_KM)
+ *   50%  distance       (closer = higher score, normalised over radiusKm)
  *   30%  rating         (higher star rating = higher score, normalised 1–5 → 0–1)
- *   20%  acceptance rate (totalAccepted / totalDispatched; new drivers get 0.5 neutral)
+ *   20%  acceptance rate (totalAccepted / totalDispatched; 0.5 neutral for new drivers)
  *
- * Feature 3 — Cooldown:
- * Drivers with cooldownUntil > NOW() are excluded from every batch query.
- * The cooldown expires automatically — no background job needed.
+ * Feature 3 — Cooldown: drivers with cooldownUntil > NOW() are excluded.
+ *
+ * Feature 4 — Fair distribution: drivers offered a ride within the last
+ *   RECENT_DISPATCH_WINDOW_MINUTES get a -RECENT_DISPATCH_PENALTY score modifier.
+ *
+ * Feature 5 — Dynamic radius: the radiusKm param is supplied by
+ *   findNextBatchWithExpansion(), which tries RADIUS_STEPS_KM in order.
+ *   distanceScore is normalised against the actual radiusKm used so scores
+ *   stay in [0,1] regardless of which radius tier is active.
  */
 async function findNextBatch(
   vehicleType: string,
   pickupLat: number,
   pickupLng: number,
   excludeDriverIds: number[],
+  radiusKm: number,
 ): Promise<DriverCandidate[]> {
   const stalenessCutoff = new Date(Date.now() - LOCATION_STALENESS_MINUTES * 60 * 1000);
-  const distanceExpr = haversineKmSql(pickupLat, pickupLng, driversTable.currentLatitude, driversTable.currentLongitude);
+  const distanceExpr    = haversineKmSql(pickupLat, pickupLng, driversTable.currentLatitude, driversTable.currentLongitude);
 
-  // Composite score — all dimensions normalised to [0, 1].
-  //   distanceScore    = (MAX_RADIUS_KM - km) / MAX_RADIUS_KM  → 1 at pickup, 0 at radius edge
-  //   ratingScore      = (rating - 1) / 4                       → 0 for 1-star, 1 for 5-star
-  //   acceptanceScore  = accepted / dispatched (0.5 neutral for brand-new drivers; capped at 1.0)
+  // Composite score — all dimensions normalised to [0, 1], then a flat penalty modifier.
+  //   distanceScore   = (radiusKm - km) / radiusKm  → 1 at pickup, 0 at radius edge
+  //   ratingScore     = (rating - 1) / 4            → 0 for 1-star, 1 for 5-star
+  //   acceptanceScore = accepted / dispatched        (0.5 neutral for brand-new drivers; capped at 1.0)
+  //   recentPenalty   = -0.1 if offered within last RECENT_DISPATCH_WINDOW_MINUTES, else 0
   const scoreExpr = sql<number>`
-    0.5 * ((${MAX_RADIUS_KM}::float - LEAST(${distanceExpr}, ${MAX_RADIUS_KM}::float)) / ${MAX_RADIUS_KM}::float)
+    0.5 * ((${radiusKm}::float - LEAST(${distanceExpr}, ${radiusKm}::float)) / ${radiusKm}::float)
     + 0.3 * ((COALESCE(${driversTable.rating}::float, 5.0) - 1.0) / 4.0)
     + 0.2 * (CASE
                WHEN ${driversTable.totalDispatched} = 0 THEN 0.5
                ELSE LEAST(${driversTable.totalAccepted}::float / ${driversTable.totalDispatched}::float, 1.0)
              END)
+    - CASE
+        WHEN ${driversTable.lastDispatchedAt} IS NOT NULL
+         AND ${driversTable.lastDispatchedAt} > NOW() - (${RECENT_DISPATCH_WINDOW_MINUTES} || ' minutes')::interval
+        THEN ${RECENT_DISPATCH_PENALTY}::float
+        ELSE 0.0
+      END
   `;
 
   const baseConditions = and(
@@ -79,8 +101,7 @@ async function findNextBatch(
     sql`${driversTable.currentLatitude} IS NOT NULL`,
     sql`${driversTable.currentLongitude} IS NOT NULL`,
     sql`${driversTable.locationUpdatedAt} > ${stalenessCutoff}`,
-    sql`${distanceExpr} <= ${MAX_RADIUS_KM}`,
-    // Feature 3: skip drivers who are in a cooldown period.
+    sql`${distanceExpr} <= ${radiusKm}`,
     sql`(${driversTable.cooldownUntil} IS NULL OR ${driversTable.cooldownUntil} <= NOW())`,
   );
 
@@ -105,6 +126,33 @@ async function findNextBatch(
     userId:     r.userId,
     distanceKm: Number(r.distanceKm ?? 0),
   }));
+}
+
+/**
+ * Feature 5 — Dynamic radius expansion.
+ *
+ * Tries each radius in RADIUS_STEPS_KM in ascending order and returns the
+ * first result set with ≥ 1 driver. If all radii return empty, returns an
+ * empty drivers array with the last radius used (caller handles no-drivers).
+ *
+ * At most 3 DB queries in the worst case; 1 in the happy path.
+ */
+async function findNextBatchWithExpansion(
+  vehicleType: string,
+  pickupLat: number,
+  pickupLng: number,
+  excludeDriverIds: number[],
+): Promise<{ drivers: DriverCandidate[]; radiusUsedKm: number }> {
+  for (const radiusKm of RADIUS_STEPS_KM) {
+    const drivers = await findNextBatch(vehicleType, pickupLat, pickupLng, excludeDriverIds, radiusKm);
+    if (drivers.length > 0) {
+      if (radiusKm > RADIUS_STEPS_KM[0]) {
+        logger.info({ radiusKm, driverCount: drivers.length }, "Dispatch radius expanded — drivers found beyond default 5 km");
+      }
+      return { drivers, radiusUsedKm: radiusKm };
+    }
+  }
+  return { drivers: [], radiusUsedKm: RADIUS_STEPS_KM[RADIUS_STEPS_KM.length - 1] };
 }
 
 function emitOfferToDrivers(
@@ -228,12 +276,17 @@ async function dispatchBatch(
     })
     .where(eq(rideDispatchStateTable.rideId, rideId));
 
-  // Feature 2: track how many times each driver has been offered a ride.
+  // Feature 2 + 4: track offer count and stamp the last-dispatched time in one update.
+  // lastDispatchedAt drives the -0.1 recency penalty in findNextBatch() so recently
+  // offered drivers are deprioritised for RECENT_DISPATCH_WINDOW_MINUTES minutes.
   if (batchDriverIds.length > 0) {
     db.update(driversTable)
-      .set({ totalDispatched: sql`${driversTable.totalDispatched} + 1` })
+      .set({
+        totalDispatched:  sql`${driversTable.totalDispatched} + 1`,
+        lastDispatchedAt: sql`NOW()`,
+      })
       .where(inArray(driversTable.id, batchDriverIds))
-      .catch((err) => logger.error({ err, rideId, batchDriverIds }, "Failed to increment totalDispatched"));
+      .catch((err) => logger.error({ err, rideId, batchDriverIds }, "Failed to update totalDispatched / lastDispatchedAt"));
   }
 
   emitOfferToDrivers(batchUserIds, rideId, { ...offerPayload, expiresInSeconds: ROUND_TIMEOUT_MS / 1000 });
@@ -259,13 +312,14 @@ export async function startDispatch(
     status:          "active",
   });
 
-  const batch = await findNextBatch(vehicleType, pickupLat, pickupLng, []);
+  const { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, []);
 
   if (batch.length === 0) {
     await cancelRideNoDrivers(rideId, passengerId);
     return;
   }
 
+  logger.info({ rideId, radiusUsedKm }, "Dispatch started");
   await dispatchBatch(rideId, batch, offerPayload, []);
 }
 
@@ -337,7 +391,7 @@ export async function advanceRound(rideId: number): Promise<void> {
   };
 
   let notifiedIds = state.notifiedIds as number[];
-  let batch = await findNextBatch(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, notifiedIds);
+  let { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, notifiedIds);
 
   if (batch.length === 0 && notifiedIds.length > 0) {
     logger.info({ rideId }, "Dispatch exhaustion — restarting cycle from beginning");
@@ -348,7 +402,7 @@ export async function advanceRound(rideId: number): Promise<void> {
       .set({ notifiedIds: [] })
       .where(eq(rideDispatchStateTable.rideId, rideId));
 
-    batch = await findNextBatch(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, []);
+    ({ drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, []));
   }
 
   if (batch.length === 0) {
@@ -356,6 +410,7 @@ export async function advanceRound(rideId: number): Promise<void> {
     return;
   }
 
+  logger.info({ rideId, radiusUsedKm }, "Dispatch round advanced");
   await dispatchBatch(rideId, batch, offerPayload, notifiedIds);
 }
 
@@ -448,7 +503,7 @@ export async function restartDispatch(
       },
     });
 
-  const batch = await findNextBatch(vehicleType, pickupLat, pickupLng, []);
+  const { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, []);
 
   if (batch.length === 0) {
     await cancelRideNoDrivers(rideId, passengerId);
@@ -456,7 +511,7 @@ export async function restartDispatch(
   }
 
   await dispatchBatch(rideId, batch, offerPayload, []);
-  logger.info({ rideId, passengerId }, "Dispatch restarted after driver cancel");
+  logger.info({ rideId, passengerId, radiusUsedKm }, "Dispatch restarted after driver cancel");
 }
 
 export async function onCancelled(rideId: number): Promise<void> {

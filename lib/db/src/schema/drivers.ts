@@ -35,6 +35,12 @@ export const driversTable = pgTable("drivers", {
   totalDispatched: integer("total_dispatched").notNull().default(0),
   totalAccepted:   integer("total_accepted").notNull().default(0),
 
+  // ── Fair ride distribution (Feature 4) ───────────────────────────────────
+  // Timestamp of the last RIDE_OFFER sent to this driver. Drivers who received
+  // an offer in the last 10 minutes get a -0.1 score penalty in findNextBatch()
+  // so they are deprioritised in favour of drivers who haven't been offered recently.
+  lastDispatchedAt: timestamp("last_dispatched_at", { withTimezone: true }),
+
   // ── Cooldown after repeated rejections (Feature 3) ────────────────────────
   // consecutiveRejections counts back-to-back expired-without-accepting rounds.
   // Resets to 0 on acceptance. At 3 rejections, cooldownUntil is set +10 min.
