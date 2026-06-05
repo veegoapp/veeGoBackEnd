@@ -1044,6 +1044,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [editTrip, setEditTrip] = useState<any | null>(null);
+  const [deleteTrip, setDeleteTrip] = useState<any | null>(null);
 
   const updateMutation = useUpdateTrip();
   const cancelMutation = useCancelTrip();
@@ -1051,7 +1052,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
     mutationFn: async (tripId: number) => {
       await adminFetch(`/trips/${tripId}`, { method: "DELETE" });
     },
-    onSuccess: () => { toast({ title: t("trips.tripDeleted", "Trip deleted") }); invalidate(); },
+    onSuccess: () => { toast({ title: t("trips.tripDeleted", "Trip deleted") }); setDeleteTrip(null); invalidate(); },
     onError: (err: any) => toast({ title: err.message || t("trips.deleteFailed", "Failed to delete trip"), variant: "destructive" }),
   });
 
@@ -1085,10 +1086,8 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
     }
   };
 
-  const handleDelete = (tripId: number) => {
-    if (confirm(t("trips.deleteConfirm", "Permanently delete this trip? This cannot be undone."))) {
-      deleteMutation.mutate(tripId);
-    }
+  const handleDelete = (trip: any) => {
+    setDeleteTrip(trip);
   };
 
   const driverMap = Object.fromEntries(allDrivers.map(d => [d.id, d]));
@@ -1221,7 +1220,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleCancel(trip.id)} disabled={trip.status === "cancelled"}>
                         <Ban className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDelete(trip.id)} disabled={deleteMutation.isPending}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDelete(trip)} disabled={deleteMutation.isPending}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -1232,6 +1231,34 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!deleteTrip} onOpenChange={open => !open && setDeleteTrip(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-destructive/10">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              <DialogTitle>{t("trips.deleteTitle", "Delete Trip")}</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm text-muted-foreground">
+              {t("trips.deleteDesc", "This will permanently delete the trip departing on")}{" "}
+              <span className="font-semibold text-foreground">
+                {deleteTrip ? new Date(deleteTrip.departureTime).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : ""}
+              </span>
+              {". "}{t("trips.deleteWarning", "All bookings will also be removed. This cannot be undone.")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2 mt-2">
+            <Button variant="outline" onClick={() => setDeleteTrip(null)} disabled={deleteMutation.isPending}>
+              {t("common.cancel")}
+            </Button>
+            <Button variant="destructive" onClick={() => deleteTrip && deleteMutation.mutate(deleteTrip.id)} disabled={deleteMutation.isPending}>
+              {deleteMutation.isPending ? t("common.deleting", "Deleting…") : t("common.delete", "Delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
