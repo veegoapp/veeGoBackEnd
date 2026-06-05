@@ -16,7 +16,7 @@ import { formatEGP } from "@/lib/currency";
 import {
   ArrowLeft, MapPin, Clock, Users, Bus, UserCircle, Ban, RefreshCw,
   MessageSquare, Star, CalendarClock, Route, CheckCircle2, XCircle,
-  Ticket, Wallet, AlertCircle, Navigation,
+  Ticket, Wallet, AlertCircle, Navigation, Trash2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
@@ -118,6 +118,7 @@ export default function TripDetail() {
 
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteText, setNoteText] = useState("");
   const [refundBookingId, setRefundBookingId] = useState<number | null>(null);
@@ -170,6 +171,17 @@ export default function TripDetail() {
       setCancelReason("");
     },
     onError: (err: Error) => toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () =>
+      adminFetch(`/trips/${tripId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      toast({ title: "Trip deleted" });
+      setDeleteOpen(false);
+      window.location.href = "/trips";
+    },
+    onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
   });
 
   const refundMutation = useMutation({
@@ -233,6 +245,9 @@ export default function TripDetail() {
             <Ban className="h-4 w-4 mr-2" /> {t("tripDetail.cancelTrip")}
           </Button>
         )}
+        <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteOpen(true)}>
+          <Trash2 className="h-4 w-4 mr-2" /> Delete Trip
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setNoteOpen(true)}>
           <MessageSquare className="h-4 w-4 mr-2" /> {t("tripDetail.addNote")}
         </Button>
@@ -458,6 +473,39 @@ export default function TripDetail() {
               onClick={() => refundBookingId && refundMutation.mutate(refundBookingId)}
             >
               <Wallet className="h-4 w-4 mr-2" /> {t("tripDetail.issueRefund")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete Dialog ──────────────────────────────────────────────────── */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> Delete Trip #{trip.id}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              This will <strong>permanently delete</strong> Trip #{trip.id} and all{" "}
+              <strong>{bookingsData?.total ?? 0} associated booking(s)</strong>. This action cannot be undone.
+            </p>
+            {trip.status === "active" && (
+              <p className="text-sm text-destructive font-medium">
+                Active trips cannot be deleted. Cancel the trip first.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>Keep Trip</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending || trip.status === "active"}
+              onClick={() => deleteMutation.mutate()}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {deleteMutation.isPending ? "Deleting…" : "Delete Permanently"}
             </Button>
           </DialogFooter>
         </DialogContent>

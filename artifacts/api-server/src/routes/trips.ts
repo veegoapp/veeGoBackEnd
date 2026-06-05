@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, tripsTable, busesTable, routesTable, driversTable } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
+import { db, tripsTable, busesTable, routesTable, driversTable, bookingsTable } from "@workspace/db";
+import { eq, sql, and, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
   ListTripsQueryParams,
@@ -92,6 +92,17 @@ router.patch("/trips/:id/cancel", authenticate, requireRole("admin"), async (req
   const [updated] = await db.update(tripsTable).set({ status: "cancelled" }).where(eq(tripsTable.id, params.data.id)).returning();
   if (!updated) { res.status(404).json({ error: "Trip not found" }); return; }
   res.json(formatTrip(updated as Record<string, unknown>));
+});
+
+router.delete("/trips/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid trip ID" }); return; }
+  const [trip] = await db.select({ id: tripsTable.id, status: tripsTable.status }).from(tripsTable).where(eq(tripsTable.id, id));
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+  if (trip.status === "active") { res.status(400).json({ error: "Cannot delete an active trip. Cancel it first." }); return; }
+  await db.delete(bookingsTable).where(eq(bookingsTable.tripId, id));
+  await db.delete(tripsTable).where(eq(tripsTable.id, id));
+  res.sendStatus(204);
 });
 
 export default router;
