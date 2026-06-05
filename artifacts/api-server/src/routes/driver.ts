@@ -648,17 +648,19 @@ router.patch("/driver/trips/:id/complete", authenticate, requireRole("driver"), 
     .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.status, "confirmed")));
 
   const tripPrice = parseFloat(updated.price);
-  // FIXED: read commission rate from settings instead of hardcoded 0.15
+  // commissionRate is the PLATFORM cut (e.g. 0.15 = 15%).
+  // Driver receives the remainder: tripPrice * (1 - commissionRate).
   const [commissionSetting] = await db
     .select({ value: settingsTable.value })
     .from(settingsTable)
     .where(eq(settingsTable.key, "driver_commission_rate"));
   const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) || 0.15 : 0.15;
-  const driverCut = parseFloat((tripPrice * commissionRate).toFixed(2));
+  const platformCut = parseFloat((tripPrice * commissionRate).toFixed(2));
+  const driverCut   = parseFloat((tripPrice - platformCut).toFixed(2));
   await db.insert(driverEarningsTable).values({
     driverId: driver.id,
     tripId,
-    amount: String(driverCut),
+    amount: driverCut.toFixed(2),
     status: "confirmed",
   });
 
