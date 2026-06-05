@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db, routesTable, stationsTable } from "@workspace/db";
-import { eq, ilike, and } from "drizzle-orm";
+import { db, routesTable, stationsTable, tripsTable, bookingsTable } from "@workspace/db";
+import { eq, ilike, and, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
   ListRoutesQueryParams,
@@ -80,7 +80,15 @@ router.patch("/routes/:id", authenticate, requireRole("admin"), async (req, res)
 router.delete("/routes/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const params = DeleteRouteParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const [deleted] = await db.delete(routesTable).where(eq(routesTable.id, params.data.id)).returning();
+  const routeId = params.data.id;
+  // Delete bookings for trips on this route, then delete trips, then delete route
+  const trips = await db.select({ id: tripsTable.id }).from(tripsTable).where(eq(tripsTable.routeId, routeId));
+  if (trips.length > 0) {
+    const tripIds = trips.map(t => t.id);
+    await db.delete(bookingsTable).where(inArray(bookingsTable.tripId, tripIds));
+    await db.delete(tripsTable).where(eq(tripsTable.routeId, routeId));
+  }
+  const [deleted] = await db.delete(routesTable).where(eq(routesTable.id, routeId)).returning();
   if (!deleted) { res.status(404).json({ error: "Route not found" }); return; }
   res.sendStatus(204);
 });

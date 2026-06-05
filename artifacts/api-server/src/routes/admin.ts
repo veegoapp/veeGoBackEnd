@@ -1188,8 +1188,24 @@ router.post("/admin/trips/:id/cancel", authenticate, requireRole("admin"), async
 router.delete("/admin/users/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const user = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, id)).limit(1);
+  if (!user[0]) { res.status(404).json({ error: "User not found" }); return; }
+  // Null out driver references in trips/rides if this user is a driver
+  const driverRecord = await db.select({ id: driversTable.id }).from(driversTable).where(eq(driversTable.userId, id)).limit(1);
+  if (driverRecord[0]) {
+    await db.update(tripsTable).set({ driverId: null }).where(eq(tripsTable.driverId, driverRecord[0].id));
+    await db.update(ridesTable).set({ driverId: null }).where(eq(ridesTable.driverId, driverRecord[0].id));
+  }
+  // Cascade delete in dependency order
+  await db.delete(ridesTable).where(eq(ridesTable.passengerId, id));
+  await db.delete(bookingsTable).where(eq(bookingsTable.userId, id));
+  await db.delete(walletTransactionsTable).where(eq(walletTransactionsTable.userId, id));
+  await db.delete(notificationsTable).where(eq(notificationsTable.userId, id));
+  await db.delete(sosEventsTable).where(eq(sosEventsTable.userId, id));
+  if (driverRecord[0]) {
+    await db.delete(driversTable).where(eq(driversTable.userId, id));
+  }
   const [deleted] = await db.delete(usersTable).where(eq(usersTable.id, id)).returning({ id: usersTable.id });
-  if (!deleted) { res.status(404).json({ error: "User not found" }); return; }
   res.json({ success: true, deleted: deleted.id });
 });
 
@@ -1199,7 +1215,20 @@ router.delete("/admin/drivers/:id", authenticate, requireRole("admin"), async (r
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const driver = await db.select({ userId: driversTable.userId }).from(driversTable).where(eq(driversTable.id, id)).limit(1);
   if (!driver[0]) { res.status(404).json({ error: "Driver not found" }); return; }
-  await db.delete(usersTable).where(eq(usersTable.id, driver[0].userId));
+  const userId = driver[0].userId;
+  // Null out driver references in trips and rides
+  await db.update(tripsTable).set({ driverId: null }).where(eq(tripsTable.driverId, id));
+  await db.update(ridesTable).set({ driverId: null }).where(eq(ridesTable.driverId, id));
+  // Cascade delete user-related data
+  await db.delete(ridesTable).where(eq(ridesTable.passengerId, userId));
+  await db.delete(bookingsTable).where(eq(bookingsTable.userId, userId));
+  await db.delete(walletTransactionsTable).where(eq(walletTransactionsTable.userId, userId));
+  await db.delete(notificationsTable).where(eq(notificationsTable.userId, userId));
+  await db.delete(sosEventsTable).where(eq(sosEventsTable.userId, userId));
+  // Delete driver record (cascades documents, locations, earnings, ratings, vehicles)
+  await db.delete(driversTable).where(eq(driversTable.id, id));
+  // Delete the user account
+  await db.delete(usersTable).where(eq(usersTable.id, userId));
   res.json({ success: true });
 });
 

@@ -127,6 +127,15 @@ router.post("/admin/staff", authenticate, requireRole("admin"), async (req, res)
   res.status(201).json(safeStaff(user as Record<string, unknown>));
 });
 
+router.delete("/admin/staff/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  if (req.user?.id === id) { res.status(400).json({ error: "Cannot delete your own account" }); return; }
+  const [deleted] = await db.delete(usersTable).where(and(eq(usersTable.id, id), eq(usersTable.role, "admin"))).returning({ id: usersTable.id });
+  if (!deleted) { res.status(404).json({ error: "Staff member not found" }); return; }
+  res.json({ success: true });
+});
+
 router.patch("/admin/staff/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const id = parseInt(req.params.id as string);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

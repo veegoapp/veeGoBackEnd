@@ -1,0 +1,3 @@
+- [Shuttle cascade-delete constraints](shuttle-cascade-delete.md) — deleting users/drivers/routes fails with FK violations unless done in the right order; see topic file for the exact sequence.
+- [Admin auth flow](admin-auth.md) — admin login uses POST /auth/admin/login (not /auth/login); passenger /auth/login blocks role=admin; token has role:"admin".
+- [Generated client auth](generated-client-auth.md) — customFetch gets bearer token via setAuthTokenGetter; configured in main.tsx at startup; GET /drivers and DELETE /routes/:id use this path.

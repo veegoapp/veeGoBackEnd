@@ -77,6 +77,7 @@ export default function Staff() {
   const [staffModal, setStaffModal] = useState<{ open: boolean; editing: any | null }>({ open: false, editing: null });
   const [roleModal, setRoleModal] = useState<{ open: boolean; editing: any | null }>({ open: false, editing: null });
   const [deleteRoleId, setDeleteRoleId] = useState<number | null>(null);
+  const [deleteStaffId, setDeleteStaffId] = useState<number | null>(null);
 
   const { data: staffData, isLoading: staffLoading } = useQuery({
     queryKey: ["staff"],
@@ -124,6 +125,12 @@ export default function Staff() {
     mutationFn: ({ id, isBlocked }: { id: number; isBlocked: boolean }) =>
       apiFetch(`/api/admin/staff/${id}`, token, { method: "PATCH", body: JSON.stringify({ isBlocked }) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); toast({ title: t("staff.statusUpdated", "Status updated") }); },
+    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+  });
+
+  const deleteStaffMut = useMutation({
+    mutationFn: (id: number) => apiFetch(`/api/admin/staff/${id}`, token, { method: "DELETE" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setDeleteStaffId(null); toast({ title: t("staff.memberDeleted", "Staff member deleted") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
@@ -223,6 +230,12 @@ export default function Staff() {
                               className="scale-75"
                             />
                           </div>
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                            onClick={() => setDeleteStaffId(member.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -323,6 +336,23 @@ export default function Staff() {
         }}
         isPending={createRoleMut.isPending || updateRoleMut.isPending}
       />
+
+      <Dialog open={deleteStaffId !== null} onOpenChange={(o) => !o && setDeleteStaffId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("staff.deleteStaffMember", "Delete Staff Member")}</DialogTitle>
+            <DialogDescription>
+              {t("staff.deleteStaffDesc", "This will permanently remove this staff member's account. This action cannot be undone.")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteStaffId(null)}>{t("common.cancel")}</Button>
+            <Button variant="destructive" onClick={() => deleteStaffId && deleteStaffMut.mutate(deleteStaffId)} disabled={deleteStaffMut.isPending}>
+              {t("staff.deleteStaffMember", "Delete Staff Member")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleteRoleId !== null} onOpenChange={(o) => !o && setDeleteRoleId(null)}>
         <DialogContent>
