@@ -47,13 +47,20 @@ const tripSchema = z.object({
 
 type TripFormValues = z.infer<typeof tripSchema>;
 
+function shuttleUiStatus(dbStatus: string): "open" | "active" | "cancelled" | string {
+  if (dbStatus === "active" || dbStatus === "waiting_driver") return "active";
+  if (dbStatus === "cancelled") return "cancelled";
+  if (dbStatus === "scheduled") return "open";
+  return dbStatus;
+}
+
 function statusBadgeVariant(status: string) {
-  switch (status) {
-    case 'scheduled': return 'default';
+  const ui = shuttleUiStatus(status);
+  switch (ui) {
+    case 'open': return 'default';
     case 'active': return 'secondary';
-    case 'boarding': return 'secondary';
-    case 'completed': return 'outline';
     case 'cancelled': return 'destructive';
+    case 'completed': return 'outline';
     default: return 'outline';
   }
 }
@@ -308,14 +315,14 @@ export default function Trips() {
   const { t } = useTranslation();
 
   const statusLabel = (status: string) => {
+    const ui = shuttleUiStatus(status);
+    if (ui === "open") return t("trips.scheduled", "Open");
+    if (ui === "active") return t("trips.enRoute", "Active");
+    if (ui === "cancelled") return t("trips.cancelled", "Cancelled");
     const labels: Record<string, string> = {
-      scheduled: t("trips.scheduled", "Scheduled"),
-      waiting_driver: t("trips.waitingDriver", "Waiting Driver"),
-      driver_assigned: t("trips.driverAssigned", "Driver Assigned"),
-      boarding: t("trips.boarding", "Boarding"),
-      active: t("trips.enRoute", "En Route"),
       completed: t("trips.completed", "Completed"),
-      cancelled: t("trips.cancelled", "Cancelled"),
+      boarding: t("trips.boarding", "Boarding"),
+      driver_assigned: t("trips.driverAssigned", "Driver Assigned"),
     };
     return labels[status] ?? status;
   };
@@ -655,7 +662,7 @@ export default function Trips() {
                           <ExternalLink className="h-3.5 w-3.5" />
                         </Button>
                       </Link>
-                      {trip.status === 'scheduled' && (
+                      {shuttleUiStatus(trip.status) === 'open' && (
                         <Button
                           variant="ghost" size="icon" className="h-7 w-7"
                           onClick={() => handleOpenEdit(trip)}
@@ -671,7 +678,7 @@ export default function Trips() {
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      {trip.status === 'scheduled' && (
+                      {shuttleUiStatus(trip.status) === 'open' && (
                         <Button 
                           variant="ghost" size="icon"
                           className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
@@ -681,7 +688,7 @@ export default function Trips() {
                           <Ban className="h-3.5 w-3.5" />
                         </Button>
                       )}
-                      {trip.status !== 'active' && (
+                      {shuttleUiStatus(trip.status) !== 'active' && (
                         <Button
                           variant="ghost" size="icon"
                           className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"

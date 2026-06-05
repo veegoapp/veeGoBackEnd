@@ -86,8 +86,8 @@ export default function RoutesList() {
     for (const trip of allTripsData?.data ?? []) {
       if (!map[trip.routeId]) map[trip.routeId] = { total: 0, active: 0, scheduled: 0 };
       map[trip.routeId].total++;
-      if ((trip.status as string) === "active" || (trip.status as string) === "boarding") map[trip.routeId].active++;
-      if ((trip.status as string) === "scheduled" || (trip.status as string) === "driver_assigned" || (trip.status as string) === "waiting_driver") map[trip.routeId].scheduled++;
+      if ((trip.status as string) === "active" || (trip.status as string) === "waiting_driver" || (trip.status as string) === "boarding") map[trip.routeId].active++;
+      if ((trip.status as string) === "scheduled" || (trip.status as string) === "driver_assigned") map[trip.routeId].scheduled++;
     }
     return map;
   }, [allTripsData]);

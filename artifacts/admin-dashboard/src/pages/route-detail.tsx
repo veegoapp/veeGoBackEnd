@@ -79,7 +79,7 @@ type TripFormValues = z.infer<typeof tripSchema>;
 
 const STATUS_COLORS: Record<string, string> = {
   scheduled: "bg-blue-100 text-blue-800",
-  waiting_driver: "bg-yellow-100 text-yellow-800",
+  waiting_driver: "bg-green-100 text-green-800",
   driver_assigned: "bg-orange-100 text-orange-800",
   boarding: "bg-purple-100 text-purple-800",
   active: "bg-green-100 text-green-800",
@@ -89,10 +89,20 @@ const STATUS_COLORS: Record<string, string> = {
 
 const CHART_COLORS = ["#3b82f6", "#22c55e", "#6b7280", "#ef4444", "#f59e0b", "#a855f7", "#f97316"];
 
+function shuttleUiStatus(dbStatus: string): "open" | "active" | "cancelled" | string {
+  if (dbStatus === "active" || dbStatus === "waiting_driver") return "active";
+  if (dbStatus === "cancelled") return "cancelled";
+  if (dbStatus === "scheduled") return "open";
+  return dbStatus;
+}
+
 function StatusBadge({ status }: { status: string }) {
+  const ui = shuttleUiStatus(status);
+  const label = ui === "open" ? "Open" : ui === "active" ? "Active" : ui === "cancelled" ? "Cancelled" : status.replace(/_/g, " ");
+  const colorClass = STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700";
   return (
-    <Badge variant="outline" className={`${STATUS_COLORS[status] ?? "bg-gray-100 text-gray-700"} border-transparent text-xs capitalize`}>
-      {status.replace(/_/g, " ")}
+    <Badge variant="outline" className={`${colorClass} border-transparent text-xs capitalize`}>
+      {label}
     </Badge>
   );
 }
@@ -348,10 +358,10 @@ function TripForm({
 
 function OverviewTab({ route, trips, stations }: { route: any; trips: any[]; stations: any[] }) {
   const { t } = useTranslation();
-  const scheduled = trips.filter(t => t.status === "scheduled").length;
-  const active = trips.filter(t => t.status === "active").length;
+  const scheduled = trips.filter(t => shuttleUiStatus(t.status) === "open").length;
+  const active = trips.filter(t => shuttleUiStatus(t.status) === "active").length;
   const completed = trips.filter(t => t.status === "completed").length;
-  const cancelled = trips.filter(t => t.status === "cancelled").length;
+  const cancelled = trips.filter(t => shuttleUiStatus(t.status) === "cancelled").length;
   const totalSeats = trips.reduce((sum, t) => sum + (t.totalSeats ?? 0), 0);
   const bookedSeats = trips.reduce((sum, t) => sum + ((t.totalSeats ?? 0) - (t.availableSeats ?? 0)), 0);
   const occupancy = totalSeats > 0 ? Math.round((bookedSeats / totalSeats) * 100) : 0;

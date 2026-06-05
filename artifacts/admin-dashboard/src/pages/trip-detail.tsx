@@ -72,7 +72,7 @@ type Booking = {
 
 const STATUS_STYLES: Record<string, string> = {
   scheduled:       "border-blue-200 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200",
-  waiting_driver:  "border-amber-200 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-200",
+  waiting_driver:  "border-green-200 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-200",
   driver_assigned: "border-indigo-200 bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-200",
   boarding:        "border-purple-200 bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-200",
   active:          "border-green-200 bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-200",
@@ -81,7 +81,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  scheduled: "Scheduled", waiting_driver: "Waiting Driver", driver_assigned: "Driver Assigned",
+  scheduled: "Open", waiting_driver: "Active", driver_assigned: "Driver Assigned",
   boarding: "Boarding", active: "Active", completed: "Completed", cancelled: "Cancelled",
 };
 
@@ -491,7 +491,7 @@ export default function TripDetail() {
               This will <strong>permanently delete</strong> Trip #{trip.id} and all{" "}
               <strong>{bookingsData?.total ?? 0} associated booking(s)</strong>. This action cannot be undone.
             </p>
-            {trip.status === "active" && (
+            {(trip.status === "active" || trip.status === "waiting_driver") && (
               <p className="text-sm text-destructive font-medium">
                 Active trips cannot be deleted. Cancel the trip first.
               </p>
@@ -501,7 +501,7 @@ export default function TripDetail() {
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>Keep Trip</Button>
             <Button
               variant="destructive"
-              disabled={deleteMutation.isPending || trip.status === "active"}
+              disabled={deleteMutation.isPending || trip.status === "active" || trip.status === "waiting_driver"}
               onClick={() => deleteMutation.mutate()}
             >
               <Trash2 className="h-4 w-4 mr-2" />

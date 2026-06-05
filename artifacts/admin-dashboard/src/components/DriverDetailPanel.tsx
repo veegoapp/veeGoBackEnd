@@ -228,7 +228,7 @@ function RideStatusBadge({ status, label }: { status: string; label: string }) {
 function TripStatusBadge({ status, label }: { status: string; label: string }) {
   if (status === "completed") return <Badge variant="outline" className="border-green-500/40 text-green-600 bg-green-500/10 text-[10px]">{label}</Badge>;
   if (status === "cancelled") return <Badge variant="destructive" className="text-[10px]">{label}</Badge>;
-  if (status === "active" || status === "boarding") return <Badge className="bg-blue-500 text-[10px]">{label}</Badge>;
+  if (status === "active" || status === "waiting_driver" || status === "boarding") return <Badge className="bg-blue-500 text-[10px]">{label}</Badge>;
   return <Badge variant="outline" className="text-[10px]">{label}</Badge>;
 }
 
