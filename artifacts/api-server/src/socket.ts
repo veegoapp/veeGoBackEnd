@@ -15,6 +15,52 @@ export interface LocationPayload {
   tripId?: number;
 }
 
+// ── Route deviation detection ──────────────────────────────────────────────────
+// Cross-track distance: perpendicular metres from point P to the great-circle
+// segment A→B.  Returns a positive number regardless of which side P is on.
+// Formula source: https://www.movable-type.co.uk/scripts/latlong.html
+const EARTH_RADIUS_M = 6_371_000;
+
+function toRad(deg: number): number { return (deg * Math.PI) / 180; }
+
+function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function bearingRad(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+  return Math.atan2(y, x);
+}
+
+/**
+ * Returns the perpendicular (cross-track) distance in metres from point P
+ * to the great-circle segment A→B.
+ */
+function crossTrackMeters(
+  pLat: number, pLng: number,
+  aLat: number, aLng: number,
+  bLat: number, bLng: number,
+): number {
+  const d13 = haversineM(aLat, aLng, pLat, pLng) / EARTH_RADIUS_M; // angular dist A→P
+  const θ13 = bearingRad(aLat, aLng, pLat, pLng);
+  const θ12 = bearingRad(aLat, aLng, bLat, bLng);
+  return Math.abs(Math.asin(Math.sin(d13) * Math.sin(θ13 - θ12)) * EARTH_RADIUS_M);
+}
+
+/** Suppress duplicate warnings: only emit once per ride per 60-second window. */
+const deviationWarnedAt = new Map<number, number>(); // rideId → epoch ms
+const DEVIATION_THRESHOLD_M  = 500;
+const DEVIATION_THROTTLE_MS  = 60_000;
+
 let io: SocketIOServer | null = null;
 
 export function initSocket(httpServer: HttpServer): SocketIOServer {
@@ -229,7 +275,13 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
       try {
         const [ride] = await db
-          .select({ passengerId: ridesTable.passengerId })
+          .select({
+            passengerId:      ridesTable.passengerId,
+            pickupLatitude:   ridesTable.pickupLatitude,
+            pickupLongitude:  ridesTable.pickupLongitude,
+            dropoffLatitude:  ridesTable.dropoffLatitude,
+            dropoffLongitude: ridesTable.dropoffLongitude,
+          })
           .from(ridesTable)
           .where(eq(ridesTable.id, rideId));
 
@@ -243,6 +295,39 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
           location: { latitude, longitude },
           timestamp: Date.now(),
         });
+
+        // ── Route deviation check ──────────────────────────────────────────────
+        // Compute cross-track (perpendicular) distance from the driver's current
+        // position to the straight-line segment pickup→dropoff. If it exceeds
+        // 500 m and we haven't warned in the last 60 seconds for this ride,
+        // emit a warning to both the passenger and the admin room.
+        const deviationM = crossTrackMeters(
+          latitude,            longitude,
+          ride.pickupLatitude, ride.pickupLongitude,
+          ride.dropoffLatitude, ride.dropoffLongitude,
+        );
+
+        if (deviationM > DEVIATION_THRESHOLD_M) {
+          const lastWarnedMs = deviationWarnedAt.get(rideId) ?? 0;
+          const now = Date.now();
+
+          if (now - lastWarnedMs >= DEVIATION_THROTTLE_MS) {
+            deviationWarnedAt.set(rideId, now);
+
+            const warningPayload = {
+              rideId,
+              driverLat:        latitude,
+              driverLng:        longitude,
+              deviationMeters:  Math.round(deviationM),
+              detectedAt:       new Date(now).toISOString(),
+            };
+
+            io!.to(SOCKET_ROOMS.PASSENGER(ride.passengerId)).emit(SOCKET_EVENTS.RIDE_DEVIATION_WARNING, warningPayload);
+            io!.to(SOCKET_ROOMS.ADMIN).emit(SOCKET_EVENTS.RIDE_DEVIATION_WARNING, warningPayload);
+
+            logger.warn({ rideId, deviationM: Math.round(deviationM) }, "Route deviation warning emitted");
+          }
+        }
       } catch (err) {
         logger.error({ err }, "Error handling ride location update");
         socket.emit(SOCKET_EVENTS.ERROR, { message: "Internal error" });
@@ -344,4 +429,12 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
 export function getIO(): SocketIOServer | null {
   return io;
+}
+
+/**
+ * Remove a ride's deviation-throttle entry once it ends (completed or cancelled).
+ * Call this from any ride-termination code path so the Map stays lean.
+ */
+export function clearDeviationState(rideId: number): void {
+  deviationWarnedAt.delete(rideId);
 }

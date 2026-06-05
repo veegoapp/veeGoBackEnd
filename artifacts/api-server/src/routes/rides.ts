@@ -15,14 +15,15 @@ import {
   paymentsTable,
   ratingsTable,
   promoCodesTable,
+  sosEventsTable,
 } from "@workspace/db";
 import { jobQueue } from "../lib/jobQueue";
 import { getCurrentSurge } from "../lib/surge-pricing";
 import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
-import { getIO } from "../socket";
-import { SOCKET_EVENTS } from "../lib/socket-events";
+import { getIO, clearDeviationState } from "../socket";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import { z } from "zod";
 import * as dispatchManager from "../lib/dispatch-manager";
 import rateLimit from "express-rate-limit";
@@ -867,6 +868,7 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
 
     // Clean up any in-flight dispatch state for this ride.
     dispatchManager.onCancelled(id).catch((err) => console.error("Dispatch onCancelled error", err));
+    clearDeviationState(id);
 
     // Notify the driver via WebSocket.
     const io = getIO();
@@ -1201,6 +1203,7 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
     if (io) {
       io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
     }
+    clearDeviationState(rideId);
 
     res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {
@@ -1312,6 +1315,7 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
 
     const io = getIO();
     if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
+    clearDeviationState(rideId);
 
     res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {
@@ -1538,6 +1542,8 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
       });
     });
 
+    clearDeviationState(rideId);
+
     // Notify passenger before re-dispatch so they know what's happening.
     const io = getIO();
     if (io) {
@@ -1569,6 +1575,104 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
     res.json({ data: { rideId, status: "searching", message: "Re-dispatching to available drivers" } });
   } catch {
     res.status(500).json({ error: "Failed to cancel ride" });
+  }
+});
+
+/**
+ * POST /rides/:id/sos
+ * Triggered by a passenger or driver during an active ride to signal an emergency.
+ *
+ * Validation:
+ *  - Ride must exist and be in an active state (driver_arrived or in_progress).
+ *  - Caller must be the ride's passenger OR the assigned driver.
+ *
+ * Side effects:
+ *  - Inserts a row into sos_events.
+ *  - Emits sos:triggered to admin:room immediately.
+ *
+ * Returns 201 { sosId, message }.
+ */
+const sosBodySchema = z.object({
+  latitude:  z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  notes:     z.string().max(500).optional(),
+});
+
+const ACTIVE_RIDE_STATUSES = ["driver_arrived", "in_progress"] as const;
+
+router.post("/:id/sos", authenticate, async (req: Request, res): Promise<void> => {
+  try {
+    const rideId = parseInt(req.params.id as string);
+    if (isNaN(rideId)) { res.status(400).json({ error: "Invalid ride id" }); return; }
+
+    const parsed = sosBodySchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() }); return; }
+
+    const { latitude, longitude, notes } = parsed.data;
+    const callerId: number = (req as any).user.id;
+    const callerRole: string = (req as any).user.role;
+
+    const [ride] = await db
+      .select({
+        id:          ridesTable.id,
+        passengerId: ridesTable.passengerId,
+        driverId:    ridesTable.driverId,
+        status:      ridesTable.status,
+      })
+      .from(ridesTable)
+      .where(eq(ridesTable.id, rideId));
+
+    if (!ride) { res.status(404).json({ error: "Ride not found" }); return; }
+
+    if (!ACTIVE_RIDE_STATUSES.includes(ride.status as any)) {
+      res.status(409).json({ error: "SOS can only be triggered on an active ride", rideStatus: ride.status });
+      return;
+    }
+
+    // Verify the caller is a party to this ride.
+    // For drivers, resolve their driverId from the drivers table.
+    let role: "passenger" | "driver";
+
+    if (ride.passengerId === callerId) {
+      role = "passenger";
+    } else if (callerRole === "driver") {
+      const [driver] = await db
+        .select({ id: driversTable.id })
+        .from(driversTable)
+        .where(eq(driversTable.userId, callerId));
+
+      if (!driver || driver.id !== ride.driverId) {
+        res.status(403).json({ error: "You are not a party to this ride" });
+        return;
+      }
+      role = "driver";
+    } else {
+      res.status(403).json({ error: "You are not a party to this ride" });
+      return;
+    }
+
+    const [sos] = await db
+      .insert(sosEventsTable)
+      .values({ userId: callerId, rideId, role, latitude, longitude, notes: notes ?? null })
+      .returning({ id: sosEventsTable.id, triggeredAt: sosEventsTable.triggeredAt });
+
+    const io = getIO();
+    if (io) {
+      io.to(SOCKET_ROOMS.ADMIN).emit(SOCKET_EVENTS.SOS_TRIGGERED, {
+        sosId:       sos.id,
+        rideId,
+        userId:      callerId,
+        role,
+        latitude,
+        longitude,
+        notes:       notes ?? null,
+        triggeredAt: sos.triggeredAt,
+      });
+    }
+
+    res.status(201).json({ sosId: sos.id, message: "SOS received" });
+  } catch {
+    res.status(500).json({ error: "Failed to record SOS" });
   }
 });
 
