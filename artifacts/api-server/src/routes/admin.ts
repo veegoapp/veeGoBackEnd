@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable, sosEventsTable, ridesTable } from "@workspace/db";
 import { loadSetting, saveSetting } from "../lib/settings";
+import { cancelBookingsForTrip } from "../lib/shuttle-job";
 import { getAllSurgeStates } from "../lib/surge-pricing";
 import { eq, sql, and, or, ilike, desc, asc, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
@@ -1181,6 +1182,8 @@ router.post("/admin/trips/:id/cancel", authenticate, requireRole("admin"), async
     res.status(400).json({ error: `Cannot cancel trip with status '${trip.status}'` }); return;
   }
   const [updated] = await db.update(tripsTable).set({ status: "cancelled" }).where(eq(tripsTable.id, tripId)).returning();
+  // Refund all passengers — must run after trip is marked cancelled
+  await cancelBookingsForTrip(tripId);
   res.json(updated);
 });
 

@@ -1,0 +1,140 @@
+You are working on the Shuttle service backend (Node.js / TypeScript).
+
+We have a critical audit report and must fix production-breaking issues before frontend integration.
+
+────────────────────────────────────
+🚨 TASK: FIX + GENERATE FRONTEND CONTRACT
+────────────────────────────────────
+
+Step 1: APPLY ALL FIXES BELOW
+Step 2: ENSURE SYSTEM IS STABLE
+Step 3: GENERATE FINAL FRONTEND API CONTRACT (.md FILE)
+
+Do NOT stop after fixes. You MUST output a Markdown file at the end.
+
+────────────────────────────────────
+1. FIX TRIP STATUS IMMUTABILITY (CRITICAL)
+────────────────────────────────────
+
+REMOVE COMPLETELY any logic that allows:
+
+- ACTIVE → OPEN / scheduled rollback
+- status downgrade based on cancellations
+
+❌ Delete this type of logic:
+if (bookedSeats < minRequired) {
+  UPDATE trips SET status = 'scheduled'
+}
+
+✅ RULE:
+Once Shuttle trip becomes ACTIVE, it must NEVER go back to OPEN/scheduled.
+
+Allowed transitions ONLY:
+OPEN → ACTIVE → CANCELLED
+
+────────────────────────────────────
+2. FIX ADMIN CANCEL REFUND (CRITICAL)
+────────────────────────────────────
+
+In admin trip cancel endpoint:
+
+AFTER setting trip status to cancelled:
+MUST CALL cancelBookingsForTrip(tripId)
+
+So passengers always get refunded.
+
+────────────────────────────────────
+3. FIX DOUBLE REFUND RISK
+────────────────────────────────────
+
+Make cancelBookingsForTrip fully ATOMIC:
+
+- Use single atomic DB query (CTE or equivalent)
+- Update bookings + mark refunded in ONE operation
+- Prevent duplicate processing under concurrency
+
+────────────────────────────────────
+4. REMOVE INVALID CHECKS
+────────────────────────────────────
+
+Remove dead logic like:
+updatedSeats < 0 checks
+
+Replace with correct DB-controlled validation only.
+
+────────────────────────────────────
+5. VERIFY FINAL SYSTEM STABILITY
+────────────────────────────────────
+
+Ensure:
+
+- No overbooking (14 seats hard limit)
+- No duplicate booking per user
+- No status inconsistencies
+- No refund duplication risk
+
+────────────────────────────────────
+6. FINAL OUTPUT (VERY IMPORTANT)
+────────────────────────────────────
+
+After applying all fixes, you MUST generate a downloadable Markdown file:
+
+📄 FILE NAME:
+shuttle-rider-api-contract.md
+
+────────────────────────────────────
+📦 CONTENT OF THE .md FILE MUST INCLUDE:
+────────────────────────────────────
+
+# Shuttle Rider API Contract (FINAL)
+
+## 1. Overview
+Explain briefly that system is demand-based shuttle booking.
+
+## 2. Trip Status Flow
+OPEN → ACTIVE → CANCELLED (STRICT RULE)
+
+## 3. APIs
+
+### GET /shuttle/lines
+### GET /shuttle/lines/:id
+### POST /bookings
+### PATCH /bookings/:id/cancel
+### GET /shuttle/trips/:id/passengers
+
+Include:
+- request examples
+- response JSON examples
+- status meanings
+
+## 4. Booking Rules
+- 14 seats max
+- seatCount = 1 only
+- no overbooking allowed
+
+## 5. Business Logic Rules
+- ACTIVE triggers at >= 7 bookings
+- CANCELLED if < 7 within 8 hours of departure
+- ACTIVE never reverts back
+
+## 6. Error Cases
+- 400 / 409 cases explained
+
+## 7. Frontend Integration Notes
+- how to display status
+- how to show seats counter
+- how to show “needs X more bookings”
+
+────────────────────────────────────
+IMPORTANT RULES
+────────────────────────────────────
+
+- Shuttle ONLY
+- DO NOT modify Car or Motorcycle services
+- The .md file must be complete and production-ready for frontend team
+- Output must be downloadable file, not plain text in console
+
+────────────────────────────────────
+GOAL
+────────────────────────────────────
+Fix backend completely and deliver a clean, stable API contract for Rider mobile app integration.

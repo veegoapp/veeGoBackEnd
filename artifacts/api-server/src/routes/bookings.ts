@@ -146,17 +146,11 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       };
     }
 
-    // Decrement using the locked row's value to prevent race conditions
-    await tx.execute(
-      sql`UPDATE trips SET available_seats = available_seats - ${seatCount} WHERE id = ${tripId} AND available_seats >= ${seatCount}`
+    // Atomically decrement seats; the WHERE guard ensures it only fires when seats remain
+    const decrResult = await tx.execute(
+      sql`UPDATE trips SET available_seats = available_seats - ${seatCount} WHERE id = ${tripId} AND available_seats >= ${seatCount} RETURNING available_seats`
     );
-
-    // Verify the update actually affected a row (double-check seats were available)
-    const verifyResult = await tx.execute(
-      sql`SELECT available_seats FROM trips WHERE id = ${tripId}`
-    );
-    const updatedSeats = (verifyResult.rows[0] as { available_seats: number } | undefined)?.available_seats;
-    if (updatedSeats === undefined || updatedSeats < 0) {
+    if ((decrResult.rows as unknown[]).length === 0) {
       return { error: "Seat reservation failed — seats may have just been taken", status: 409 };
     }
 
@@ -265,18 +259,8 @@ router.patch("/bookings/:id/cancel", authenticate, async (req, res): Promise<voi
       sql`UPDATE trips SET available_seats = available_seats + ${booking.seatCount} WHERE id = ${booking.tripId}`
     );
 
-    // Shuttle: revert trip to OPEN (scheduled) if remaining booked seats drop below minimum
-    const SHUTTLE_MIN_REQUIRED = 7;
-    const remainingResult = await tx.execute(
-      sql`SELECT COALESCE(SUM(seat_count), 0)::int AS total_booked FROM bookings WHERE trip_id = ${booking.tripId} AND status NOT IN ('cancelled')`
-    );
-    type BookedRow = { total_booked: number };
-    const remaining = (remainingResult.rows[0] as BookedRow).total_booked;
-    if (remaining < SHUTTLE_MIN_REQUIRED) {
-      await tx.execute(
-        sql`UPDATE trips SET status = 'scheduled' WHERE id = ${booking.tripId} AND status = 'active'`
-      );
-    }
+    // NOTE: ACTIVE trips NEVER revert to OPEN/scheduled on cancellation.
+    // Allowed transitions: OPEN → ACTIVE → CANCELLED only.
 
     // Auto-refund on booking cancellation — credits wallet balance in the same transaction
     if (booking.paymentStatus === "paid") {

@@ -30,3 +30,9 @@ id = "ZsPOLSInhBVqaMFlnYkS7"
 uri = "file://shuttle-service-report.md"
 type = "text"
 title = "Shuttle Service Refactor Report"
+
+[[outputs]]
+id = "BVSMSaSGIf2q3FEH4EUrJ"
+uri = "file://shuttle-rider-api-contract.md"
+type = "text"
+title = "Shuttle Rider API Contract (FINAL)"
