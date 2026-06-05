@@ -207,13 +207,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           ],
         },
         { title: t("nav.vehicles"), href: "/vehicles", icon: Car },
-        {
-          title: t("nav.trips"), href: "/trips", icon: Navigation,
-          subItems: [
-            { title: t("nav.live"), href: "/live-tracking", icon: Radio },
-            { title: t("nav.bookings"), href: "/bookings", icon: Ticket },
-          ],
-        },
+        { title: t("nav.live"), href: "/live-tracking", icon: Radio },
+        { title: t("nav.bookings"), href: "/bookings", icon: Ticket },
       ],
     },
     {

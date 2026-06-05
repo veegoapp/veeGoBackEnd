@@ -79,10 +79,19 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
+const SERVICE_OPTIONS = [
+  { value: "all", label: "All Services" },
+  { value: "shuttle", label: "Shuttle" },
+  { value: "car", label: "Car" },
+  { value: "motorcycle", label: "Motorcycle" },
+  { value: "delivery", label: "Delivery" },
+];
+
 export default function Bookings() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [serviceFilter, setServiceFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const debouncedSearch = useDebounce(search, 350);
@@ -101,12 +110,13 @@ export default function Bookings() {
     limit: "20",
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+    ...(serviceFilter !== "all" ? { serviceType: serviceFilter } : {}),
     ...(fromDate ? { fromDate } : {}),
     ...(toDate ? { toDate } : {}),
   });
 
   const { data, isLoading } = useQuery<BookingsResponse>({
-    queryKey: ["admin-bookings", page, debouncedSearch, statusFilter, fromDate, toDate],
+    queryKey: ["admin-bookings", page, debouncedSearch, statusFilter, serviceFilter, fromDate, toDate],
     queryFn: () => adminFetch<BookingsResponse>(`/admin/bookings?${queryParams}`),
     placeholderData: (prev) => prev,
   });
@@ -163,12 +173,13 @@ export default function Bookings() {
   const clearFilters = () => {
     setSearch("");
     setStatusFilter("all");
+    setServiceFilter("all");
     setFromDate("");
     setToDate("");
     setPage(1);
   };
 
-  const hasFilters = search || statusFilter !== "all" || fromDate || toDate;
+  const hasFilters = search || statusFilter !== "all" || serviceFilter !== "all" || fromDate || toDate;
   const bookings = data?.data ?? [];
   const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
 
@@ -211,6 +222,24 @@ export default function Bookings() {
         <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={bookings.length === 0}>
           <Download className="h-4 w-4" /> Export CSV
         </Button>
+      </div>
+
+      {/* Service filter bar */}
+      <div className="flex flex-wrap gap-2 items-center bg-card border border-border rounded-xl px-4 py-3">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">Service</span>
+        {SERVICE_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => { setServiceFilter(opt.value); setPage(1); }}
+            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors border ${
+              serviceFilter === opt.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {/* Filters */}

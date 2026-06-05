@@ -30,6 +30,7 @@ type LiveDriver = {
   currentSpeed?: number | null;
   currentHeading?: number | null;
   assignedBusId?: number | null;
+  serviceType?: string | null;
   updatedAt: string;
   activeTrip?: {
     id: number;
@@ -38,6 +39,14 @@ type LiveDriver = {
     arrivalTime: string;
   } | null;
 };
+
+const SERVICE_OPTIONS = [
+  { value: "all", label: "All Services" },
+  { value: "shuttle", label: "Shuttle" },
+  { value: "car", label: "Car" },
+  { value: "motorcycle", label: "Motorcycle" },
+  { value: "delivery", label: "Delivery" },
+];
 
 function applyLocationOverlay(
   driver: LiveDriver,
@@ -73,6 +82,7 @@ export default function LiveTracking() {
   const [selectedDriver, setSelectedDriver] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [serviceFilter, setServiceFilter] = useState("all");
   const { t } = useTranslation();
   const { token } = useAuth();
 
@@ -103,13 +113,17 @@ export default function LiveTracking() {
         if (statusFilter === "offline"   && d.status !== "offline")   return false;
         if (statusFilter === "suspended" && d.status !== "suspended") return false;
       }
+      if (serviceFilter !== "all") {
+        const svc = (d.serviceType ?? "").toLowerCase();
+        if (svc !== serviceFilter) return false;
+      }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         if (!d.name.toLowerCase().includes(q) && !d.phone.includes(q)) return false;
       }
       return true;
     });
-  }, [drivers, searchQuery, statusFilter]);
+  }, [drivers, searchQuery, statusFilter, serviceFilter]);
 
   const online    = filteredDrivers.filter((d) => d.status === "online" || d.status === "busy");
   const offline   = filteredDrivers.filter((d) => d.status === "offline" || d.status === "suspended");
@@ -192,6 +206,24 @@ export default function LiveTracking() {
         ))}
       </div>
 
+      {/* Service filter bar */}
+      <div className="flex flex-wrap gap-2 items-center bg-card border border-border rounded-xl px-4 py-3">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">Service</span>
+        {SERVICE_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setServiceFilter(opt.value)}
+            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors border ${
+              serviceFilter === opt.value
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Driver search + status filter */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px]">
@@ -215,12 +247,12 @@ export default function LiveTracking() {
             <SelectItem value="suspended">Suspended</SelectItem>
           </SelectContent>
         </Select>
-        {(searchQuery || statusFilter !== "all") && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+        {(searchQuery || statusFilter !== "all" || serviceFilter !== "all") && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setServiceFilter("all"); }}>
             Clear
           </Button>
         )}
-        {(searchQuery || statusFilter !== "all") && (
+        {(searchQuery || statusFilter !== "all" || serviceFilter !== "all") && (
           <span className="text-xs text-muted-foreground ml-auto">
             {filteredDrivers.length} of {drivers.length} drivers
           </span>
