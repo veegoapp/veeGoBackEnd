@@ -26,6 +26,7 @@ artifacts/api-server/uploads/
 *.tsbuildinfo
 
 # Replit internals
+.replit
 .config/
 .upm/
 .setup_done
