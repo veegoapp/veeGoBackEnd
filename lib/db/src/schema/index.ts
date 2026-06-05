@@ -32,3 +32,4 @@ export * from "./rideDispatchState";
 export * from "./driverCheckins";
 export * from "./sosEvents";
 export * from "./rideShareTokens";
+export * from "./routeSchedules";

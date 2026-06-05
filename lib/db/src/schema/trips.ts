@@ -4,6 +4,7 @@ import { z } from "zod/v4";
 import { routesTable } from "./routes";
 import { busesTable } from "./buses";
 import { driversTable } from "./drivers";
+import { routeSchedulesTable } from "./routeSchedules";
 
 export const tripStatusEnum = pgEnum("trip_status", [
   "scheduled",
@@ -26,7 +27,8 @@ export const recurringTypeEnum = pgEnum("recurring_type", [
 export const tripsTable = pgTable("trips", {
   id: serial("id").primaryKey(),
   routeId: integer("route_id").notNull().references(() => routesTable.id),
-  busId: integer("bus_id").notNull().references(() => busesTable.id),
+  scheduleId: integer("schedule_id").references(() => routeSchedulesTable.id, { onDelete: "set null" }),
+  busId: integer("bus_id").references(() => busesTable.id),
   driverId: integer("driver_id").references(() => driversTable.id),
   departureTime: timestamp("departure_time", { withTimezone: true }).notNull(),
   arrivalTime: timestamp("arrival_time", { withTimezone: true }).notNull(),

@@ -31,6 +31,7 @@ import chatRouter from "./chat";
 import serviceControlsRouter from "./serviceControls";
 import checkinRouter from "./checkin";
 import trackRouter from "./track";
+import schedulesRouter from "./schedules";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(chatRouter);
 router.use(serviceControlsRouter);
 router.use(checkinRouter);
 router.use(trackRouter);
+router.use(schedulesRouter);
 
 export default router;
