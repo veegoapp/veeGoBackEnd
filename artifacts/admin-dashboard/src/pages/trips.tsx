@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { CalendarClock, Plus, Ban, Filter, Map, Copy, Edit, Repeat, ExternalLink } from "lucide-react";
+import { CalendarClock, Plus, Ban, Filter, Map, Copy, Edit, Repeat, ExternalLink, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -30,6 +30,7 @@ import { formatEGP } from "@/lib/currency";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useTranslation } from "react-i18next";
+import { adminFetch } from "@/lib/api";
 
 const tripSchema = z.object({
   routeId: z.coerce.number().min(1, "Route is required"),
@@ -298,6 +299,8 @@ export default function Trips() {
   const [dateFilter, setDateFilter] = useState<string>("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editTrip, setEditTrip] = useState<any | null>(null);
+  const [deleteTrip, setDeleteTrip] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -394,6 +397,25 @@ export default function Trips() {
     }
   };
 
+  const handleDeleteTrip = async () => {
+    if (!deleteTrip) return;
+    setIsDeleting(true);
+    try {
+      const res = await adminFetch(`/api/trips/${deleteTrip.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to delete trip");
+      }
+      toast({ title: "Trip deleted" });
+      setDeleteTrip(null);
+      queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
+    } catch (err: any) {
+      toast({ title: err.message || "Failed to delete trip", variant: "destructive" });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleDuplicate = (trip: any) => {
     createForm.reset({
       routeId: trip.routeId,
@@ -481,6 +503,25 @@ export default function Trips() {
             busesData={busesData}
             driversData={driversData}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteTrip} onOpenChange={(open) => !open && setDeleteTrip(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Delete Trip #{deleteTrip?.id}?</DialogTitle>
+            <DialogDescription>
+              This will permanently delete the trip and all its bookings. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteTrip(null)} disabled={isDeleting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteTrip} disabled={isDeleting}>
+              {isDeleting ? "Deleting…" : "Delete Trip"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -637,6 +678,16 @@ export default function Trips() {
                           title={t("trips.cancelTrip", "Cancel trip")}
                         >
                           <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {trip.status !== 'active' && (
+                        <Button
+                          variant="ghost" size="icon"
+                          className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setDeleteTrip(trip)}
+                          title="Delete trip"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </div>
