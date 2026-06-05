@@ -228,7 +228,7 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
     }).from(tripsTable)
       .where(and(
         eq(tripsTable.routeId, routeId),
-        inArray(tripsTable.status, ["scheduled", "active", "boarding", "driver_assigned"]),
+        inArray(tripsTable.status, ["waiting_driver", "scheduled", "active", "boarding", "driver_assigned"]),
       ))
       .orderBy(tripsTable.departureTime)
       .limit(10),

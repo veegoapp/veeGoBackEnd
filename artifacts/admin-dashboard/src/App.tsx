@@ -38,6 +38,7 @@ import TripDetail from "@/pages/trip-detail";
 import AuditLogs from "@/pages/audit-logs";
 import Ratings from "@/pages/ratings";
 import ChatInbox from "@/pages/chat-inbox";
+import Schedules from "@/pages/schedules";
 
 const logoutRef = { current: () => {} };
 
@@ -130,6 +131,7 @@ function Router() {
         <Route path="/audit-logs" component={() => <ProtectedRoute component={AuditLogs} />} />
         <Route path="/ratings" component={() => <ProtectedRoute component={Ratings} />} />
         <Route path="/chat-inbox" component={() => <ProtectedRoute component={ChatInbox} />} />
+        <Route path="/schedules" component={() => <ProtectedRoute component={Schedules} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

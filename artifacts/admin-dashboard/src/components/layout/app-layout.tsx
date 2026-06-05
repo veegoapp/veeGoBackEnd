@@ -10,7 +10,7 @@ import {
   Layers, Car, Bus, Bike, PackageOpen, Tag, Zap, MapPin, Map,
   Tags, Wallet, CreditCard, ArrowUpRight, Percent, MessageSquare,
   Bell, BarChart3, DollarSign, Settings, LogOut, Menu, Clock,
-  ChevronDown, ChevronRight, Shield, Star,
+  ChevronDown, ChevronRight, Shield, Star, CalendarClock,
 } from "lucide-react";
 import logoUrl from "/logo.png";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -229,6 +229,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           ],
         },
         { title: t("nav.routes"), href: "/routes", icon: Map },
+        { title: "Schedules", href: "/schedules", icon: CalendarClock },
         {
           title: t("nav.pricing"), href: "/pricing", icon: Tag,
           subItems: [
