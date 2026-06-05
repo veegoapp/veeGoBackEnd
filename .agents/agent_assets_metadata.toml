@@ -18,3 +18,9 @@ id = "hLzaSvcs_MbmwJmCwbAll"
 uri = "file://project-status.md"
 type = "text"
 title = "Project Status Report"
+
+[[outputs]]
+id = "waHT0LWsK-qUp4YB0apk_"
+uri = "file://shuttle-passenger-api-reference.md"
+type = "text"
+title = "Shuttle Passenger App — API Reference"
