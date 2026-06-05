@@ -223,7 +223,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {
           title: t("nav.shuttle"), href: "/services/shuttle", icon: Bus,
           subItems: [
-            { title: t("nav.pricing"), href: "/pricing/shuttle", icon: Tag },
             { title: t("nav.routes"), href: "/routes", icon: Map },
             { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
           ],
