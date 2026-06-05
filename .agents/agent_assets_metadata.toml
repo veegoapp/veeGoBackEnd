@@ -24,3 +24,9 @@ id = "waHT0LWsK-qUp4YB0apk_"
 uri = "file://shuttle-passenger-api-reference.md"
 type = "text"
 title = "Shuttle Passenger App — API Reference"
+
+[[outputs]]
+id = "ZsPOLSInhBVqaMFlnYkS7"
+uri = "file://shuttle-service-report.md"
+type = "text"
+title = "Shuttle Service Refactor Report"

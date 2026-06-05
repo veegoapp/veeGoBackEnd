@@ -5,6 +5,7 @@ import { logger } from "./lib/logger";
 import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
+import { startShuttleJob } from "./lib/shuttle-job";
 import { initSurgePricing, startSurgePricingJob } from "./lib/surge-pricing";
 import { initWaitingTimers } from "./lib/waiting-timer";
 import { initNoShowTimers } from "./lib/no-show-monitor";
@@ -109,6 +110,8 @@ async function main() {
   warmupFaceDetection().catch((err) =>
     logger.error({ err }, "Face-detection warmup failed on startup"),
   );
+
+  startShuttleJob();
 
   httpServer.listen(port, () => {
     recoverActiveDispatches().catch((err) =>

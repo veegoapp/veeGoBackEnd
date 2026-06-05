@@ -72,10 +72,19 @@ router.get("/bookings", authenticate, requireRole("admin"), async (req, res): Pr
   res.json({ data: data.map(b => formatBooking(b as Record<string, unknown>)), total: countResult[0].count, page, limit });
 });
 
+const SHUTTLE_TOTAL_SEATS = 14;
+const SHUTTLE_MIN_REQUIRED = 7;
+
 router.post("/bookings", authenticate, async (req, res): Promise<void> => {
   const parsed = CreateBookingBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { tripId, seatCount, promoCode: promoCodeStr } = parsed.data;
+
+  // Shuttle: each rider books exactly 1 seat
+  if (seatCount !== 1) {
+    res.status(400).json({ error: "Shuttle bookings allow exactly 1 seat per booking." });
+    return;
+  }
 
   const result = await db.transaction(async (tx) => {
     // SELECT FOR UPDATE: lock the trip row to prevent concurrent overbooking
@@ -87,11 +96,20 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     const tripRow = tripResult.rows[0] as TripRow | undefined;
 
     if (!tripRow) return { error: "Trip not found", status: 404 };
+    // Shuttle: OPEN (scheduled) and ACTIVE trips are bookable
     if (tripRow.status !== "scheduled" && tripRow.status !== "active") {
       return { error: "Trip is not available for booking", status: 400 };
     }
     if (tripRow.available_seats < seatCount) {
-      return { error: "Not enough available seats", status: 400 };
+      return { error: "Not enough available seats — this trip is fully booked", status: 400 };
+    }
+
+    // Shuttle: prevent duplicate booking by the same user on the same trip
+    const dupResult = await tx.execute(
+      sql`SELECT id FROM bookings WHERE trip_id = ${tripId} AND user_id = ${req.user!.id} AND status NOT IN ('cancelled') LIMIT 1`
+    );
+    if (dupResult.rows.length > 0) {
+      return { error: "You already have an active booking for this trip", status: 409 };
     }
 
     let totalPrice = parseFloat(tripRow.price) * seatCount;
@@ -114,7 +132,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       }
     }
 
-    // FIXED: check wallet balance before confirming the booking
+    // Check wallet balance before confirming the booking
     const userResult = await tx.execute(
       sql`SELECT id, wallet_balance FROM users WHERE id = ${req.user!.id} FOR UPDATE`
     );
@@ -142,27 +160,28 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       return { error: "Seat reservation failed — seats may have just been taken", status: 409 };
     }
 
+    // Shuttle: booking status is PENDING (trip confirms when minRequired is met)
     const [booking] = await tx.insert(bookingsTable).values({
       userId: req.user!.id,
       tripId,
       seatCount,
       totalPrice: String(totalPrice),
-      status: "confirmed",
+      status: "pending",
       paymentStatus: "paid",
       promoCodeId,
     }).returning();
 
-    // FIXED: deduct wallet balance atomically inside the same transaction
+    // Deduct wallet balance atomically inside the same transaction
     await tx.execute(
       sql`UPDATE users SET wallet_balance = wallet_balance - ${totalPrice} WHERE id = ${req.user!.id}`
     );
 
-    // FIXED: record the wallet deduction as a payment transaction
+    // Record the wallet deduction as a payment transaction
     await tx.insert(walletTransactionsTable).values({
       userId:      req.user!.id,
       amount:      String(totalPrice),
       type:        "payment",
-      description: `Booking #${booking.id} — trip #${tripId} (${seatCount} seat${seatCount > 1 ? "s" : ""})`,
+      description: `Booking #${booking.id} — trip #${tripId} (shuttle)`,
     });
 
     await tx.insert(paymentsTable).values({
@@ -171,10 +190,22 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       amount:    String(totalPrice),
       method:    "wallet",
       status:    "completed",
-      notes:     `Booking #${booking.id} — trip #${tripId} (${seatCount} seat${seatCount > 1 ? "s" : ""})`,
+      notes:     `Booking #${booking.id} — trip #${tripId} (shuttle)`,
     });
 
-    return { booking };
+    // Shuttle auto-activation: when bookedSeats >= minRequired, mark trip ACTIVE
+    const bookedResult = await tx.execute(
+      sql`SELECT COALESCE(SUM(seat_count), 0)::int AS total_booked FROM bookings WHERE trip_id = ${tripId} AND status NOT IN ('cancelled')`
+    );
+    type BookedRow = { total_booked: number };
+    const totalBooked = (bookedResult.rows[0] as BookedRow).total_booked;
+    if (totalBooked >= SHUTTLE_MIN_REQUIRED) {
+      await tx.execute(
+        sql`UPDATE trips SET status = 'active' WHERE id = ${tripId} AND status = 'scheduled'`
+      );
+    }
+
+    return { booking, totalBooked };
   });
 
   if ("error" in result) {
@@ -182,7 +213,25 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  res.status(201).json(formatBooking(result.booking as Record<string, unknown>));
+  const booking = formatBooking(result.booking as Record<string, unknown>);
+  const totalBooked = result.totalBooked as number;
+  const availableSeats = SHUTTLE_TOTAL_SEATS - totalBooked;
+  const shuttleStatus = totalBooked >= SHUTTLE_MIN_REQUIRED ? "active" : "open";
+  const needed = Math.max(0, SHUTTLE_MIN_REQUIRED - totalBooked);
+
+  res.status(201).json({
+    ...booking,
+    shuttle: {
+      totalSeats: SHUTTLE_TOTAL_SEATS,
+      bookedSeats: totalBooked,
+      availableSeats,
+      minRequired: SHUTTLE_MIN_REQUIRED,
+      shuttleStatus,
+      message: shuttleStatus === "active"
+        ? "Trip is confirmed — boarding guaranteed"
+        : `Needs ${needed} more booking${needed !== 1 ? "s" : ""} to become active`,
+    },
+  });
 });
 
 router.get("/bookings/:id", authenticate, async (req, res): Promise<void> => {
@@ -216,7 +265,20 @@ router.patch("/bookings/:id/cancel", authenticate, async (req, res): Promise<voi
       sql`UPDATE trips SET available_seats = available_seats + ${booking.seatCount} WHERE id = ${booking.tripId}`
     );
 
-    // FIXED: refund wallet balance when the booking was paid
+    // Shuttle: revert trip to OPEN (scheduled) if remaining booked seats drop below minimum
+    const SHUTTLE_MIN_REQUIRED = 7;
+    const remainingResult = await tx.execute(
+      sql`SELECT COALESCE(SUM(seat_count), 0)::int AS total_booked FROM bookings WHERE trip_id = ${booking.tripId} AND status NOT IN ('cancelled')`
+    );
+    type BookedRow = { total_booked: number };
+    const remaining = (remainingResult.rows[0] as BookedRow).total_booked;
+    if (remaining < SHUTTLE_MIN_REQUIRED) {
+      await tx.execute(
+        sql`UPDATE trips SET status = 'scheduled' WHERE id = ${booking.tripId} AND status = 'active'`
+      );
+    }
+
+    // Auto-refund on booking cancellation — credits wallet balance in the same transaction
     if (booking.paymentStatus === "paid") {
       await tx.update(usersTable).set({
         walletBalance: sql`wallet_balance + ${booking.totalPrice}`,

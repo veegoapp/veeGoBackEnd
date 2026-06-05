@@ -29,6 +29,7 @@ const UpdateScheduleBody = z.object({
 });
 
 const BATCH_SIZE = 500;
+const SHUTTLE_TOTAL_SEATS = 14;
 
 async function generateTripsForSchedule(
   scheduleId: number,
@@ -76,7 +77,7 @@ async function generateTripsForSchedule(
     availableSeats: number;
     totalSeats: number;
     price: string;
-    status: "waiting_driver";
+    status: "scheduled";
     isActive: boolean;
   }> = [];
 
@@ -102,10 +103,10 @@ async function generateTripsForSchedule(
             driverId: null,
             departureTime: departure,
             arrivalTime: arrival,
-            availableSeats: defaultCapacity,
-            totalSeats: defaultCapacity,
+            availableSeats: SHUTTLE_TOTAL_SEATS,
+            totalSeats: SHUTTLE_TOTAL_SEATS,
             price: basePrice,
-            status: "waiting_driver",
+            status: "scheduled",
             isActive: true,
           });
         }
@@ -244,8 +245,8 @@ router.get(
         .select({
           scheduleId: tripsTable.scheduleId,
           total: sql<number>`count(*)::int`,
-          waiting: sql<number>`count(*) filter (where ${tripsTable.status} = 'waiting_driver')::int`,
-          assigned: sql<number>`count(*) filter (where ${tripsTable.status} = 'driver_assigned')::int`,
+          open: sql<number>`count(*) filter (where ${tripsTable.status} IN ('scheduled', 'waiting_driver'))::int`,
+          active: sql<number>`count(*) filter (where ${tripsTable.status} = 'active')::int`,
           completed: sql<number>`count(*) filter (where ${tripsTable.status} = 'completed')::int`,
           cancelled: sql<number>`count(*) filter (where ${tripsTable.status} = 'cancelled')::int`,
         })
@@ -268,8 +269,8 @@ router.get(
       slots: slotMap.get(s.id) ?? [],
       tripStats: countMap.get(s.id) ?? {
         total: 0,
-        waiting: 0,
-        assigned: 0,
+        open: 0,
+        active: 0,
         completed: 0,
         cancelled: 0,
       },
@@ -324,8 +325,7 @@ router.get(
       db
         .select({
           total: sql<number>`count(*)::int`,
-          waiting: sql<number>`count(*) filter (where ${tripsTable.status} = 'waiting_driver')::int`,
-          assigned: sql<number>`count(*) filter (where ${tripsTable.status} = 'driver_assigned')::int`,
+          open: sql<number>`count(*) filter (where ${tripsTable.status} IN ('scheduled', 'waiting_driver'))::int`,
           active: sql<number>`count(*) filter (where ${tripsTable.status} = 'active')::int`,
           completed: sql<number>`count(*) filter (where ${tripsTable.status} = 'completed')::int`,
           cancelled: sql<number>`count(*) filter (where ${tripsTable.status} = 'cancelled')::int`,
@@ -339,8 +339,7 @@ router.get(
       slots,
       tripStats: tripStats[0] ?? {
         total: 0,
-        waiting: 0,
-        assigned: 0,
+        open: 0,
         active: 0,
         completed: 0,
         cancelled: 0,
