@@ -159,7 +159,7 @@ export default function TripDetail() {
 
   const cancelMutation = useMutation({
     mutationFn: () =>
-      adminFetch(`/admin/trips/${tripId}/cancel`, {
+      adminFetch(`/trips/${tripId}/cancel`, {
         method: "PATCH",
         body: JSON.stringify({ reason: cancelReason || "Cancelled by admin" }),
       }),
