@@ -23,6 +23,7 @@ import { jobQueue } from "../lib/jobQueue";
 import { getCurrentSurge } from "../lib/surge-pricing";
 import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
 import { startNoShowTimer, stopNoShowTimer } from "../lib/no-show-monitor";
+import { isCurrentlyPeakHour } from "../lib/peak-hours";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO, clearDeviationState } from "../socket";
@@ -1167,6 +1168,10 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
     const platformCut = parseFloat((finalPrice * commissionRate).toFixed(2));
     const driverCut   = parseFloat((finalPrice - platformCut).toFixed(2));
 
+    // Check peak hours before entering the transaction (async settings read).
+    const isPeak    = await isCurrentlyPeakHour();
+    const peakBonus = isPeak ? parseFloat((driverCut * 0.20).toFixed(2)) : 0;
+
     await db.transaction(async (tx) => {
       await tx
         .update(ridesTable)
@@ -1202,6 +1207,15 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
         amount:   driverCut.toFixed(2),
         status:   "confirmed",
       });
+
+      if (peakBonus > 0) {
+        await tx.insert(driverEarningsTable).values({
+          driverId: driver.id,
+          amount:   peakBonus.toFixed(2),
+          status:   "confirmed",
+          notes:    "peak_hours_bonus",
+        });
+      }
 
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));
     });
@@ -1294,6 +1308,9 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
     const platformCutPost = parseFloat((finalPrice * commissionRatePost).toFixed(2));
     const driverCut       = parseFloat((finalPrice - platformCutPost).toFixed(2));
 
+    const isPeakPost    = await isCurrentlyPeakHour();
+    const peakBonusPost = isPeakPost ? parseFloat((driverCut * 0.20).toFixed(2)) : 0;
+
     await db.transaction(async (tx) => {
       await tx.update(ridesTable)
         .set({ status: "completed", completedAt: new Date(), finalPrice: finalPrice.toFixed(2) })
@@ -1321,6 +1338,9 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
         notes:   `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
       });
       await tx.insert(driverEarningsTable).values({ driverId: driver.id, amount: driverCut.toFixed(2), status: "confirmed" });
+      if (peakBonusPost > 0) {
+        await tx.insert(driverEarningsTable).values({ driverId: driver.id, amount: peakBonusPost.toFixed(2), status: "confirmed", notes: "peak_hours_bonus" });
+      }
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));
     });
 

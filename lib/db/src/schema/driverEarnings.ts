@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, numeric, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, numeric, text, timestamp, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { driversTable } from "./drivers";
@@ -12,7 +12,8 @@ export const driverEarningsTable = pgTable("driver_earnings", {
   tripId: integer("trip_id").references(() => tripsTable.id, { onDelete: "set null" }),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   status: earningStatusEnum("status").notNull().default("pending"),
-  date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
+  notes:     text("notes"),
+  date:      timestamp("date", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("idx_driver_earnings_driver_id").on(table.driverId),

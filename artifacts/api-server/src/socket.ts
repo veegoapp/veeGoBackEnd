@@ -324,6 +324,7 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
 
             io!.to(SOCKET_ROOMS.PASSENGER(ride.passengerId)).emit(SOCKET_EVENTS.RIDE_DEVIATION_WARNING, warningPayload);
             io!.to(SOCKET_ROOMS.ADMIN).emit(SOCKET_EVENTS.RIDE_DEVIATION_WARNING, warningPayload);
+            io!.to(SOCKET_ROOMS.DRIVER(userId)).emit(SOCKET_EVENTS.RIDE_DEVIATION_WARNING, warningPayload);
 
             logger.warn({ rideId, deviationM: Math.round(deviationM) }, "Route deviation warning emitted");
           }
