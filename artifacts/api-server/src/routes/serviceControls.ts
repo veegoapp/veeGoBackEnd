@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, serviceControlsTable, serviceControlLogsTable } from "@workspace/db";
+import { db, serviceControlsTable, serviceControlLogsTable, serviceSettingsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
@@ -25,6 +25,14 @@ const ServiceControlPatchBody = z.object({
   maxActiveRides: z.number().int().min(1).nullable().optional(),
 });
 
+const ServiceSettingsPatchBody = z.object({
+  minDriverRating: z.number().min(0).max(5).optional(),
+  requiredLicenseTypes: z.array(z.string()).optional(),
+  requireInsurance: z.boolean().optional(),
+  requireBackgroundCheck: z.boolean().optional(),
+  maxActiveRidesPerDriver: z.number().int().min(1).max(20).optional(),
+});
+
 const DEFAULT_CONTROL = {
   isEnabled: true,
   displayMode: "live" as const,
@@ -33,6 +41,14 @@ const DEFAULT_CONTROL = {
   activeZoneIds: [] as number[],
   maintenanceEta: null,
   maxActiveRides: null,
+};
+
+const DEFAULT_SETTINGS = {
+  minDriverRating: "0.0",
+  requiredLicenseTypes: [] as string[],
+  requireInsurance: false,
+  requireBackgroundCheck: false,
+  maxActiveRidesPerDriver: 1,
 };
 
 async function ensureServiceControl(type: ServiceType) {
@@ -46,6 +62,21 @@ async function ensureServiceControl(type: ServiceType) {
   const [created] = await db
     .insert(serviceControlsTable)
     .values({ serviceType: type, ...DEFAULT_CONTROL })
+    .returning();
+  return created;
+}
+
+async function ensureServiceSettings(type: ServiceType) {
+  const [existing] = await db
+    .select()
+    .from(serviceSettingsTable)
+    .where(eq(serviceSettingsTable.serviceType, type));
+
+  if (existing) return existing;
+
+  const [created] = await db
+    .insert(serviceSettingsTable)
+    .values({ serviceType: type, ...DEFAULT_SETTINGS })
     .returning();
   return created;
 }
@@ -80,7 +111,7 @@ async function writeControlLog(type: ServiceType, changedBy: number | undefined,
   });
 }
 
-// ─── ADMIN endpoints (role: admin) ───────────────────────────────────────────
+// ─── ADMIN: SERVICE CONTROL endpoints ────────────────────────────────────────
 
 router.get("/admin/services/:type/control", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const params = ServiceTypeParam.safeParse(req.params);
@@ -195,6 +226,71 @@ router.post("/admin/services/:type/control/reset", authenticate, requireRole("ad
   }
 });
 
+// ─── ADMIN: SERVICE SETTINGS endpoints ───────────────────────────────────────
+
+router.get("/admin/services/:type/settings", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const params = ServiceTypeParam.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
+
+  try {
+    const settings = await ensureServiceSettings(params.data.type);
+    res.json({
+      ...settings,
+      minDriverRating: parseFloat(settings.minDriverRating as string),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch service settings" });
+  }
+});
+
+router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const params = ServiceTypeParam.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
+
+  const parsed = ServiceSettingsPatchBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  try {
+    await ensureServiceSettings(params.data.type);
+
+    const updateData: Record<string, unknown> = { updatedBy: req.user?.id ?? null, updatedAt: new Date() };
+    if (parsed.data.minDriverRating !== undefined) updateData.minDriverRating = parsed.data.minDriverRating.toFixed(1);
+    if (parsed.data.requiredLicenseTypes !== undefined) updateData.requiredLicenseTypes = parsed.data.requiredLicenseTypes;
+    if (parsed.data.requireInsurance !== undefined) updateData.requireInsurance = parsed.data.requireInsurance;
+    if (parsed.data.requireBackgroundCheck !== undefined) updateData.requireBackgroundCheck = parsed.data.requireBackgroundCheck;
+    if (parsed.data.maxActiveRidesPerDriver !== undefined) updateData.maxActiveRidesPerDriver = parsed.data.maxActiveRidesPerDriver;
+
+    const [updated] = await db
+      .update(serviceSettingsTable)
+      .set(updateData as Partial<typeof serviceSettingsTable.$inferInsert>)
+      .where(eq(serviceSettingsTable.serviceType, params.data.type))
+      .returning();
+
+    const io = getIO();
+    if (io) {
+      const broadcastPayload = {
+        serviceType: updated.serviceType,
+        minDriverRating: parseFloat(updated.minDriverRating as string),
+        requiredLicenseTypes: updated.requiredLicenseTypes,
+        requireInsurance: updated.requireInsurance,
+        requireBackgroundCheck: updated.requireBackgroundCheck,
+        maxActiveRidesPerDriver: updated.maxActiveRidesPerDriver,
+        changedBy: req.user?.id ?? null,
+        changedAt: new Date().toISOString(),
+      };
+      io.to(SOCKET_ROOMS.ADMIN).emit(SOCKET_EVENTS.SERVICE_SETTINGS_CHANGED, broadcastPayload);
+      io.emit(SOCKET_EVENTS.SERVICE_SETTINGS_CHANGED, broadcastPayload);
+    }
+
+    res.json({
+      ...updated,
+      minDriverRating: parseFloat(updated.minDriverRating as string),
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update service settings" });
+  }
+});
+
 // ─── PUBLIC endpoints (JWT required, no admin role) ──────────────────────────
 
 const PUBLIC_FIELDS = {
@@ -254,6 +350,25 @@ router.get("/services/:type/control", authenticate, async (req, res): Promise<vo
     });
   } catch (err) {
     res.status(500).json({ error: "Failed to fetch service control" });
+  }
+});
+
+router.get("/services/:type/settings", authenticate, async (req, res): Promise<void> => {
+  const params = ServiceTypeParam.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
+
+  try {
+    const settings = await ensureServiceSettings(params.data.type);
+    res.json({
+      serviceType: settings.serviceType,
+      minDriverRating: parseFloat(settings.minDriverRating as string),
+      requiredLicenseTypes: settings.requiredLicenseTypes,
+      requireInsurance: settings.requireInsurance,
+      requireBackgroundCheck: settings.requireBackgroundCheck,
+      maxActiveRidesPerDriver: settings.maxActiveRidesPerDriver,
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch service settings" });
   }
 });
 

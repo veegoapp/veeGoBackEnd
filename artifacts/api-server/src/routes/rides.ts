@@ -17,6 +17,9 @@ import {
   promoCodesTable,
   sosEventsTable,
   rideShareTokensTable,
+  serviceControlsTable,
+  serviceSettingsTable,
+  driverDocumentsTable,
 } from "@workspace/db";
 import crypto from "crypto";
 import { jobQueue } from "../lib/jobQueue";
@@ -380,6 +383,26 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       promoCode,
     } = parsed.data;
     const userId = req.user!.id;
+
+    // ── Service availability enforcement ─────────────────────────────────────
+    const serviceTypeMap: Record<string, "car" | "motorcycle" | "delivery" | "shuttle"> = {
+      car: "car", bike: "car", motorcycle: "motorcycle", delivery: "delivery",
+    };
+    const serviceType = serviceTypeMap[vehicleType];
+    if (serviceType) {
+      const [control] = await db
+        .select({ isEnabled: serviceControlsTable.isEnabled, unavailableMessage: serviceControlsTable.unavailableMessage })
+        .from(serviceControlsTable)
+        .where(eq(serviceControlsTable.serviceType, serviceType));
+      if (control && !control.isEnabled) {
+        res.status(503).json({
+          error: control.unavailableMessage ?? "This service is currently unavailable. Please try again later.",
+          code: "SERVICE_DISABLED",
+        });
+        return;
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const [activeRide] = await db
       .select({ id: ridesTable.id, status: ridesTable.status })
@@ -961,6 +984,84 @@ router.patch("/driver/rides/:id/accept", authenticate, requireRole("driver"), as
       res.status(409).json({ error: `Ride is no longer available (status: ${ride.status})` });
       return;
     }
+
+    // ── Driver requirements enforcement ──────────────────────────────────────
+    const svcTypeMap: Record<string, "car" | "motorcycle" | "delivery" | "shuttle"> = {
+      car: "car", bike: "car", motorcycle: "motorcycle", delivery: "delivery",
+    };
+    const rideSvcType = svcTypeMap[ride.vehicleType ?? ""];
+    if (rideSvcType) {
+      const [settings] = await db
+        .select()
+        .from(serviceSettingsTable)
+        .where(eq(serviceSettingsTable.serviceType, rideSvcType));
+
+      if (settings) {
+        const driverRating = parseFloat(driver.rating as string);
+        const minRating = parseFloat(settings.minDriverRating as string);
+        if (driverRating < minRating) {
+          res.status(403).json({
+            error: `Your rating (${driverRating.toFixed(1)}) is below the minimum required (${minRating.toFixed(1)}) for this service.`,
+            code: "DRIVER_RATING_TOO_LOW",
+          });
+          return;
+        }
+
+        if (settings.requireInsurance) {
+          const [insuranceDoc] = await db
+            .select({ id: driverDocumentsTable.id })
+            .from(driverDocumentsTable)
+            .where(and(
+              eq(driverDocumentsTable.driverId, driver.id),
+              eq(driverDocumentsTable.type, "vehicle_license_front"),
+              eq(driverDocumentsTable.verificationStatus, "approved"),
+            ));
+          if (!insuranceDoc) {
+            res.status(403).json({
+              error: "This service requires an approved vehicle insurance document.",
+              code: "INSURANCE_REQUIRED",
+            });
+            return;
+          }
+        }
+
+        if (settings.requireBackgroundCheck) {
+          const [bgDoc] = await db
+            .select({ id: driverDocumentsTable.id })
+            .from(driverDocumentsTable)
+            .where(and(
+              eq(driverDocumentsTable.driverId, driver.id),
+              eq(driverDocumentsTable.type, "criminal_record"),
+              eq(driverDocumentsTable.verificationStatus, "approved"),
+            ));
+          if (!bgDoc) {
+            res.status(403).json({
+              error: "This service requires an approved background check.",
+              code: "BACKGROUND_CHECK_REQUIRED",
+            });
+            return;
+          }
+        }
+
+        if (settings.maxActiveRidesPerDriver > 0) {
+          const [countRow] = await db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(ridesTable)
+            .where(and(
+              eq(ridesTable.driverId, driver.id),
+              sql`${ridesTable.status} IN ('driver_assigned', 'accepted', 'arrived', 'in_progress')`,
+            ));
+          if ((countRow?.count ?? 0) >= settings.maxActiveRidesPerDriver) {
+            res.status(409).json({
+              error: `You have reached the maximum active rides limit (${settings.maxActiveRidesPerDriver}) for this service.`,
+              code: "MAX_ACTIVE_RIDES_REACHED",
+            });
+            return;
+          }
+        }
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const [updated] = await db
       .update(ridesTable)

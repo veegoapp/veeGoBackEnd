@@ -41,7 +41,8 @@ export const SOCKET_EVENTS = {
   SURGE_UPDATED:           "surge:updated",
 
   // ── Server → All authenticated clients (broadcast) ───────────────────────────
-  SERVICE_CONTROL_CHANGED: "service:control:changed",
+  SERVICE_CONTROL_CHANGED:  "service:control:changed",
+  SERVICE_SETTINGS_CHANGED: "service:settings:changed",
 
   // ── Server → Driver (check-in) ───────────────────────────────────────────────
   DRIVER_CHECKIN_REQUIRED: "driver:checkin:required",
