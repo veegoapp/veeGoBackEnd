@@ -1049,8 +1049,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
   const cancelMutation = useCancelTrip();
   const deleteMutation = useMutation({
     mutationFn: async (tripId: number) => {
-      const res = await adminFetch(`/api/trips/${tripId}`, { method: "DELETE" });
-      if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.error || "Failed to delete trip"); }
+      await adminFetch(`/trips/${tripId}`, { method: "DELETE" });
     },
     onSuccess: () => { toast({ title: t("trips.tripDeleted", "Trip deleted") }); invalidate(); },
     onError: (err: any) => toast({ title: err.message || t("trips.deleteFailed", "Failed to delete trip"), variant: "destructive" }),
