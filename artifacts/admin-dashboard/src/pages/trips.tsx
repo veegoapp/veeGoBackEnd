@@ -409,7 +409,7 @@ export default function Trips() {
     if (!deleteTrip) return;
     setIsDeleting(true);
     try {
-      const res = await adminFetch(`/api/trips/${deleteTrip.id}`, { method: "DELETE" });
+      const res = await adminFetch(`/trips/${deleteTrip.id}`, { method: "DELETE" });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to delete trip");

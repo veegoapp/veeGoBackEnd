@@ -15,23 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { UsersRound, Plus, Pencil, Trash2, Shield, Check, Key } from "lucide-react";
 import { format } from "date-fns";
 import { useTranslation } from "react-i18next";
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "");
-
-function apiFetch(path: string, token: string | null, options?: RequestInit) {
-  return fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options?.headers ?? {}),
-    },
-  }).then(async (r) => {
-    const json = await r.json();
-    if (!r.ok) throw new Error(json.error ?? "Request failed");
-    return json;
-  });
-}
+import { adminFetch } from "@/lib/api";
 
 const ALL_PERMISSIONS = [
   { key: "view_dashboard", labelKey: "staff.permViewDashboard", labelDefault: "View Dashboard", group: "Dashboard" },
@@ -69,7 +53,7 @@ const ALL_PERMISSIONS = [
 const PERMISSION_GROUPS = Array.from(new Set(ALL_PERMISSIONS.map((p) => p.group)));
 
 export default function Staff() {
-  const { token, isSuperAdmin } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { t } = useTranslation();
@@ -81,55 +65,53 @@ export default function Staff() {
 
   const { data: staffData, isLoading: staffLoading } = useQuery({
     queryKey: ["staff"],
-    queryFn: () => apiFetch("/api/admin/staff", token),
-    enabled: !!token,
+    queryFn: () => adminFetch("/admin/staff"),
   });
 
   const { data: rolesData, isLoading: rolesLoading } = useQuery({
     queryKey: ["roles"],
-    queryFn: () => apiFetch("/api/admin/roles", token),
-    enabled: !!token,
+    queryFn: () => adminFetch("/admin/roles"),
   });
 
   const createStaffMut = useMutation({
-    mutationFn: (body: any) => apiFetch("/api/admin/staff", token, { method: "POST", body: JSON.stringify(body) }),
+    mutationFn: (body: any) => adminFetch("/admin/staff", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setStaffModal({ open: false, editing: null }); toast({ title: t("staff.memberCreated", "Staff member created") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
   const updateStaffMut = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: any }) => apiFetch(`/api/admin/staff/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
+    mutationFn: ({ id, body }: { id: number; body: any }) => adminFetch(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setStaffModal({ open: false, editing: null }); toast({ title: t("staff.memberUpdated", "Staff member updated") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
   const createRoleMut = useMutation({
-    mutationFn: (body: any) => apiFetch("/api/admin/roles", token, { method: "POST", body: JSON.stringify(body) }),
+    mutationFn: (body: any) => adminFetch("/admin/roles", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); setRoleModal({ open: false, editing: null }); toast({ title: t("staff.roleCreated", "Role created") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
   const updateRoleMut = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: any }) => apiFetch(`/api/admin/roles/${id}`, token, { method: "PATCH", body: JSON.stringify(body) }),
+    mutationFn: ({ id, body }: { id: number; body: any }) => adminFetch(`/admin/roles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); setRoleModal({ open: false, editing: null }); toast({ title: t("staff.roleUpdated", "Role updated") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteRoleMut = useMutation({
-    mutationFn: (id: number) => apiFetch(`/api/admin/roles/${id}`, token, { method: "DELETE" }),
+    mutationFn: (id: number) => adminFetch(`/admin/roles/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles", "staff"] }); setDeleteRoleId(null); toast({ title: t("staff.roleDeleted", "Role deleted") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
   const toggleBlockMut = useMutation({
     mutationFn: ({ id, isBlocked }: { id: number; isBlocked: boolean }) =>
-      apiFetch(`/api/admin/staff/${id}`, token, { method: "PATCH", body: JSON.stringify({ isBlocked }) }),
+      adminFetch(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify({ isBlocked }) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); toast({ title: t("staff.statusUpdated", "Status updated") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteStaffMut = useMutation({
-    mutationFn: (id: number) => apiFetch(`/api/admin/staff/${id}`, token, { method: "DELETE" }),
+    mutationFn: (id: number) => adminFetch(`/admin/staff/${id}`, { method: "DELETE" }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setDeleteStaffId(null); toast({ title: t("staff.memberDeleted", "Staff member deleted") }); },
     onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
   });
