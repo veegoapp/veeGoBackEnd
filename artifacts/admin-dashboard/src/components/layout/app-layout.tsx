@@ -11,7 +11,6 @@ import {
   Tags, Wallet, CreditCard, ArrowUpRight, Percent, MessageSquare,
   Bell, BarChart3, DollarSign, Settings, LogOut, Menu, Clock,
   ChevronDown, ChevronRight, Shield, Star, CalendarClock,
-  CalendarDays, History,
 } from "lucide-react";
 import logoUrl from "/logo.png";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -226,9 +225,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           subItems: [
             { title: t("nav.routes"), href: "/routes", icon: Map },
             { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
-            { title: t("nav.shuttleBookings"), href: "/shuttle-bookings", icon: Ticket },
-            { title: t("nav.shuttleAvailability"), href: "/shuttle-availability", icon: CalendarDays },
-            { title: t("nav.shuttleRenewalHistory"), href: "/shuttle-renewal-history", icon: History },
           ],
         },
         {

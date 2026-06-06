@@ -3,14 +3,18 @@ import { z } from "zod";
 import { db, routeSchedulesTable, scheduleSlotsTable, tripsTable, routesTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { VEHICLE_CAPACITY } from "@workspace/db";
 
 const router = Router();
+
+const VEHICLE_TYPES = ["hiace", "minibus"] as const;
+type VehicleType = (typeof VEHICLE_TYPES)[number];
 
 const CreateScheduleBody = z.object({
   routeId: z.number().int().positive(),
   effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
   effectiveTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
-  defaultCapacity: z.number().int().positive().default(40),
+  vehicleType: z.enum(VEHICLE_TYPES),
   slots: z
     .array(
       z.object({
@@ -24,23 +28,22 @@ const CreateScheduleBody = z.object({
 const UpdateScheduleBody = z.object({
   effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   effectiveTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  defaultCapacity: z.number().int().positive().optional(),
   isActive: z.boolean().optional(),
 });
 
 const BATCH_SIZE = 500;
-const SHUTTLE_TOTAL_SEATS = 14;
 
 async function generateTripsForSchedule(
   scheduleId: number,
   routeId: number,
   effectiveFrom: string,
   effectiveTo: string,
-  defaultCapacity: number,
+  vehicleType: VehicleType,
   slots: Array<{ dayOfWeek: number; departureTime: string }>,
   estimatedDuration: number,
   basePrice: string,
 ): Promise<number> {
+  const totalSeats = VEHICLE_CAPACITY[vehicleType];
   const start = new Date(effectiveFrom + "T00:00:00Z");
   const end = new Date(effectiveTo + "T23:59:59Z");
 
@@ -77,6 +80,7 @@ async function generateTripsForSchedule(
     availableSeats: number;
     totalSeats: number;
     price: string;
+    vehicleType: VehicleType;
     status: "scheduled";
     isActive: boolean;
   }> = [];
@@ -90,7 +94,7 @@ async function generateTripsForSchedule(
       for (const time of times) {
         const [hh, mm] = time.split(":").map(Number);
         const departure = new Date(cursor);
-        departure.setUTCHours(hh, mm, 0, 0);
+        departure.setUTCHours(hh!, mm!, 0, 0);
         const arrival = new Date(
           departure.getTime() + estimatedDuration * 60 * 1000,
         );
@@ -103,9 +107,10 @@ async function generateTripsForSchedule(
             driverId: null,
             departureTime: departure,
             arrivalTime: arrival,
-            availableSeats: SHUTTLE_TOTAL_SEATS,
-            totalSeats: SHUTTLE_TOTAL_SEATS,
+            availableSeats: totalSeats,
+            totalSeats,
             price: basePrice,
+            vehicleType,
             status: "scheduled",
             isActive: true,
           });
@@ -136,13 +141,11 @@ router.post(
       return;
     }
 
-    const { routeId, effectiveFrom, effectiveTo, defaultCapacity, slots } =
-      parsed.data;
+    const { routeId, effectiveFrom, effectiveTo, vehicleType, slots } = parsed.data;
+    const capacity = VEHICLE_CAPACITY[vehicleType];
 
     if (new Date(effectiveTo) <= new Date(effectiveFrom)) {
-      res
-        .status(400)
-        .json({ error: "effectiveTo must be after effectiveFrom" });
+      res.status(400).json({ error: "effectiveTo must be after effectiveFrom" });
       return;
     }
 
@@ -162,11 +165,18 @@ router.post(
 
     const [schedule] = await db
       .insert(routeSchedulesTable)
-      .values({ routeId, effectiveFrom, effectiveTo, defaultCapacity, isActive: true })
+      .values({
+        routeId,
+        effectiveFrom,
+        effectiveTo,
+        vehicleType,
+        defaultCapacity: capacity,
+        isActive: true,
+      })
       .returning();
 
     const slotRows = slots.map((s) => ({
-      scheduleId: schedule.id,
+      scheduleId: schedule!.id,
       dayOfWeek: s.dayOfWeek,
       departureTime: s.departureTime,
     }));
@@ -177,11 +187,11 @@ router.post(
       .returning();
 
     const tripsCreated = await generateTripsForSchedule(
-      schedule.id,
+      schedule!.id,
       routeId,
       effectiveFrom,
       effectiveTo,
-      defaultCapacity,
+      vehicleType,
       slots,
       route.estimatedDuration,
       route.basePrice,
@@ -218,6 +228,7 @@ router.get(
         toLocation: routesTable.toLocation,
         effectiveFrom: routeSchedulesTable.effectiveFrom,
         effectiveTo: routeSchedulesTable.effectiveTo,
+        vehicleType: routeSchedulesTable.vehicleType,
         defaultCapacity: routeSchedulesTable.defaultCapacity,
         isActive: routeSchedulesTable.isActive,
         createdAt: routeSchedulesTable.createdAt,
@@ -245,8 +256,8 @@ router.get(
         .select({
           scheduleId: tripsTable.scheduleId,
           total: sql<number>`count(*)::int`,
-          open: sql<number>`count(*) filter (where ${tripsTable.status} IN ('scheduled', 'waiting_driver'))::int`,
-          active: sql<number>`count(*) filter (where ${tripsTable.status} = 'active')::int`,
+          waiting: sql<number>`count(*) filter (where ${tripsTable.status} IN ('scheduled', 'waiting_driver'))::int`,
+          assigned: sql<number>`count(*) filter (where ${tripsTable.status} = 'driver_assigned')::int`,
           completed: sql<number>`count(*) filter (where ${tripsTable.status} = 'completed')::int`,
           cancelled: sql<number>`count(*) filter (where ${tripsTable.status} = 'cancelled')::int`,
         })
@@ -269,8 +280,8 @@ router.get(
       slots: slotMap.get(s.id) ?? [],
       tripStats: countMap.get(s.id) ?? {
         total: 0,
-        open: 0,
-        active: 0,
+        waiting: 0,
+        assigned: 0,
         completed: 0,
         cancelled: 0,
       },
@@ -285,7 +296,7 @@ router.get(
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid schedule ID" });
       return;
@@ -301,6 +312,7 @@ router.get(
         estimatedDuration: routesTable.estimatedDuration,
         effectiveFrom: routeSchedulesTable.effectiveFrom,
         effectiveTo: routeSchedulesTable.effectiveTo,
+        vehicleType: routeSchedulesTable.vehicleType,
         defaultCapacity: routeSchedulesTable.defaultCapacity,
         isActive: routeSchedulesTable.isActive,
         createdAt: routeSchedulesTable.createdAt,
@@ -325,8 +337,8 @@ router.get(
       db
         .select({
           total: sql<number>`count(*)::int`,
-          open: sql<number>`count(*) filter (where ${tripsTable.status} IN ('scheduled', 'waiting_driver'))::int`,
-          active: sql<number>`count(*) filter (where ${tripsTable.status} = 'active')::int`,
+          waiting: sql<number>`count(*) filter (where ${tripsTable.status} IN ('scheduled', 'waiting_driver'))::int`,
+          assigned: sql<number>`count(*) filter (where ${tripsTable.status} = 'driver_assigned')::int`,
           completed: sql<number>`count(*) filter (where ${tripsTable.status} = 'completed')::int`,
           cancelled: sql<number>`count(*) filter (where ${tripsTable.status} = 'cancelled')::int`,
         })
@@ -339,8 +351,8 @@ router.get(
       slots,
       tripStats: tripStats[0] ?? {
         total: 0,
-        open: 0,
-        active: 0,
+        waiting: 0,
+        assigned: 0,
         completed: 0,
         cancelled: 0,
       },
@@ -353,7 +365,7 @@ router.patch(
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid schedule ID" });
       return;
@@ -390,7 +402,7 @@ router.post(
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid schedule ID" });
       return;
@@ -402,6 +414,7 @@ router.post(
         routeId: routeSchedulesTable.routeId,
         effectiveFrom: routeSchedulesTable.effectiveFrom,
         effectiveTo: routeSchedulesTable.effectiveTo,
+        vehicleType: routeSchedulesTable.vehicleType,
         defaultCapacity: routeSchedulesTable.defaultCapacity,
         isActive: routeSchedulesTable.isActive,
         estimatedDuration: routesTable.estimatedDuration,
@@ -436,7 +449,7 @@ router.post(
       schedule.routeId,
       schedule.effectiveFrom,
       schedule.effectiveTo,
-      schedule.defaultCapacity,
+      schedule.vehicleType as VehicleType,
       slots,
       schedule.estimatedDuration!,
       schedule.basePrice!,
@@ -451,7 +464,7 @@ router.delete(
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     if (isNaN(id)) {
       res.status(400).json({ error: "Invalid schedule ID" });
       return;

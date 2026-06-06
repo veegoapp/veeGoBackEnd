@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 import { routesTable } from "./routes";
 import { busesTable } from "./buses";
 import { driversTable } from "./drivers";
-import { routeSchedulesTable } from "./routeSchedules";
+import { routeSchedulesTable, shuttleVehicleTypeEnum } from "./routeSchedules";
 
 export const tripStatusEnum = pgEnum("trip_status", [
   "scheduled",
@@ -39,6 +39,7 @@ export const tripsTable = pgTable("trips", {
   isActive: boolean("is_active").notNull().default(true),
   recurringType: recurringTypeEnum("recurring_type").notNull().default("one_time"),
   weekdays: text("weekdays"),
+  vehicleType: shuttleVehicleTypeEnum("vehicle_type").notNull().default("hiace"),
   cancelReason: text("cancel_reason"),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
   arrivedAt: timestamp("arrived_at", { withTimezone: true }),

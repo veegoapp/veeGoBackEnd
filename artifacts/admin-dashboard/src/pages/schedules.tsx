@@ -12,18 +12,40 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { CalendarClock, Plus, Trash2, RefreshCw, ToggleLeft, ChevronDown, ChevronRight, CalendarDays, Clock, Bus, Map } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import {
+  CalendarClock, Plus, Trash2, RefreshCw, ToggleLeft,
+  ChevronDown, ChevronRight, CalendarDays, Clock, Bus, Map,
+  Users,
+} from "lucide-react";
 
 const DAYS = [
-  { label: "Sunday", short: "Sun", value: 0 },
-  { label: "Monday", short: "Mon", value: 1 },
-  { label: "Tuesday", short: "Tue", value: 2 },
+  { label: "Sunday",    short: "Sun", value: 0 },
+  { label: "Monday",    short: "Mon", value: 1 },
+  { label: "Tuesday",   short: "Tue", value: 2 },
   { label: "Wednesday", short: "Wed", value: 3 },
-  { label: "Thursday", short: "Thu", value: 4 },
-  { label: "Friday", short: "Fri", value: 5 },
-  { label: "Saturday", short: "Sat", value: 6 },
+  { label: "Thursday",  short: "Thu", value: 4 },
+  { label: "Friday",    short: "Fri", value: 5 },
+  { label: "Saturday",  short: "Sat", value: 6 },
 ];
+
+const VEHICLE_TYPES = [
+  {
+    value: "hiace",
+    label: "HiAce Minibus",
+    seats: 14,
+    minThreshold: 7,
+    description: "14 seats · min 7 passengers to run",
+  },
+  {
+    value: "minibus",
+    label: "Mini Bus",
+    seats: 28,
+    minThreshold: 14,
+    description: "28 seats · min 14 passengers to run",
+  },
+] as const;
+
+type VehicleType = "hiace" | "minibus";
 
 interface ScheduleSlot {
   id: number;
@@ -48,6 +70,7 @@ interface Schedule {
   toLocation: string;
   effectiveFrom: string;
   effectiveTo: string;
+  vehicleType: VehicleType;
   defaultCapacity: number;
   isActive: boolean;
   createdAt: string;
@@ -63,6 +86,10 @@ function groupSlotsByDay(slots: ScheduleSlot[]): Record<number, string[]> {
   return map;
 }
 
+function vehicleMeta(vt: VehicleType) {
+  return VEHICLE_TYPES.find((v) => v.value === vt) ?? VEHICLE_TYPES[0]!;
+}
+
 function ScheduleCard({ schedule, onRegenerate, onDeactivate }: {
   schedule: Schedule;
   onRegenerate: (id: number) => void;
@@ -71,6 +98,7 @@ function ScheduleCard({ schedule, onRegenerate, onDeactivate }: {
   const [expanded, setExpanded] = useState(false);
   const byDay = groupSlotsByDay(schedule.slots);
   const activeDays = DAYS.filter(d => byDay[d.value]);
+  const meta = vehicleMeta(schedule.vehicleType);
 
   return (
     <Card className={`border ${schedule.isActive ? "border-border" : "border-muted opacity-60"}`}>
@@ -83,6 +111,10 @@ function ScheduleCard({ schedule, onRegenerate, onDeactivate }: {
               </CardTitle>
               <Badge variant={schedule.isActive ? "default" : "secondary"} className="text-xs shrink-0">
                 {schedule.isActive ? "Active" : "Inactive"}
+              </Badge>
+              <Badge variant="outline" className="text-xs shrink-0 gap-1">
+                <Bus className="h-3 w-3" />
+                {meta.label}
               </Badge>
             </div>
             <CardDescription className="mt-0.5 flex items-center gap-1 text-xs">
@@ -114,16 +146,19 @@ function ScheduleCard({ schedule, onRegenerate, onDeactivate }: {
             <span className="font-medium text-foreground">{schedule.effectiveTo}</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <Bus className="h-4 w-4 text-primary/70" />
-            <span>Default capacity: <span className="font-medium text-foreground">{schedule.defaultCapacity}</span></span>
+            <Users className="h-4 w-4 text-primary/70" />
+            <span>
+              <span className="font-medium text-foreground">{meta.seats}</span> seats ·{" "}
+              min <span className="font-medium text-foreground">{meta.minThreshold}</span> to run
+            </span>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
           {[
-            { label: "Total", value: schedule.tripStats.total, cls: "bg-muted/50" },
-            { label: "Waiting", value: schedule.tripStats.waiting, cls: "bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300" },
-            { label: "Assigned", value: schedule.tripStats.assigned, cls: "bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300" },
+            { label: "Total",     value: schedule.tripStats.total,     cls: "bg-muted/50" },
+            { label: "Waiting",   value: schedule.tripStats.waiting,   cls: "bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300" },
+            { label: "Assigned",  value: schedule.tripStats.assigned,  cls: "bg-blue-50 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300" },
             { label: "Completed", value: schedule.tripStats.completed, cls: "bg-emerald-50 text-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300" },
             { label: "Cancelled", value: schedule.tripStats.cancelled, cls: "bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-300" },
           ].map(s => (
@@ -173,13 +208,13 @@ export default function Schedules() {
 
   const { data: routesData } = useListRoutes({ limit: 200 });
 
-  const [routeId, setRouteId] = useState<string>("");
+  const [routeId, setRouteId]           = useState<string>("");
+  const [vehicleType, setVehicleType]   = useState<VehicleType>("hiace");
   const [effectiveFrom, setEffectiveFrom] = useState("");
-  const [effectiveTo, setEffectiveTo] = useState("");
-  const [defaultCapacity, setDefaultCapacity] = useState(40);
+  const [effectiveTo, setEffectiveTo]   = useState("");
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
-  const [times, setTimes] = useState<string[]>(["09:00"]);
-  const [newTime, setNewTime] = useState("10:00");
+  const [times, setTimes]               = useState<string[]>(["09:00"]);
+  const [newTime, setNewTime]           = useState("10:00");
 
   const { data: schedulesData, isLoading: schedulesLoading } = useQuery({
     queryKey: ["schedules"],
@@ -193,15 +228,16 @@ export default function Schedules() {
         { method: "POST", body: JSON.stringify(body) },
       ),
     onSuccess: (result) => {
+      const meta = vehicleMeta(vehicleType);
       toast({
         title: "Schedule created",
-        description: `${result.tripsCreated} trips generated successfully across the date range.`,
+        description: `${result.tripsCreated} trips generated (${meta.label}, ${meta.seats} seats each).`,
       });
       queryClient.invalidateQueries({ queryKey: ["schedules"] });
       setRouteId("");
+      setVehicleType("hiace");
       setEffectiveFrom("");
       setEffectiveTo("");
-      setDefaultCapacity(40);
       setSelectedDays([]);
       setTimes(["09:00"]);
     },
@@ -253,13 +289,13 @@ export default function Schedules() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!routeId) { toast({ title: "Select a route", variant: "destructive" }); return; }
+    if (!routeId)  { toast({ title: "Select a route",            variant: "destructive" }); return; }
     if (!effectiveFrom || !effectiveTo) { toast({ title: "Set the date range", variant: "destructive" }); return; }
     if (new Date(effectiveTo) <= new Date(effectiveFrom)) {
       toast({ title: "End date must be after start date", variant: "destructive" }); return;
     }
-    if (selectedDays.length === 0) { toast({ title: "Select at least one day", variant: "destructive" }); return; }
-    if (times.length === 0) { toast({ title: "Add at least one departure time", variant: "destructive" }); return; }
+    if (selectedDays.length === 0) { toast({ title: "Select at least one day",            variant: "destructive" }); return; }
+    if (times.length === 0)        { toast({ title: "Add at least one departure time",     variant: "destructive" }); return; }
 
     const slots = selectedDays.flatMap(day =>
       times.map(t => ({ dayOfWeek: day, departureTime: t })),
@@ -267,14 +303,15 @@ export default function Schedules() {
 
     createMutation.mutate({
       routeId: parseInt(routeId),
+      vehicleType,
       effectiveFrom,
       effectiveTo,
-      defaultCapacity,
       slots,
     });
   }
 
   const schedules = schedulesData?.data ?? [];
+  const selectedVehicleMeta = vehicleMeta(vehicleType);
 
   return (
     <div className="p-8 space-y-8 max-w-5xl mx-auto">
@@ -284,7 +321,7 @@ export default function Schedules() {
           Schedule Manager
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Define recurring departure slots for a route. Trips are bulk-generated automatically.
+          Define recurring departure slots for a route. Trips are auto-generated and visible to drivers and passengers immediately.
         </p>
       </div>
 
@@ -292,11 +329,12 @@ export default function Schedules() {
         <CardHeader>
           <CardTitle className="text-base">Create New Schedule</CardTitle>
           <CardDescription>
-            Configure a route, date range, days, and departure times. One trip row will be created per matching day + time.
+            Choose a route, vehicle type, date range, operating days, and departure times. One trip is created per matching day × time.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Route <span className="text-destructive">*</span></Label>
@@ -315,16 +353,29 @@ export default function Schedules() {
               </div>
 
               <div className="space-y-1.5">
-                <Label>Default Seat Capacity <span className="text-destructive">*</span></Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={500}
-                  value={defaultCapacity}
-                  onChange={e => setDefaultCapacity(Number(e.target.value))}
-                  placeholder="40"
-                />
-                <p className="text-xs text-muted-foreground">Used for generated trips until a bus is assigned.</p>
+                <Label>Vehicle Type <span className="text-destructive">*</span></Label>
+                <Select value={vehicleType} onValueChange={(v) => setVehicleType(v as VehicleType)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VEHICLE_TYPES.map(vt => (
+                      <SelectItem key={vt.value} value={vt.value}>
+                        <div className="flex flex-col">
+                          <span>{vt.label}</span>
+                          <span className="text-xs text-muted-foreground">{vt.description}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {vehicleType && (
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{selectedVehicleMeta.seats} seats</span> per trip ·
+                    auto-cancel if fewer than{" "}
+                    <span className="font-medium text-foreground">{selectedVehicleMeta.minThreshold}</span> passengers booked 8h before departure
+                  </p>
+                )}
               </div>
             </div>
 
@@ -359,10 +410,10 @@ export default function Schedules() {
               </div>
               <div className="flex gap-2 flex-wrap pt-1">
                 {[
-                  { label: "All week", days: [0,1,2,3,4,5,6] },
-                  { label: "Sun – Thu", days: [0,1,2,3,4] },
-                  { label: "Weekdays (Mon–Fri)", days: [1,2,3,4,5] },
-                  { label: "Weekend", days: [5,6] },
+                  { label: "All week",           days: [0,1,2,3,4,5,6] },
+                  { label: "Sun – Thu",           days: [0,1,2,3,4] },
+                  { label: "Weekdays (Mon–Fri)",  days: [1,2,3,4,5] },
+                  { label: "Weekend",             days: [5,6] },
                 ].map(preset => (
                   <Button
                     key={preset.label}
@@ -415,9 +466,9 @@ export default function Schedules() {
                   <span>
                     Will generate approx.{" "}
                     <span className="font-semibold text-foreground">
-                      {selectedDays.length} days/week × {times.length} times
+                      {selectedDays.length} days/week × {times.length} time{times.length > 1 ? "s" : ""}
                     </span>{" "}
-                    across the date range.
+                    — each trip: <span className="font-semibold text-foreground">{selectedVehicleMeta.seats} seats</span>
                   </span>
                 ) : (
                   "Fill all fields to see the estimate."

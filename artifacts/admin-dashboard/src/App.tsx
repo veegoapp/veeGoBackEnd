@@ -39,9 +39,6 @@ import AuditLogs from "@/pages/audit-logs";
 import Ratings from "@/pages/ratings";
 import ChatInbox from "@/pages/chat-inbox";
 import Schedules from "@/pages/schedules";
-import ShuttleBookings from "@/pages/shuttle-bookings";
-import ShuttleAvailability from "@/pages/shuttle-availability";
-import ShuttleRenewalHistory from "@/pages/shuttle-renewal-history";
 
 const logoutRef = { current: () => {} };
 
@@ -135,9 +132,6 @@ function Router() {
         <Route path="/ratings" component={() => <ProtectedRoute component={Ratings} />} />
         <Route path="/chat-inbox" component={() => <ProtectedRoute component={ChatInbox} />} />
         <Route path="/schedules" component={() => <ProtectedRoute component={Schedules} />} />
-        <Route path="/shuttle-bookings" component={() => <ProtectedRoute component={ShuttleBookings} />} />
-        <Route path="/shuttle-availability" component={() => <ProtectedRoute component={ShuttleAvailability} />} />
-        <Route path="/shuttle-renewal-history" component={() => <ProtectedRoute component={ShuttleRenewalHistory} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

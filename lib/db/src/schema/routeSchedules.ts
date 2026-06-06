@@ -1,14 +1,30 @@
-import { pgTable, serial, integer, boolean, timestamp, date, text, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, boolean, timestamp, date, text, index, unique, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { routesTable } from "./routes";
+
+export const shuttleVehicleTypeEnum = pgEnum("shuttle_vehicle_type", [
+  "hiace",
+  "minibus",
+]);
+
+export const VEHICLE_CAPACITY: Record<"hiace" | "minibus", number> = {
+  hiace: 14,
+  minibus: 28,
+};
+
+export const VEHICLE_MIN_THRESHOLD: Record<"hiace" | "minibus", number> = {
+  hiace: 7,
+  minibus: 14,
+};
 
 export const routeSchedulesTable = pgTable("route_schedules", {
   id: serial("id").primaryKey(),
   routeId: integer("route_id").notNull().references(() => routesTable.id, { onDelete: "cascade" }),
   effectiveFrom: date("effective_from").notNull(),
   effectiveTo: date("effective_to").notNull(),
-  defaultCapacity: integer("default_capacity").notNull().default(40),
+  vehicleType: shuttleVehicleTypeEnum("vehicle_type").notNull().default("hiace"),
+  defaultCapacity: integer("default_capacity").notNull().default(14),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

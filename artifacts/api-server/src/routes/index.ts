@@ -32,7 +32,6 @@ import serviceControlsRouter from "./serviceControls";
 import checkinRouter from "./checkin";
 import trackRouter from "./track";
 import schedulesRouter from "./schedules";
-import shuttleBookingsRouter from "./shuttleBookings";
 
 const router: IRouter = Router();
 
@@ -69,6 +68,5 @@ router.use(serviceControlsRouter);
 router.use(checkinRouter);
 router.use(trackRouter);
 router.use(schedulesRouter);
-router.use(shuttleBookingsRouter);
 
 export default router;
