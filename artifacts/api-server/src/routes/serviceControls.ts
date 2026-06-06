@@ -4,15 +4,21 @@ import { eq, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
+import {
+  toPublic,
+  toInternal,
+  PUBLIC_SERVICE_TYPES,
+  type InternalServiceType,
+} from "../lib/service-map";
 import { z } from "zod";
 
 const router = Router();
 
-const SERVICE_TYPES = ["shuttle", "car", "motorcycle", "delivery"] as const;
-type ServiceType = typeof SERVICE_TYPES[number];
-
+// Accepts both public-facing names ("scooter") and the legacy internal
+// name ("motorcycle") so the admin dashboard doesn't break mid-migration.
+// Responses always use the public name ("scooter").
 const ServiceTypeParam = z.object({
-  type: z.enum(SERVICE_TYPES),
+  type: z.enum(["car", "shuttle", "delivery", "scooter", "motorcycle"]),
 });
 
 const ServiceControlPatchBody = z.object({
@@ -51,7 +57,7 @@ const DEFAULT_SETTINGS = {
   maxActiveRidesPerDriver: 1,
 };
 
-async function ensureServiceControl(type: ServiceType) {
+async function ensureServiceControl(type: InternalServiceType) {
   const [existing] = await db
     .select()
     .from(serviceControlsTable)
@@ -66,7 +72,7 @@ async function ensureServiceControl(type: ServiceType) {
   return created;
 }
 
-async function ensureServiceSettings(type: ServiceType) {
+async function ensureServiceSettings(type: InternalServiceType) {
   const [existing] = await db
     .select()
     .from(serviceSettingsTable)
@@ -81,7 +87,7 @@ async function ensureServiceSettings(type: ServiceType) {
   return created;
 }
 
-async function getLastLogs(type: ServiceType, limit = 10) {
+async function getLastLogs(type: InternalServiceType, limit = 10) {
   return db
     .select({
       id: serviceControlLogsTable.id,
@@ -96,7 +102,7 @@ async function getLastLogs(type: ServiceType, limit = 10) {
     .limit(limit);
 }
 
-async function writeControlLog(type: ServiceType, changedBy: number | undefined, before: Record<string, unknown>, after: Record<string, unknown>) {
+async function writeControlLog(type: InternalServiceType, changedBy: number | undefined, before: Record<string, unknown>, after: Record<string, unknown>) {
   const diff: Record<string, { before: unknown; after: unknown }> = {};
   for (const key of Object.keys(after)) {
     if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) {
@@ -111,17 +117,36 @@ async function writeControlLog(type: ServiceType, changedBy: number | undefined,
   });
 }
 
+/** Map a raw DB control row to the public-facing shape. */
+function mapControl(row: Record<string, unknown>) {
+  return {
+    ...row,
+    serviceType: toPublic(row.serviceType as string),
+  };
+}
+
+/** Map a raw DB settings row to the public-facing shape. */
+function mapSettings(row: Record<string, unknown>) {
+  return {
+    ...row,
+    serviceType: toPublic(row.serviceType as string),
+  };
+}
+
 // ─── ADMIN: SERVICE CONTROL endpoints ────────────────────────────────────────
 
 router.get("/admin/services/:type/control", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const params = ServiceTypeParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    const control = await ensureServiceControl(params.data.type);
-    const logs = await getLastLogs(params.data.type, 10);
-    res.json({ ...control, logs });
-  } catch (err) {
+    const control = await ensureServiceControl(internalType);
+    const logs = await getLastLogs(internalType, 10);
+    const mappedLogs = logs.map(l => ({ ...l, serviceType: toPublic(l.serviceType as string) }));
+    res.json({ ...mapControl(control as unknown as Record<string, unknown>), logs: mappedLogs });
+  } catch {
     res.status(500).json({ error: "Failed to fetch service control" });
   }
 });
@@ -133,8 +158,10 @@ router.patch("/admin/services/:type/control", authenticate, requireRole("admin")
   const parsed = ServiceControlPatchBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    const current = await ensureServiceControl(params.data.type);
+    const current = await ensureServiceControl(internalType);
 
     const updateData: Record<string, unknown> = { updatedBy: req.user?.id ?? null, updatedAt: new Date() };
     if (parsed.data.isEnabled !== undefined) updateData.isEnabled = parsed.data.isEnabled;
@@ -148,11 +175,11 @@ router.patch("/admin/services/:type/control", authenticate, requireRole("admin")
     const [updated] = await db
       .update(serviceControlsTable)
       .set(updateData as Partial<typeof serviceControlsTable.$inferInsert>)
-      .where(eq(serviceControlsTable.serviceType, params.data.type))
+      .where(eq(serviceControlsTable.serviceType, internalType))
       .returning();
 
     await writeControlLog(
-      params.data.type,
+      internalType,
       req.user?.id,
       current as unknown as Record<string, unknown>,
       updated as unknown as Record<string, unknown>,
@@ -161,7 +188,7 @@ router.patch("/admin/services/:type/control", authenticate, requireRole("admin")
     const io = getIO();
     if (io) {
       const broadcastPayload = {
-        serviceType: updated.serviceType,
+        serviceType: toPublic(updated.serviceType),
         isEnabled: updated.isEnabled,
         displayMode: updated.displayMode,
         unavailableMessage: updated.unavailableMessage,
@@ -175,9 +202,10 @@ router.patch("/admin/services/:type/control", authenticate, requireRole("admin")
       io.emit(SOCKET_EVENTS.SERVICE_CONTROL_CHANGED, broadcastPayload);
     }
 
-    const logs = await getLastLogs(params.data.type, 10);
-    res.json({ ...updated, logs });
-  } catch (err) {
+    const logs = await getLastLogs(internalType, 10);
+    const mappedLogs = logs.map(l => ({ ...l, serviceType: toPublic(l.serviceType as string) }));
+    res.json({ ...mapControl(updated as unknown as Record<string, unknown>), logs: mappedLogs });
+  } catch {
     res.status(500).json({ error: "Failed to update service control" });
   }
 });
@@ -186,17 +214,19 @@ router.post("/admin/services/:type/control/reset", authenticate, requireRole("ad
   const params = ServiceTypeParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    const current = await ensureServiceControl(params.data.type);
+    const current = await ensureServiceControl(internalType);
 
     const [updated] = await db
       .update(serviceControlsTable)
       .set({ ...DEFAULT_CONTROL, updatedBy: req.user?.id ?? null, updatedAt: new Date() })
-      .where(eq(serviceControlsTable.serviceType, params.data.type))
+      .where(eq(serviceControlsTable.serviceType, internalType))
       .returning();
 
     await writeControlLog(
-      params.data.type,
+      internalType,
       req.user?.id,
       current as unknown as Record<string, unknown>,
       updated as unknown as Record<string, unknown>,
@@ -205,7 +235,7 @@ router.post("/admin/services/:type/control/reset", authenticate, requireRole("ad
     const io = getIO();
     if (io) {
       const broadcastPayload = {
-        serviceType: updated.serviceType,
+        serviceType: toPublic(updated.serviceType),
         isEnabled: updated.isEnabled,
         displayMode: updated.displayMode,
         unavailableMessage: updated.unavailableMessage,
@@ -219,9 +249,10 @@ router.post("/admin/services/:type/control/reset", authenticate, requireRole("ad
       io.emit(SOCKET_EVENTS.SERVICE_CONTROL_CHANGED, broadcastPayload);
     }
 
-    const logs = await getLastLogs(params.data.type, 10);
-    res.json({ ...updated, logs });
-  } catch (err) {
+    const logs = await getLastLogs(internalType, 10);
+    const mappedLogs = logs.map(l => ({ ...l, serviceType: toPublic(l.serviceType as string) }));
+    res.json({ ...mapControl(updated as unknown as Record<string, unknown>), logs: mappedLogs });
+  } catch {
     res.status(500).json({ error: "Failed to reset service control" });
   }
 });
@@ -232,13 +263,15 @@ router.get("/admin/services/:type/settings", authenticate, requireRole("admin"),
   const params = ServiceTypeParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    const settings = await ensureServiceSettings(params.data.type);
+    const settings = await ensureServiceSettings(internalType);
     res.json({
-      ...settings,
+      ...mapSettings(settings as unknown as Record<string, unknown>),
       minDriverRating: parseFloat(settings.minDriverRating as string),
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch service settings" });
   }
 });
@@ -250,8 +283,10 @@ router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"
   const parsed = ServiceSettingsPatchBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    await ensureServiceSettings(params.data.type);
+    await ensureServiceSettings(internalType);
 
     const updateData: Record<string, unknown> = { updatedBy: req.user?.id ?? null, updatedAt: new Date() };
     if (parsed.data.minDriverRating !== undefined) updateData.minDriverRating = parsed.data.minDriverRating.toFixed(1);
@@ -263,13 +298,13 @@ router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"
     const [updated] = await db
       .update(serviceSettingsTable)
       .set(updateData as Partial<typeof serviceSettingsTable.$inferInsert>)
-      .where(eq(serviceSettingsTable.serviceType, params.data.type))
+      .where(eq(serviceSettingsTable.serviceType, internalType))
       .returning();
 
     const io = getIO();
     if (io) {
       const broadcastPayload = {
-        serviceType: updated.serviceType,
+        serviceType: toPublic(updated.serviceType),
         minDriverRating: parseFloat(updated.minDriverRating as string),
         requiredLicenseTypes: updated.requiredLicenseTypes,
         requireInsurance: updated.requireInsurance,
@@ -283,10 +318,10 @@ router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"
     }
 
     res.json({
-      ...updated,
+      ...mapSettings(updated as unknown as Record<string, unknown>),
       minDriverRating: parseFloat(updated.minDriverRating as string),
     });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to update service settings" });
   }
 });
@@ -309,13 +344,14 @@ router.get("/services/control", authenticate, async (_req, res): Promise<void> =
 
     const byType: Record<string, unknown> = {};
     for (const row of rows) {
-      byType[row.serviceType] = row;
+      byType[row.serviceType] = mapControl(row as unknown as Record<string, unknown>);
     }
 
-    for (const type of SERVICE_TYPES) {
+    const INTERNAL_TYPES: InternalServiceType[] = ["car", "shuttle", "delivery", "motorcycle"];
+    for (const type of INTERNAL_TYPES) {
       if (!byType[type]) {
         const created = await ensureServiceControl(type);
-        byType[type] = {
+        byType[type] = mapControl({
           serviceType: created.serviceType,
           isEnabled: created.isEnabled,
           displayMode: created.displayMode,
@@ -323,12 +359,12 @@ router.get("/services/control", authenticate, async (_req, res): Promise<void> =
           unavailableAction: created.unavailableAction,
           activeZoneIds: created.activeZoneIds,
           maintenanceEta: created.maintenanceEta,
-        };
+        });
       }
     }
 
     res.json({ data: Object.values(byType) });
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Failed to fetch service controls" });
   }
 });
@@ -337,9 +373,11 @@ router.get("/services/:type/control", authenticate, async (req, res): Promise<vo
   const params = ServiceTypeParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    const control = await ensureServiceControl(params.data.type);
-    res.json({
+    const control = await ensureServiceControl(internalType);
+    res.json(mapControl({
       serviceType: control.serviceType,
       isEnabled: control.isEnabled,
       displayMode: control.displayMode,
@@ -347,8 +385,8 @@ router.get("/services/:type/control", authenticate, async (req, res): Promise<vo
       unavailableAction: control.unavailableAction,
       activeZoneIds: control.activeZoneIds,
       maintenanceEta: control.maintenanceEta,
-    });
-  } catch (err) {
+    }));
+  } catch {
     res.status(500).json({ error: "Failed to fetch service control" });
   }
 });
@@ -357,17 +395,19 @@ router.get("/services/:type/settings", authenticate, async (req, res): Promise<v
   const params = ServiceTypeParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid service type" }); return; }
 
+  const internalType = toInternal(params.data.type)!;
+
   try {
-    const settings = await ensureServiceSettings(params.data.type);
-    res.json({
+    const settings = await ensureServiceSettings(internalType);
+    res.json(mapSettings({
       serviceType: settings.serviceType,
       minDriverRating: parseFloat(settings.minDriverRating as string),
       requiredLicenseTypes: settings.requiredLicenseTypes,
       requireInsurance: settings.requireInsurance,
       requireBackgroundCheck: settings.requireBackgroundCheck,
       maxActiveRidesPerDriver: settings.maxActiveRidesPerDriver,
-    });
-  } catch (err) {
+    }));
+  } catch {
     res.status(500).json({ error: "Failed to fetch service settings" });
   }
 });
