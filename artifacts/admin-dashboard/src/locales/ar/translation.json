@@ -54,7 +54,10 @@
     "groupSystem": "النظام",
     "auditLogs": "سجلات التدقيق",
     "ratings": "التقييمات",
-    "chatInbox": "صندوق المحادثات"
+    "chatInbox": "صندوق المحادثات",
+    "shuttleBookings": "حجوزات المسارات",
+    "shuttleAvailability": "توفر الفترات",
+    "shuttleRenewalHistory": "سجل التجديد"
   },
   "common": {
     "save": "حفظ",

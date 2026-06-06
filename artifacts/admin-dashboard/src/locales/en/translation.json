@@ -54,7 +54,10 @@
     "groupSystem": "SYSTEM",
     "auditLogs": "Audit Logs",
     "ratings": "Ratings",
-    "chatInbox": "Chat Inbox"
+    "chatInbox": "Chat Inbox",
+    "shuttleBookings": "Route Bookings",
+    "shuttleAvailability": "Slot Availability",
+    "shuttleRenewalHistory": "Renewal History"
   },
   "common": {
     "save": "Save",

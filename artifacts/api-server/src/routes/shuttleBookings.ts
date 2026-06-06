@@ -559,22 +559,94 @@ router.patch(
     const { driverId } = parsed.data;
 
     const [existing] = await db
-      .select({ id: driverShuttleBookingsTable.id, status: driverShuttleBookingsTable.status })
+      .select({
+        id: driverShuttleBookingsTable.id,
+        status: driverShuttleBookingsTable.status,
+        driverId: driverShuttleBookingsTable.driverId,
+        routeId: driverShuttleBookingsTable.routeId,
+        weekStart: driverShuttleBookingsTable.weekStart,
+        routeName: routesTable.name,
+        departureTime: routeTimeSlotsTable.departureTime,
+      })
       .from(driverShuttleBookingsTable)
+      .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
+      .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
       .where(eq(driverShuttleBookingsTable.id, bookingId));
     if (!existing) { res.status(404).json({ error: "Booking not found" }); return; }
 
-    const [newDriver] = await db
-      .select({ id: driversTable.id })
+    const [newDriverRow] = await db
+      .select({ id: driversTable.id, userId: driversTable.userId, name: driversTable.name })
       .from(driversTable)
       .where(and(eq(driversTable.id, driverId), eq(driversTable.isActive, true)));
-    if (!newDriver) { res.status(404).json({ error: "Target driver not found or inactive" }); return; }
+    if (!newDriverRow) { res.status(404).json({ error: "Target driver not found or inactive" }); return; }
 
     const [updated] = await db
       .update(driverShuttleBookingsTable)
       .set({ driverId, status: "active", renewalNotifiedAt: null, renewalDeadline: null, renewalConfirmedAt: null, updatedAt: new Date() })
       .where(eq(driverShuttleBookingsTable.id, bookingId))
       .returning();
+
+    // ── Notify old driver (if different) ──────────────────────────────────────
+    const io = getIO();
+    if (existing.driverId !== driverId) {
+      const [oldDriverRow] = await db
+        .select({ userId: driversTable.userId })
+        .from(driversTable)
+        .where(eq(driversTable.id, existing.driverId));
+
+      if (oldDriverRow) {
+        const [oldNotif] = await db
+          .insert(notificationsTable)
+          .values({
+            userId: oldDriverRow.userId,
+            title: "Route Booking Reassigned",
+            body: `Your booking for route "${existing.routeName}" at ${existing.departureTime} (week of ${existing.weekStart}) has been reassigned to another driver by an administrator.`,
+          })
+          .returning();
+        if (io && oldNotif) {
+          io.to(SOCKET_ROOMS.PASSENGER(oldDriverRow.userId)).emit(SOCKET_EVENTS.SHUTTLE_BOOKING_REASSIGNED, {
+            bookingId,
+            role: "removed",
+            routeName: existing.routeName,
+            departureTime: existing.departureTime,
+            weekStart: existing.weekStart,
+          });
+          io.to(SOCKET_ROOMS.PASSENGER(oldDriverRow.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+            id: String(oldNotif.id),
+            category: "shuttle",
+            title: oldNotif.title,
+            body: oldNotif.body,
+            time: oldNotif.createdAt instanceof Date ? oldNotif.createdAt.toISOString() : String(oldNotif.createdAt),
+          });
+        }
+      }
+    }
+
+    // ── Notify new driver ──────────────────────────────────────────────────────
+    const [newNotif] = await db
+      .insert(notificationsTable)
+      .values({
+        userId: newDriverRow.userId,
+        title: "Route Booking Assigned",
+        body: `You have been assigned to route "${existing.routeName}" at ${existing.departureTime} for the week of ${existing.weekStart}.`,
+      })
+      .returning();
+    if (io && newNotif) {
+      io.to(SOCKET_ROOMS.PASSENGER(newDriverRow.userId)).emit(SOCKET_EVENTS.SHUTTLE_BOOKING_REASSIGNED, {
+        bookingId,
+        role: "assigned",
+        routeName: existing.routeName,
+        departureTime: existing.departureTime,
+        weekStart: existing.weekStart,
+      });
+      io.to(SOCKET_ROOMS.PASSENGER(newDriverRow.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+        id: String(newNotif.id),
+        category: "shuttle",
+        title: newNotif.title,
+        body: newNotif.body,
+        time: newNotif.createdAt instanceof Date ? newNotif.createdAt.toISOString() : String(newNotif.createdAt),
+      });
+    }
 
     res.json({ ok: true, booking: updated });
   },
@@ -719,6 +791,125 @@ router.patch(
     }
 
     res.json({ ok: true, booking: updated });
+  },
+);
+
+// ─── GET /admin/shuttle/availability ─────────────────────────────────────────
+// Availability matrix: for a given week (query ?week=YYYY-MM-DD), returns every
+// route × every active time slot with the booking (if any) occupying that slot.
+// Defaults to the upcoming week when ?week is omitted.
+router.get(
+  "/admin/shuttle/availability",
+  authenticate,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    let weekStart: string;
+    if (req.query.week) {
+      weekStart = req.query.week as string;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
+        res.status(400).json({ error: "week must be YYYY-MM-DD" });
+        return;
+      }
+    } else {
+      const now = new Date();
+      const day = now.getUTCDay();
+      const daysToAdd = day === 0 ? 7 : 7 - day;
+      const sunday = new Date(now);
+      sunday.setUTCDate(sunday.getUTCDate() + daysToAdd);
+      sunday.setUTCHours(0, 0, 0, 0);
+      weekStart = sunday.toISOString().split("T")[0]!;
+    }
+
+    const [routes, slots, bookings] = await Promise.all([
+      db
+        .select({
+          id: routesTable.id,
+          name: routesTable.name,
+          fromLocation: routesTable.fromLocation,
+          toLocation: routesTable.toLocation,
+        })
+        .from(routesTable)
+        .where(eq(routesTable.isActive, true))
+        .orderBy(asc(routesTable.name)),
+
+      db
+        .select({
+          id: routeTimeSlotsTable.id,
+          routeId: routeTimeSlotsTable.routeId,
+          departureTime: routeTimeSlotsTable.departureTime,
+          isActive: routeTimeSlotsTable.isActive,
+        })
+        .from(routeTimeSlotsTable)
+        .orderBy(asc(routeTimeSlotsTable.routeId), asc(routeTimeSlotsTable.departureTime)),
+
+      db
+        .select({
+          id: driverShuttleBookingsTable.id,
+          routeId: driverShuttleBookingsTable.routeId,
+          timeSlotId: driverShuttleBookingsTable.timeSlotId,
+          status: driverShuttleBookingsTable.status,
+          driverId: driverShuttleBookingsTable.driverId,
+          driverName: driversTable.name,
+          driverPhone: driversTable.phone,
+          renewalDeadline: driverShuttleBookingsTable.renewalDeadline,
+          renewalNotifiedAt: driverShuttleBookingsTable.renewalNotifiedAt,
+        })
+        .from(driverShuttleBookingsTable)
+        .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
+        .where(
+          and(
+            eq(driverShuttleBookingsTable.weekStart, weekStart),
+            inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+          ),
+        ),
+    ]);
+
+    const bookingMap = new Map(bookings.map((b) => [`${b.routeId}:${b.timeSlotId}`, b]));
+
+    const slotsByRoute = new Map<number, typeof slots>();
+    for (const s of slots) {
+      const list = slotsByRoute.get(s.routeId) ?? [];
+      list.push(s);
+      slotsByRoute.set(s.routeId, list);
+    }
+
+    const data = routes.map((r) => {
+      const routeSlots = (slotsByRoute.get(r.id) ?? []).map((s) => {
+        const booking = bookingMap.get(`${r.id}:${s.id}`);
+        return {
+          slotId: s.id,
+          departureTime: s.departureTime,
+          isActive: s.isActive,
+          isBooked: !!booking,
+          booking: booking
+            ? {
+                id: booking.id,
+                driverId: booking.driverId,
+                driverName: booking.driverName,
+                driverPhone: booking.driverPhone,
+                status: booking.status,
+                renewalNotifiedAt: booking.renewalNotifiedAt ?? null,
+                renewalDeadline: booking.renewalDeadline ?? null,
+              }
+            : null,
+        };
+      });
+      const totalSlots = routeSlots.filter((s) => s.isActive).length;
+      const bookedSlots = routeSlots.filter((s) => s.isBooked).length;
+      return {
+        routeId: r.id,
+        routeName: r.name,
+        fromLocation: r.fromLocation,
+        toLocation: r.toLocation,
+        weekStart,
+        totalSlots,
+        bookedSlots,
+        availableSlots: totalSlots - bookedSlots,
+        slots: routeSlots,
+      };
+    });
+
+    res.json({ weekStart, data, total: data.length });
   },
 );
 

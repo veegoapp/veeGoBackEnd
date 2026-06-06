@@ -54,6 +54,16 @@ export const SOCKET_EVENTS = {
   // app can immediately update its UI without waiting for the next poll.
   DRIVER_COOLDOWN_CLEARED: "driver:cooldown:cleared",
 
+  // ── Server → Driver (shuttle bookings) ───────────────────────────────────────
+  // shuttle:booking:created  — emitted to the booking driver when a new route-booking is confirmed.
+  // shuttle:booking:cancelled — emitted to the affected driver when a booking is cancelled (by admin or expiry).
+  // shuttle:renewal:confirmed — emitted to the driver after they confirm a priority renewal.
+  // shuttle:booking:reassigned — emitted to OLD and NEW driver when admin reassigns a booking.
+  SHUTTLE_BOOKING_CREATED:    "shuttle:booking:created",
+  SHUTTLE_BOOKING_CANCELLED:  "shuttle:booking:cancelled",
+  SHUTTLE_RENEWAL_CONFIRMED:  "shuttle:renewal:confirmed",
+  SHUTTLE_BOOKING_REASSIGNED: "shuttle:booking:reassigned",
+
   // ── Server → Admin + Passenger (safety) ─────────────────────────────────────
   SOS_TRIGGERED:           "sos:triggered",
   RIDE_DEVIATION_WARNING:  "ride:deviation:warning",
