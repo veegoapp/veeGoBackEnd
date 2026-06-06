@@ -1,0 +1,115 @@
+You are reviewing your own backend API contract. A frontend integration audit was conducted on the VeeGo Passenger App, and the audit team identified several issues — some blamed on the frontend, others may actually reflect missing or undocumented backend endpoints.
+
+Your job is to cross-check each finding below against your actual backend implementation and answer honestly:
+  - Is the frontend wrong? (wrong path, wrong method, wrong event name)
+  - Is the backend missing this endpoint / event entirely?
+  - Is the backend contract documentation incomplete or ambiguous?
+  - Or is this a shared responsibility?
+
+For each item, give a verdict: FRONTEND BUG | BACKEND MISSING | CONTRACT GAP | SHARED
+
+---
+
+## Findings to cross-check
+
+### REST endpoints
+
+F-001 — Ride request
+Frontend calls: POST /rides/request
+Contract says:  POST /api/rides
+Question: Does your router handle /rides/request at all, or is it a strict 404?
+
+F-002 — Fare estimate
+Frontend calls: POST /rides/estimate
+Contract says:  (no such endpoint documented)
+Question: Does this endpoint exist but was never documented? Or should the frontend remove this step?
+
+F-003 — Rate driver
+Frontend calls: POST /rides/:id/rate
+Contract says:  POST /api/rides/:id/rate-driver
+Question: Do you have a handler on /rides/:id/rate that might catch this, or is it a clean 404?
+
+F-004 — Cancel ride
+Frontend calls: PATCH /rides/:id/cancel
+Contract says:  POST /api/rides/:id/cancel
+Question: Does your router reject PATCH entirely, or does it fall through silently?
+
+F-005 — User profile
+Frontend calls: GET /users/me and PATCH /users/me
+Contract says:  GET /api/auth/me and PATCH /api/auth/me
+Question: Is /users/me a completely dead path, or is there a legacy handler on it?
+
+F-006 — In-ride chat
+Frontend calls: GET /trips/:id/chat and POST /trips/:id/chat
+Contract says:  GET /api/chat/:rideId and POST /api/chat/:rideId
+Question: Are tripId and rideId the same identifier, or different? This must be clarified.
+
+F-007 — Cancel shuttle booking
+Frontend calls: PATCH /bookings/:id/cancel
+Contract says:  POST /api/bookings/:id/cancel
+Question: Same as F-004 — does PATCH get a 405, or does nothing happen?
+
+F-008 — Promo listing
+Frontend calls: GET /promo (admin-only endpoint)
+Contract says:  Passenger flow should use POST /api/promos/validate
+Question: Is GET /promos truly admin-only with a role guard? Or is it open and returning the wrong data shape?
+
+F-009 — Forgot password
+Frontend calls: POST /auth/forgot-password
+Contract says:  (no such endpoint documented)
+Question: Was this endpoint planned but not yet built? Or is it intentionally out of scope?
+
+---
+
+### Socket.IO events
+
+S-001 — Service control
+Frontend listens: service:control:changed
+Backend emits:   service:control_changed
+Question: Confirm which name your server actually emits. One colon vs underscore difference.
+
+S-002 — Driver location
+Frontend listens: ride:driver_location
+Backend emits:   ride:location_updated
+Question: What is the exact event name your server emits when driver GPS updates?
+
+S-003 — Passenger joins trip
+Frontend emits:  passenger:join:trip  with payload: tripId (bare number)
+Backend expects: passenger:join_trip  with payload: { tripId: number }
+Question: Does your server validate the payload shape? What happens if it receives a bare number instead of an object?
+
+S-004 — Waiting charges
+Frontend: not listening to ride:free_window_ended or ride:waiting_charge_updated
+Question: Are these events currently being emitted by your server in production? If yes, passengers are being charged silently with no UI feedback.
+
+S-005 — Surge pricing
+Frontend: not listening to surge:update
+Question: Is surge:update actively emitted today, or is surge pricing not yet live?
+
+---
+
+### Endpoints with zero frontend coverage (your call)
+
+B-001 — POST /rides/:id/sos
+No SOS button exists anywhere in the passenger app.
+Question: Is this endpoint live and tested? A safety feature with no UI is a liability.
+
+B-005 — POST /promos/validate
+The correct passenger promo flow is never called.
+Question: Is this endpoint live? The frontend currently hits the admin list endpoint instead.
+
+B-007 — POST /wallet/topup
+Top-up button exists in the UI but the API call is never made.
+Question: Is the topup endpoint fully implemented and tested on your side?
+
+---
+
+## What we need from you
+
+1. Go through each item above and give a verdict per finding.
+2. Flag any endpoint that exists on your side but is undocumented — those are contract gaps, not frontend bugs.
+3. Confirm the exact Socket.IO event names your server emits (S-001, S-002, S-003).
+4. Clarify whether tripId and rideId are the same value (F-006).
+5. Decide: should F-002 (fare estimate) and F-009 (forgot password) be added to the contract, or removed from the frontend?
+
+The goal is a single agreed contract both sides sign off on before any fixes are written.

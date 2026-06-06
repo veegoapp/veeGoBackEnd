@@ -1,8 +1,9 @@
 # VeeGo Backend API Contract
 
-> **Generated:** 2026-06-06  
+> **Generated:** 2026-06-06 · **Audited & corrected:** 2026-06-06  
 > **Source:** `artifacts/api-server` (Express + TypeScript, Drizzle ORM, PostgreSQL)  
-> **Base URL:** All REST endpoints are prefixed with `/api` (e.g., `POST /api/auth/register`)
+> **Base URL:** All REST endpoints are prefixed with `/api` (e.g., `POST /api/auth/register`)  
+> **Audit note:** See `FRONTEND_AUDIT_VERDICTS.md` for the full cross-check that produced this corrected version.
 
 ---
 
@@ -14,20 +15,23 @@
 4. [Error Format](#error-format)
 5. [REST Endpoints](#rest-endpoints)
    - [Health](#health)
-   - [Authentication](#auth-endpoints)
-   - [Users (Passengers)](#users-passengers)
-   - [User Locations](#user-locations)
-   - [Rides](#rides)
+   - [Auth Endpoints](#auth-endpoints)
+   - [Users (Canonical Profile)](#users-canonical-profile)
+   - [User Saved Locations](#user-saved-locations)
+   - [Rides — Fare Estimate](#rides--fare-estimate)
+   - [Rides — Passenger](#rides--passenger)
+   - [Rides — Driver Actions](#rides--driver-actions)
+   - [Rides — Admin](#rides--admin)
    - [Ratings](#ratings)
    - [Tracking (Public Share Links)](#tracking-public-share-links)
    - [SOS Events](#sos-events)
-   - [Drivers (Self-Service)](#drivers-self-service)
+   - [Driver Self-Service](#driver-self-service)
    - [Driver Trips (Shuttle)](#driver-trips-shuttle)
    - [Driver Wallet & Earnings](#driver-wallet--earnings)
-   - [Driver Documents (Self & Admin)](#driver-documents-self--admin)
+   - [Driver Documents](#driver-documents)
    - [Driver Check-In (Selfie)](#driver-check-in-selfie)
    - [Notifications](#notifications)
-   - [Wallet](#wallet)
+   - [Wallet (Passenger)](#wallet-passenger)
    - [Payments](#payments)
    - [Shuttle Lines & Bookings](#shuttle-lines--bookings)
    - [Routes](#routes)
@@ -35,24 +39,22 @@
    - [Buses](#buses)
    - [Vehicles](#vehicles)
    - [Schedules](#schedules)
-   - [Chat](#chat)
-   - [Ratings (Shared)](#ratings-shared)
+   - [Chat (Shuttle Trips Only)](#chat-shuttle-trips-only)
    - [Promo Codes](#promo-codes)
    - [Support Tickets](#support-tickets)
    - [Zones & Zone Pricing](#zones--zone-pricing)
    - [Suggestions](#suggestions)
-   - [Earnings (Admin & Driver)](#earnings-admin--driver)
+   - [Earnings](#earnings)
    - [Service Controls](#service-controls)
    - [Dashboard (Admin)](#dashboard-admin)
    - [Admin: Users & Drivers](#admin-users--drivers)
    - [Admin: Analytics](#admin-analytics)
    - [Admin: Settings](#admin-settings)
-   - [Admin: Dispatch (Peak Settings)](#admin-dispatch-peak-settings)
+   - [Admin: Dispatch / Peak Settings](#admin-dispatch--peak-settings)
    - [Admin: SOS Events](#admin-sos-events)
    - [Admin: Audit Logs](#admin-audit-logs)
    - [Admin: Staff & Roles](#admin-staff--roles)
-   - [Admin: Bookings](#admin-bookings)
-   - [Admin: Transactions](#admin-transactions)
+   - [Admin: Bookings & Transactions](#admin-bookings--transactions)
    - [Admin: Location History](#admin-location-history)
 6. [Socket.IO Events](#socketio-events)
 7. [Background Jobs](#background-jobs)
@@ -93,7 +95,7 @@ Tokens are obtained via `POST /api/auth/login` or `POST /api/auth/admin/login`.
 
 | Middleware | Description |
 |-----------|-------------|
-| `authenticate` | Verifies JWT, attaches `req.user = { id, role }` |
+| `authenticate` | Verifies JWT; attaches `req.user = { id, role }` |
 | `requireRole(...roles)` | Checks `req.user.role` against the allowed list |
 | `requirePermission(perm)` | Checks staff permission; super-admins bypass this check |
 
@@ -103,7 +105,7 @@ Tokens are obtained via `POST /api/auth/login` or `POST /api/auth/admin/login`.
 - **`user`** — passenger-only
 - **`driver`** — driver-only
 - **`admin`** — admin/staff only
-- **`user | driver`** — either role accepted
+- **`any`** — any authenticated role
 
 ---
 
@@ -113,7 +115,7 @@ Tokens are obtained via `POST /api/auth/login` or `POST /api/auth/admin/login`.
 |-------|-------|
 | Auth endpoints (`/auth/*`) | 20 requests / 15 minutes |
 | All API endpoints | 200 requests / 15 minutes |
-| Ride requests (`POST /rides`) | 3 requests / 2 minutes per user (configurable via `RIDE_RATE_LIMIT_*` env vars) |
+| Ride requests (`POST /rides/request`) | 3 requests / 2 minutes per user (configurable via `RIDE_RATE_LIMIT_*` env vars) |
 
 ---
 
@@ -128,7 +130,7 @@ All errors return JSON:
 Some endpoints include additional fields:
 
 ```json
-{ "error": "...", "code": "MACHINE_READABLE_CODE", "details": {} }
+{ "error": "...", "details": {} }
 ```
 
 Common HTTP status codes:
@@ -243,7 +245,7 @@ Exchange a refresh token for a new access token.
 
 Invalidate the current refresh token.
 
-**Auth: any authenticated role.**
+**Auth: any.**
 
 **Request body:**
 ```json
@@ -254,33 +256,20 @@ Invalidate the current refresh token.
 
 ---
 
-#### `GET /api/auth/me`
+#### `GET /api/auth/me` *(deprecated)*
 
-Return the current user's profile.
+Returns the current user's profile. **Deprecated — use `GET /api/users/me` instead.**  
+Both paths return identical payloads today; `/auth/me` may be removed in a future release.
 
-**Auth: any authenticated role.**
-
-**Response 200:**
-```json
-{
-  "id": 1,
-  "name": "...",
-  "email": "...",
-  "phone": "...",
-  "role": "user|driver|admin",
-  "walletBalance": 100.00,
-  "isBlocked": false,
-  "createdAt": "..."
-}
-```
+**Auth: any.**
 
 ---
 
-#### `PATCH /api/auth/me`
+#### `PATCH /api/auth/me` *(deprecated)*
 
-Update the authenticated user's own profile.
+Update the authenticated user's profile. **Deprecated — use `PATCH /api/users/me` instead.**
 
-**Auth: any authenticated role.**
+**Auth: any.**
 
 **Request body (all optional):**
 ```json
@@ -292,8 +281,6 @@ Update the authenticated user's own profile.
   "newPassword": "string"
 }
 ```
-
-**Response 200:** Updated user object (without password).
 
 ---
 
@@ -323,7 +310,126 @@ Register a new driver account.
 
 ---
 
-### Users (Passengers)
+#### `POST /api/auth/forgot-password`
+
+Initiate a phone-based password reset. Sends a one-time reset code via SMS.
+
+**No auth required.**
+
+**Request body:**
+```json
+{ "phone": "string (min 5 chars)" }
+```
+
+**Business logic:**
+- Always returns a success response to prevent phone number enumeration.
+- If the phone is registered: generates an 8-character uppercase hex token, stores it in `users.passwordResetToken` with a 1-hour expiry, and sends it via SMS.
+- If the phone is not registered: silently returns success.
+
+**Response 200:**
+```json
+{ "success": true, "message": "If this phone is registered, a reset code has been sent" }
+```
+
+---
+
+#### `POST /api/auth/reset-password`
+
+Confirm a reset token and set a new password.
+
+**No auth required.**
+
+**Request body:**
+```json
+{
+  "phone": "string",
+  "token": "string (6+ chars, the code from SMS)",
+  "newPassword": "string (min 8 chars)"
+}
+```
+
+**Business logic:**
+- Validates token against `users.passwordResetToken` and checks expiry.
+- On success: hashes the new password, clears the reset token, and invalidates any existing refresh token.
+
+**Response 200:**
+```json
+{ "success": true, "message": "Password updated successfully. Please log in with your new password." }
+```
+
+**Error 400:** Invalid phone, invalid token, or token expired.
+
+---
+
+### Users (Canonical Profile)
+
+> **These are the canonical user profile endpoints.** The old `/auth/me` and `/auth/me` paths are deprecated aliases that still work today.
+
+#### `GET /api/users/me`
+
+Get the authenticated user's own profile, including role permissions.
+
+**Auth: any.**
+
+**Response 200:**
+```json
+{
+  "id": 1,
+  "name": "...",
+  "email": "...",
+  "phone": "...",
+  "role": "user | driver | admin",
+  "walletBalance": 100.00,
+  "isBlocked": false,
+  "permissions": ["view_dashboard", "..."],
+  "createdAt": "..."
+}
+```
+
+---
+
+#### `PATCH /api/users/me`
+
+Update the authenticated user's own profile.
+
+**Auth: any.**
+
+**Request body (all optional):**
+```json
+{ "name": "string", "email": "string", "phone": "string" }
+```
+
+**Response 200:** Updated user object (same shape as GET).
+
+---
+
+#### `POST /api/users/me/push-token`
+
+Register a device push notification token for the authenticated user.
+
+**Auth: any.**
+
+**Request body:**
+```json
+{
+  "token": "string (required)",
+  "platform": "ios | android | web (optional)"
+}
+```
+
+**Response 200:** `{ "success": true, "message": "Push token registered" }`
+
+---
+
+#### `GET /api/users/me/bookings`
+
+Get the authenticated user's shuttle bookings with trip details.
+
+**Auth: any.**
+
+**Response 200:** Array of booking objects, each including a nested `trip` object.
+
+---
 
 #### `GET /api/users`
 
@@ -352,8 +458,6 @@ Get a single user.
 
 **Auth: admin.**
 
-**Response 200:** User object.
-
 ---
 
 #### `PATCH /api/users/:id`
@@ -367,8 +471,6 @@ Update a user's profile or block status.
 { "name": "string", "email": "string", "phone": "string", "isBlocked": false }
 ```
 
-**Response 200:** Updated user object.
-
 ---
 
 #### `GET /api/users/:id/rides`
@@ -379,13 +481,11 @@ List a user's ride history.
 
 **Query params:** `page`, `limit`
 
-**Response 200:** `{ "data": [...rides], "total": N }`
-
 ---
 
 #### `POST /api/users/:id/wallet/adjust`
 
-Adjust a user's wallet balance (admin credit/debit).
+Admin credit/debit of a user's wallet. Positive = credit; negative = debit.
 
 **Auth: admin.**
 
@@ -394,30 +494,29 @@ Adjust a user's wallet balance (admin credit/debit).
 { "amount": 50.00, "description": "string" }
 ```
 
-Positive amount = credit; negative = debit.
-
 **Response 200:** `{ "walletBalance": 150.00 }`
 
 ---
 
-### User Locations
+### User Saved Locations
 
 #### `GET /api/user/locations`
-
-List the authenticated user's saved locations.
 
 **Auth: user.**
 
 **Response 200:**
 ```json
-{ "data": [ { "id": 1, "label": "home|work|other", "name": "...", "address": "...", "latitude": 30.0, "longitude": 31.0, "isDefault": true } ], "total": 3 }
+{
+  "data": [
+    { "id": 1, "label": "home | work | other", "name": "...", "address": "...", "latitude": 30.0, "longitude": 31.0, "isDefault": true }
+  ],
+  "total": 3
+}
 ```
 
 ---
 
 #### `POST /api/user/locations`
-
-Save a new location.
 
 **Auth: user.**
 
@@ -441,19 +540,13 @@ If `isDefault: true`, all other locations for the user are set to `isDefault: fa
 
 #### `PATCH /api/user/locations/:id`
 
-Update a saved location.
-
-**Auth: user.**
-
-**Request body:** Any fields from the create body (all optional).
+**Auth: user.** All fields optional.
 
 **Response 200:** Updated location object.
 
 ---
 
 #### `DELETE /api/user/locations/:id`
-
-Delete a saved location.
 
 **Auth: user.**
 
@@ -463,8 +556,6 @@ Delete a saved location.
 
 #### `GET /api/admin/user-locations`
 
-View a user's saved locations (admin).
-
 **Auth: admin.**
 
 **Query params:** `userId` (required, int)
@@ -473,19 +564,62 @@ View a user's saved locations (admin).
 
 ---
 
-### Rides
+### Rides — Fare Estimate
+
+#### `POST /api/rides/estimate`
+
+Calculate a fare estimate before booking. Applies zone-specific pricing and the live surge multiplier. **Call this before `POST /rides/request`.**
+
+**Auth: any authenticated user.**
+
+**Request body:**
+```json
+{
+  "vehicleType": "car | bike",
+  "pickupLatitude": 30.0,
+  "pickupLongitude": 31.0,
+  "dropoffLatitude": 30.1,
+  "dropoffLongitude": 31.1
+}
+```
+
+**Business logic:**
+1. Looks up all active zone-pricing rules for the given `vehicleType`.
+2. Finds which zone (if any) contains the pickup point using haversine distance to each zone's center.
+3. Falls back to global ride pricing if no zone matches.
+4. Returns 404 if no pricing exists for the vehicle type.
+5. Applies the current surge multiplier from the in-memory surge state (no DB round-trip).
+
+**Response 200:**
+```json
+{
+  "data": {
+    "distanceKm": 5.123,
+    "estimatedDurationMinutes": 10,
+    "estimatedPrice": 45.50,
+    "surgeActive": false,
+    "surgeMultiplier": 1,
+    "pricingSource": "zone:Downtown | global"
+  }
+}
+```
+
+**Error 404:** No active pricing configured for the vehicle type.
+
+---
+
+### Rides — Passenger
 
 Ride status lifecycle:
-
 ```
 searching → driver_assigned → driver_arrived → active → completed
-                                                        ↓
-                              cancelled (at any pre-completed stage)
+                                               ↓
+                  cancelled (from any pre-completed status)
 ```
 
-#### `POST /api/rides`
+#### `POST /api/rides/request`
 
-Request a new ride. Escrowed fare is deducted from the passenger's wallet immediately.
+Request a new ride. The estimated fare is escrowed from the passenger's wallet immediately.
 
 **Auth: user.**  
 **Rate limit:** 3 requests / 2 minutes per user.
@@ -493,25 +627,23 @@ Request a new ride. Escrowed fare is deducted from the passenger's wallet immedi
 **Request body:**
 ```json
 {
+  "vehicleType": "car | bike",
   "pickupLatitude": 30.0,
   "pickupLongitude": 31.0,
   "pickupAddress": "string",
   "dropoffLatitude": 30.1,
   "dropoffLongitude": 31.1,
   "dropoffAddress": "string",
-  "vehicleType": "car | motorcycle | van | minibus",
-  "distanceKm": 5.2,
-  "estimatedPrice": 45.00,
   "promoCode": "string (optional)"
 }
 ```
 
 **Business logic:**
-- Service availability is checked (service must be `isEnabled: true` and `displayMode: "live"`).
-- Passenger wallet must have sufficient balance for the estimated fare.
-- If a valid promo code is provided, the fare is discounted and the code's `usedCount` is incremented.
-- Estimated fare is escrowed (deducted from wallet, not paid to driver yet).
-- Dispatch is started immediately (notifies nearby drivers via Socket.IO).
+- Service must be enabled (`isEnabled: true`, `displayMode: "live"`).
+- Wallet balance must cover the estimated fare (computed fresh using the same zone+surge logic as `/rides/estimate`).
+- If a valid promo code is provided, the fare is discounted; `promoCode.usedCount` is incremented.
+- The estimated fare is escrowed (deducted from wallet; not paid to driver until ride completion).
+- Dispatch starts immediately — nearby drivers are notified via Socket.IO.
 
 **Response 201:**
 ```json
@@ -520,33 +652,42 @@ Request a new ride. Escrowed fare is deducted from the passenger's wallet immedi
 
 ---
 
-#### `GET /api/rides`
+#### `GET /api/rides/my`
 
-List the authenticated passenger's rides.
+List the authenticated passenger's own rides.
 
 **Auth: user.**
 
-**Query params:** `page`, `limit`, `status`
+**Query params:**
+| Param | Type | Description |
+|-------|------|-------------|
+| `status` | string | Filter by ride status |
+| `vehicleType` | string | Filter by vehicle type |
+| `page` | int | Default 1 |
+| `limit` | int | Default 20, max 100 |
 
-**Response 200:** `{ "data": [...rides], "total": N, "page": 1, "limit": 20 }`
+**Response 200:**
+```json
+{ "data": [...rides], "meta": { "total": N, "page": 1, "limit": 20 } }
+```
 
 ---
 
 #### `GET /api/rides/active`
 
-Get the authenticated passenger's current active ride.
+Get the passenger's currently active ride (any non-terminal status).
 
 **Auth: user.**
 
-**Response 200:** `{ "data": { ...ride } }` or `{ "data": null }` if no active ride.
+**Response 200:** `{ "data": { ...ride } }` or `{ "data": null }`.
 
 ---
 
 #### `GET /api/rides/:id`
 
-Get a specific ride.
+Get a specific ride. Accessible by the ride's passenger, its driver, or any admin.
 
-**Auth: user or admin.**
+**Auth: any.**
 
 **Response 200:** `{ "data": { ...ride } }`
 
@@ -562,7 +703,7 @@ Get the event log for a ride.
 
 ---
 
-#### `POST /api/rides/:id/cancel`
+#### `PATCH /api/rides/:id/cancel`
 
 Passenger cancels a ride.
 
@@ -573,206 +714,18 @@ Passenger cancels a ride.
 { "reason": "string (optional)" }
 ```
 
-**Business logic:**
-- Allowed statuses for cancellation: `searching`, `driver_assigned`, `driver_arrived`.
-- Cancellation fees apply based on status:
-  - `searching`: full refund
-  - `driver_assigned`: flat fee of `cancellation_fee_assigned` setting (default 2.00 EGP)
-  - `driver_arrived`: flat fee of `cancellation_fee_arrived` setting (default 5.00 EGP) + any accrued waiting charges
-- Remaining escrowed amount is refunded to wallet.
+**Allowed statuses:** `searching`, `driver_assigned`, `driver_arrived`
+
+**Cancellation fees:**
+| Status at cancellation | Fee |
+|----------------------|-----|
+| `searching` | Full refund (no fee) |
+| `driver_assigned` | `cancellation_fee_assigned` setting (default 2.00 EGP) |
+| `driver_arrived` | `cancellation_fee_arrived` setting (default 5.00 EGP) + accrued waiting charge |
 
 **Response 200:** `{ "data": { ...updatedRide } }`
 
 ---
-
-#### `PATCH /api/driver/rides/:id/accept`
-
-Driver accepts (takes) a ride request.
-
-**Auth: driver.**
-
-**Business logic:**
-- Driver must be `online` and have an active vehicle.
-- Service settings are validated: minimum driver rating, insurance requirement, background check, max active rides.
-- Ride is atomically set to `driver_assigned` (optimistic locking — returns 409 if another driver grabbed it first).
-- Driver status set to `busy`.
-- Passenger notified via Socket.IO (`ride:driver_assigned`).
-
-**Response 200:** `{ "data": { ...updatedRide } }`
-
----
-
-#### `PATCH /api/driver/rides/:id/arrived`
-
-Driver signals they have arrived at pickup.
-
-**Auth: driver.**
-
-**Business logic:**
-- Ride must be in `driver_assigned` status.
-- Status → `driver_arrived`.
-- Starts the **waiting timer** (3-minute free window, then per-minute charge).
-- Starts the **no-show timer** (default 10-minute window).
-- Passenger notified via Socket.IO (`ride:driver_arrived`).
-
-**Response 200:** `{ "data": { ...updatedRide } }`
-
----
-
-#### `PATCH /api/driver/rides/:id/start`
-
-Driver starts the ride (passenger boarded).
-
-**Auth: driver.**  
-**Deprecated alias:** `POST /api/driver/rides/:id/start` (same logic, kept for backward compatibility).
-
-**Business logic:**
-- Ride must be in `driver_arrived` status.
-- Stops the no-show timer and waiting timer; waiting charge is locked.
-- Status → `active`.
-- Passenger notified via Socket.IO (`ride:started`).
-
-**Response 200:** `{ "data": { ...updatedRide } }`
-
----
-
-#### `PATCH /api/driver/rides/:id/complete`
-
-Driver completes the ride.
-
-**Auth: driver.**  
-**Deprecated alias:** `POST /api/driver/rides/:id/complete`
-
-**Business logic:**
-- Ride must be in `active` status.
-- Final price = estimated price + waiting charge.
-- Platform commission rate loaded from settings (`driver_commission_rate`, default 15%).
-- Driver earnings record inserted at `(1 - commissionRate) × finalPrice`.
-- Peak hours bonus: +20% of driver cut if peak hours active.
-- Waiting charge additionally deducted from passenger wallet (base fare was already escrowed).
-- Payment record created.
-- Driver status → `online`.
-- Passenger notified via Socket.IO (`ride:completed`).
-
-**Response 200:** `{ "data": { "rideId": N, "finalPrice": N, "driverCut": N, "waitingCharge": N } }`
-
----
-
-#### `PATCH /api/driver/rides/:id/decline`
-
-Driver declines a ride offer (un-assigns themselves).
-
-**Auth: driver.**  
-**Deprecated alias:** `POST /api/driver/rides/:id/decline`
-
-**Business logic:**
-- Ride returns to `searching` status.
-- Other available drivers are re-notified via Socket.IO.
-
-**Response 200:** `{ "data": { ...updatedRide } }`
-
----
-
-#### `PATCH /api/driver/rides/:id/cancel`
-
-Driver cancels a ride they had already accepted.
-
-**Auth: driver.**
-
-**Business logic:**
-- Allowed statuses: `driver_assigned`, `driver_arrived`.
-- Ride returns to `searching`; wallet escrow remains intact.
-- Passenger notified (`ride:driver_cancelled`).
-- Dispatch is re-started from scratch to find a new driver.
-
-**Response 200:** `{ "data": { "rideId": N, "status": "searching", "message": "..." } }`
-
----
-
-#### `GET /api/admin/rides`
-
-List all rides platform-wide.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`, `status`, `vehicleType`, `search`
-
-**Response 200:** `{ "data": [...rides], "total": N }`
-
----
-
-#### `PATCH /api/admin/rides/:id`
-
-Admin updates a ride (force status, assign driver, etc.).
-
-**Auth: admin.**
-
-**Request body (all optional):**
-```json
-{ "status": "string", "driverId": "number", "cancelReason": "string" }
-```
-
-**Response 200:** Updated ride object.
-
----
-
-#### `GET /api/driver/rides`
-
-List rides for the authenticated driver.
-
-**Auth: driver.**
-
-**Query params:** `status`, `page`, `limit`
-
-**Response 200:** `{ "data": [...rides], "total": N }`
-
----
-
-#### `GET /api/driver/rides/active`
-
-Get the driver's currently active ride.
-
-**Auth: driver.**
-
-**Response 200:** `{ "data": { ...ride } }` or `{ "data": null }`.
-
----
-
-### Ratings
-
-#### `POST /api/rides/:id/rate-driver`
-
-Passenger rates the driver after a completed ride.
-
-**Auth: user.**
-
-**Request body:**
-```json
-{ "rating": 1-5, "comment": "string (optional)" }
-```
-
-**Business logic:** Updates `drivers.rating` as the rolling average of all `DRIVER_RATED` events for that driver. Each ride can only be rated once (409 if duplicate).
-
-**Response 201:** `{ "ok": true, "rideId": N, "rating": N }`
-
----
-
-#### `POST /api/driver/rides/:id/rate-rider`
-
-Driver rates the passenger after a completed ride.
-
-**Auth: driver.**
-
-**Request body:**
-```json
-{ "rating": 1-5, "comment": "string (optional)" }
-```
-
-**Response 201:** `{ "ok": true, "rideId": N, "rating": N }`
-
----
-
-### Tracking (Public Share Links)
 
 #### `POST /api/rides/:id/share`
 
@@ -790,19 +743,6 @@ Generate a shareable tracking link for an active ride (idempotent — returns ex
 Token TTL: 24 hours.
 
 ---
-
-#### `GET /api/track/:token`
-
-Retrieve real-time ride data via a share token.
-
-**No auth required.** Public endpoint.
-
-**Response 200:** Ride object including driver location, status, pickup/dropoff.  
-**Response 401:** Token expired or not found.
-
----
-
-### SOS Events
 
 #### `POST /api/rides/:id/sos`
 
@@ -827,11 +767,257 @@ Trigger an SOS emergency signal during an active ride.
 
 ---
 
-### Drivers (Self-Service)
+### Rides — Driver Actions
+
+#### `PATCH /api/driver/rides/:id/accept`
+
+Driver accepts a ride offer.
+
+**Auth: driver.**
+
+**Business logic:**
+- Driver must be `online` with an active vehicle.
+- Service settings validated: minimum driver rating, insurance/background-check requirements, max active rides.
+- Atomically sets ride → `driver_assigned` (returns 409 if another driver grabbed it first).
+- Driver status → `busy`.
+- Passenger notified via Socket.IO `ride:driver_assigned`.
+
+**Response 200:** `{ "data": { ...updatedRide } }`
+
+---
+
+#### `PATCH /api/driver/rides/:id/arrived`
+
+Driver signals arrival at pickup.
+
+**Auth: driver.**
+
+**Business logic:**
+- Ride must be `driver_assigned`.
+- Status → `driver_arrived`.
+- Starts the **waiting timer** (3-minute free window, then per-minute charge).
+- Starts the **no-show timer** (default 10-minute window).
+- Passenger notified via `ride:driver_arrived`.
+
+**Response 200:** `{ "data": { ...updatedRide } }`
+
+---
+
+#### `PATCH /api/driver/rides/:id/start`
+
+Driver starts the ride (passenger boarded).
+
+**Auth: driver.**  
+*(Backward-compat alias: `POST /api/driver/rides/:id/start` — same logic.)*
+
+**Business logic:**
+- Ride must be `driver_arrived`.
+- Stops both timers; waiting charge is locked.
+- Status → `active`.
+- Passenger notified via `ride:started`.
+
+**Response 200:** `{ "data": { ...updatedRide } }`
+
+---
+
+#### `PATCH /api/driver/rides/:id/complete`
+
+Driver completes the ride.
+
+**Auth: driver.**  
+*(Backward-compat alias: `POST /api/driver/rides/:id/complete` — same logic.)*
+
+**Business logic:**
+- Ride must be `active`.
+- `finalPrice = estimatedPrice + waitingCharge`
+- Platform commission deducted (`driver_commission_rate` setting, default 15%).
+- Peak hours bonus: +20% of driver cut if peak hours are active.
+- Driver earnings record inserted.
+- Waiting charge deducted from passenger wallet (base fare was already escrowed).
+- Driver status → `online`.
+- Passenger notified via `ride:completed`.
+
+**Response 200:** `{ "data": { "rideId": N, "finalPrice": N, "driverCut": N, "waitingCharge": N } }`
+
+---
+
+#### `POST /api/driver/rides/:id/decline`
+
+Driver declines a ride offer.
+
+**Auth: driver.**  
+*(Backward-compat; prefer the PATCH variant.)*
+
+**Response 200:** `{ "data": { ...updatedRide } }`
+
+---
+
+#### `PATCH /api/driver/rides/:id/cancel`
+
+Driver cancels a ride they had already accepted (re-dispatches to another driver).
+
+**Auth: driver.**
+
+**Allowed statuses:** `driver_assigned`, `driver_arrived`
+
+**Business logic:**
+- Ride → `searching`; driver → `online`.
+- Wallet escrow stays intact; no refund issued.
+- Passenger notified via `ride:driver_cancelled`.
+- Dispatch re-started from scratch.
+
+**Response 200:** `{ "data": { "rideId": N, "status": "searching", "message": "..." } }`
+
+---
+
+#### `GET /api/driver/rides`
+
+List the driver's own rides.
+
+**Auth: driver.**
+
+**Query params:** `status`, `page`, `limit`
+
+**Response 200:** `{ "data": [...rides], "total": N }`
+
+---
+
+#### `GET /api/driver/rides/active`
+
+Get the driver's currently active ride.
+
+**Auth: driver.**
+
+**Response 200:** `{ "data": { ...ride } }` or `{ "data": null }`.
+
+---
+
+#### `GET /api/driver/rides/available`
+
+List rides currently searching for a driver (for manual dispatch / admin view).
+
+**Auth: driver.**
+
+**Response 200:** Array of available ride objects.
+
+---
+
+### Rides — Admin
+
+#### `GET /api/admin/rides`
+
+List all rides platform-wide.
+
+**Auth: admin.**
+
+**Query params:** `page`, `limit`, `status`, `vehicleType`, `search`
+
+**Response 200:** `{ "data": [...rides], "total": N }`
+
+---
+
+#### `GET /api/admin/rides/:id`
+
+Get a single ride (admin view, includes full driver and passenger data).
+
+**Auth: admin.**
+
+---
+
+#### `PATCH /api/admin/rides/:id`
+
+Admin force-updates a ride (status, driver assignment, cancel reason, etc.).
+
+**Auth: admin.**
+
+**Request body (all optional):**
+```json
+{ "status": "string", "driverId": "number", "cancelReason": "string" }
+```
+
+---
+
+#### `GET /api/admin/rides/pricing`
+
+List all ride pricing tiers (per vehicle type).
+
+**Auth: admin.**
+
+**Response 200:** Array of pricing objects with `vehicleType`, `baseFare`, `perKmRate`, `minimumFare`, `isActive`.
+
+---
+
+#### `PATCH /api/admin/rides/pricing/:vehicleType`
+
+Update pricing for a specific vehicle type.
+
+**Auth: admin.**
+
+**Request body (all optional):**
+```json
+{ "baseFare": 5.00, "perKmRate": 2.50, "minimumFare": 8.00, "isActive": true }
+```
+
+**Response 200:** Updated pricing object.
+
+---
+
+### Ratings
+
+#### `POST /api/rides/:id/rate-driver`
+
+Passenger rates the driver after a completed ride.
+
+**Auth: user.**
+
+**Request body:**
+```json
+{ "rating": 1-5, "comment": "string (optional)" }
+```
+
+**Business logic:** Recalculates and updates `drivers.rating` as the rolling average of all `DRIVER_RATED` events. Returns 409 if the ride was already rated.
+
+**Response 201:** `{ "ok": true, "rideId": N, "rating": N }`
+
+---
+
+#### `POST /api/driver/rides/:id/rate-rider`
+
+Driver rates the passenger after a completed ride.
+
+**Auth: driver.**
+
+**Request body:**
+```json
+{ "rating": 1-5, "comment": "string (optional)" }
+```
+
+**Response 201:** `{ "ok": true, "rideId": N, "rating": N }`
+
+---
+
+### Tracking (Public Share Links)
+
+#### `GET /api/track/:token`
+
+Retrieve real-time ride data via a share token. **No auth required.** Public endpoint.
+
+**Response 200:** Ride object including driver location, status, pickup/dropoff, estimated ETA.  
+**Response 401:** Token expired or not found.
+
+---
+
+### SOS Events
+
+*(See also Admin: SOS Events for the admin management endpoints.)*
+
+The `POST /api/rides/:id/sos` passenger/driver endpoint is documented in [Rides — Passenger](#rides--passenger) above.
+
+---
+
+### Driver Self-Service
 
 #### `GET /api/driver/profile`
-
-Get the authenticated driver's own profile.
 
 **Auth: driver.**
 
@@ -840,8 +1026,6 @@ Get the authenticated driver's own profile.
 ---
 
 #### `PATCH /api/driver/profile`
-
-Update the driver's own profile.
 
 **Auth: driver.**
 
@@ -856,11 +1040,9 @@ Update the driver's own profile.
 
 #### `GET /api/driver/status`
 
-Get the driver's current online/offline status.
-
 **Auth: driver.**
 
-**Response 200:** `{ "status": "online|offline|busy", "isOnline": true }`
+**Response 200:** `{ "status": "online | offline | busy", "isOnline": true }`
 
 ---
 
@@ -875,10 +1057,10 @@ Toggle the driver online/offline.
 { "isOnline": true, "latitude": 30.0, "longitude": 31.0 }
 ```
 
-**Side effects on going online:** Sets `onlineSince`, emits `driver:online` to `drivers:available:{vehicleType}` room.  
-**Side effects on going offline:** Checks for active rides (blocked if any), clears online state.
+**Side effects on going online:** Sets `onlineSince`, emits `driver:status:online`.  
+**Side effects on going offline:** Blocked if driver has an active ride; clears online state.
 
-**Response 200:** `{ "status": "online|offline", "isOnline": true }`
+**Response 200:** `{ "status": "online | offline", "isOnline": true }`
 
 ---
 
@@ -895,18 +1077,16 @@ Update the driver's current GPS location.
 
 **Side effects:**
 - Updates `drivers.currentLatitude/Longitude`.
-- Inserts a row into `driver_locations` history table.
-- Emits `driver:location_updated` to the driver's Socket.IO room.
-- If a ride is active, emits `ride:location_updated` to the passenger.
-- Checks for route deviation (threshold: 500m); emits `ride:deviation_warning` once per 60s if exceeded.
+- Inserts a row into `driver_locations` history.
+- Emits `driver:location:ack` to the driver's own socket.
+- If a ride is active, emits `ride:driver_location` to the passenger.
+- Checks for route deviation (threshold: 500 m); emits `ride:deviation:warning` to admin + passenger (throttled to once per 60 s).
 
 **Response 200:** `{ "ok": true }`
 
 ---
 
 #### `GET /api/driver/settings`
-
-Get the driver's personal settings (notifications, language).
 
 **Auth: driver.**
 
@@ -915,8 +1095,6 @@ Get the driver's personal settings (notifications, language).
 ---
 
 #### `PATCH /api/driver/settings`
-
-Update driver personal settings.
 
 **Auth: driver.**
 
@@ -941,7 +1119,7 @@ Get the driver's notification list (last 50).
 
 #### `GET /api/driver/reviews`
 
-Get ratings/reviews left for the driver by passengers.
+Get passenger ratings/reviews left for the driver.
 
 **Auth: driver.**
 
@@ -957,7 +1135,7 @@ Get available driver promotions (currently static/hardcoded).
 
 **Auth: driver.**
 
-**Response 200:** `{ "data": [ { "id": "...", "title": "...", "bonusPercentage": 20, ... } ] }`
+**Response 200:** `{ "data": [ { "id": "promo_peak_hours", "bonusPercentage": 20, ... }, { "id": "promo_weekend", ... } ] }`
 
 ---
 
@@ -979,13 +1157,11 @@ Get a single driver's full profile.
 
 **Auth: admin.**
 
-**Response 200:** Driver object.
-
 ---
 
 #### `PATCH /api/drivers/:id`
 
-Admin updates a driver's profile or status.
+Admin updates a driver.
 
 **Auth: admin.**
 
@@ -994,15 +1170,11 @@ Admin updates a driver's profile or status.
 { "name": "string", "isActive": true, "isOnline": false, "status": "string" }
 ```
 
-**Response 200:** Updated driver object.
-
 ---
 
 ### Driver Trips (Shuttle)
 
 #### `GET /api/driver/trips`
-
-List shuttle trips assigned to or available for the driver.
 
 **Auth: driver.**
 
@@ -1014,8 +1186,6 @@ List shuttle trips assigned to or available for the driver.
 
 #### `GET /api/driver/trips/:id`
 
-Get a specific trip.
-
 **Auth: driver.**
 
 **Response 200:** Trip object with bookings.
@@ -1024,21 +1194,17 @@ Get a specific trip.
 
 #### `PATCH /api/driver/trips/:id/accept`
 
-Accept assignment to a shuttle trip.
-
 **Auth: driver.**
 
-**Response 200:** Updated trip object.
+**Response 200:** Updated trip.
 
 ---
 
 #### `PATCH /api/driver/trips/:id/reject`
 
-Reject assignment to a shuttle trip (returns trip to `waiting_driver`).
-
 **Auth: driver.**
 
-**Response 200:** Updated trip object.
+**Response 200:** Updated trip (status → `waiting_driver`).
 
 ---
 
@@ -1050,87 +1216,65 @@ Start an assigned shuttle trip.
 
 **Pre-condition:** A face-detected selfie check-in for this trip is required (403 if missing).
 
-**Side effects:**
-- Trip status → `active`.
-- Station progress records initialized.
-- `TRIP_STARTED` event inserted.
-- Driver status → `busy`.
+**Side effects:** Trip → `active`; station progress initialized; `TRIP_STARTED` event inserted; driver → `busy`.
 
-**Response 200:** Updated trip object.
+**Response 200:** Updated trip.
 
 ---
 
 #### `PATCH /api/driver/trips/:id/complete`
 
-Complete an active shuttle trip.
-
 **Auth: driver.**
 
-**Side effects:**
-- Trip status → `completed`.
-- All `confirmed` bookings → `completed`.
-- Driver earnings record inserted.
-- Driver status → `online`.
+**Side effects:** Trip → `completed`; confirmed bookings → `completed`; driver earnings inserted; driver → `online`.
 
-**Response 200:** Updated trip object.
+**Response 200:** Updated trip.
 
 ---
 
 #### `PATCH /api/driver/trips/:id/cancel`
 
-Cancel an assigned trip.
-
 **Auth: driver.**
 
-**Request body:**
-```json
-{ "reason": "string (required)" }
-```
+**Request body:** `{ "reason": "string (required)" }`
 
-**Response 200:** Updated trip object.
+**Response 200:** Updated trip.
 
 ---
 
 #### `GET /api/driver/trips/:id/stations`
 
-Get station progress for a trip.
-
 **Auth: driver.**
 
-**Response 200:** `{ "data": [ { ...station, "progress": {...}, "status": "pending|arrived|completed" } ] }`
+**Response 200:** `{ "data": [ { ...station, "progress": {...}, "status": "pending | arrived | completed" } ] }`
 
 ---
 
 #### `PATCH /api/driver/trips/:id/stations/:stationId/arrived`
 
-Mark arrival at a station stop.
-
 **Auth: driver.**
 
-**Response 200:** Updated station progress record.
+**Response 200:** Updated station progress.
 
 ---
 
 #### `PATCH /api/driver/trips/:id/stations/:stationId/completed`
 
-Mark departure from a station stop (boarding complete).
-
 **Auth: driver.**
 
-**Response 200:** Updated station progress record.
+**Response 200:** Updated station progress.
 
 ---
 
 #### `PATCH /api/driver/bookings/:id/board`
 
-Mark a passenger as boarded (shuttle).
+Mark a passenger as boarded.
 
 **Auth: driver.**
 
-**Business logic:** Booking must be `confirmed` or `pending`; booking status → `boarded`.  
-Passenger notified via Socket.IO (`booking:boarded`).
+**Business logic:** Booking must be `confirmed` or `pending`. Status → `boarded`. Passenger notified via `booking:boarded`.
 
-**Response 200:** Updated booking object.
+**Response 200:** Updated booking.
 
 ---
 
@@ -1140,15 +1284,13 @@ Mark a passenger as absent (no-show on shuttle).
 
 **Auth: driver.**
 
-**Response 200:** Updated booking object (status → `absent`).
+**Response 200:** Updated booking (status → `absent`).
 
 ---
 
 ### Driver Wallet & Earnings
 
 #### `GET /api/driver/wallet/balance`
-
-Get the driver's current earnings balance breakdown.
 
 **Auth: driver.**
 
@@ -1157,43 +1299,21 @@ Get the driver's current earnings balance breakdown.
 { "balance": 250.00, "totalPaid": 1200.00, "totalPending": 50.00 }
 ```
 
-- `balance` = confirmed (withdrawable) amount
-- `totalPaid` = already paid out
-- `totalPending` = pending confirmation
-
 ---
 
 #### `GET /api/driver/wallet/payout-methods`
 
-List available payout methods.
-
 **Auth: driver.**
 
-**Response 200:**
-```json
-{
-  "data": [
-    { "id": "bank_transfer", "name": "Bank Transfer", "description": "2-3 business days", "isAvailable": true },
-    { "id": "mobile_money", "name": "Mobile Money", "description": "Instant", "isAvailable": true },
-    { "id": "cash", "name": "Cash Pickup", "description": "Visit nearest office", "isAvailable": true }
-  ]
-}
-```
+**Response 200:** List of `bank_transfer`, `mobile_money`, `cash` payout method objects.
 
 ---
 
 #### `POST /api/driver/wallet/payout-methods`
 
-Add a payout method (placeholder — not persisted to DB).
+Add a payout method (placeholder; not persisted to DB).
 
 **Auth: driver.**
-
-**Request body:**
-```json
-{ "type": "string", "accountNumber": "string?", "accountName": "string?", "bankName": "string?", "phoneNumber": "string?" }
-```
-
-**Response 201:** Payout method object (ephemeral).
 
 ---
 
@@ -1202,8 +1322,6 @@ Add a payout method (placeholder — not persisted to DB).
 Remove a payout method (placeholder).
 
 **Auth: driver.**
-
-**Response 200:** `{ "ok": true, "deleted": "id" }`
 
 ---
 
@@ -1218,7 +1336,7 @@ Request a payout from confirmed earnings.
 { "amount": 100.00, "method": "bank_transfer" }
 ```
 
-**Business logic:** All confirmed earnings for the driver are marked as `paid`. Insufficient balance returns 400.
+**Business logic:** All confirmed earnings for the driver are marked as `paid`. Returns 400 if balance is insufficient.
 
 **Response 200:** `{ "ok": true, "amount": 100.00, "method": "...", "message": "..." }`
 
@@ -1226,7 +1344,7 @@ Request a payout from confirmed earnings.
 
 #### `GET /api/driver/earnings`
 
-Get the driver's earnings summary + 10 most recent records.
+Earnings summary + 10 most recent records.
 
 **Auth: driver.**
 
@@ -1239,7 +1357,7 @@ Get the driver's earnings summary + 10 most recent records.
 
 #### `GET /api/driver/earnings/history`
 
-Paginated list of driver earnings history.
+Paginated earnings history.
 
 **Auth: driver.**
 
@@ -1249,11 +1367,9 @@ Paginated list of driver earnings history.
 
 ---
 
-### Driver Documents (Self & Admin)
+### Driver Documents
 
 #### `GET /api/driver-documents`
-
-List all driver documents (for verification review).
 
 **Auth: admin.**
 
@@ -1273,8 +1389,6 @@ Document types: `national_id_front`, `national_id_back`, `driving_license_front`
 
 #### `GET /api/driver-documents/by-driver/:driverId`
 
-Get all documents for a specific driver.
-
 **Auth: admin.**
 
 **Response 200:** `{ "driver": { ...driver }, "documents": [...docs] }`
@@ -1282,8 +1396,6 @@ Get all documents for a specific driver.
 ---
 
 #### `GET /api/driver-documents/stats`
-
-Aggregated document counts by verification status.
 
 **Auth: admin.**
 
@@ -1293,30 +1405,28 @@ Aggregated document counts by verification status.
 
 #### `POST /api/driver-documents/upload/:driverId`
 
-Upload a document for a driver.
+Upload a document.
 
-**Auth: any authenticated user (driver uploads their own docs).**  
+**Auth: any authenticated user.**  
 **Content-Type:** `multipart/form-data`
 
 **Form fields:**
-- `file` — image file (JPEG, PNG, WebP, max 10 MB)
-- `type` — document type string (see list above)
+- `file` — image (JPEG, PNG, WebP, max 10 MB)
+- `type` — document type string
 
-**Side effects:** Uploads to Supabase Storage; inserts record with `fileUrl`.
-
-**Response 201:** Document record.
+**Response 201:** Document record with `fileUrl`.
 
 ---
 
 #### `PATCH /api/driver-documents/:id`
 
-Update document verification status / admin notes.
+Update verification status or admin notes.
 
 **Auth: admin.**
 
 **Request body (all optional):**
 ```json
-{ "verificationStatus": "approved|rejected|pending", "adminNotes": "string" }
+{ "verificationStatus": "approved | rejected | pending", "adminNotes": "string" }
 ```
 
 **Response 200:** Updated document record.
@@ -1327,38 +1437,23 @@ Update document verification status / admin notes.
 
 #### `POST /api/checkin`
 
-Driver submits a selfie check-in for a trip. Face detection is run on the uploaded image.
+Submit a selfie check-in. Face detection is run on the uploaded image.
 
 **Auth: driver.**  
 **Content-Type:** `multipart/form-data`
 
 **Form fields:**
-- `selfie` — image file (JPEG, PNG, WebP, max 10 MB)
-- `tripId` — string (optional, links check-in to a trip)
-
-**Side effects:**
-- Image uploaded to Supabase Storage.
-- Face detection runs (AI service).
-- `faceDetected: true/false` stored on check-in record.
-- If a trip was blocked waiting for check-in, driver is notified.
+- `selfie` — image (JPEG, PNG, WebP, max 10 MB)
+- `tripId` — string (optional)
 
 **Response 201:**
 ```json
-{
-  "id": N,
-  "driverId": N,
-  "tripId": N,
-  "imageUrl": "string",
-  "faceDetected": true,
-  "createdAt": "..."
-}
+{ "id": N, "driverId": N, "tripId": N, "imageUrl": "string", "faceDetected": true, "createdAt": "..." }
 ```
 
 ---
 
 #### `GET /api/checkin/status`
-
-Get the driver's most recent check-in status for the current shift.
 
 **Auth: driver.**
 
@@ -1370,8 +1465,6 @@ Get the driver's most recent check-in status for the current shift.
 ---
 
 #### `GET /api/admin/checkins`
-
-List all driver check-in records.
 
 **Auth: admin.**
 
@@ -1385,17 +1478,13 @@ List all driver check-in records.
 
 #### `GET /api/notifications`
 
-Get the authenticated user's notifications (most recent 50).
-
 **Auth: user.**
 
-**Response 200:** `{ "data": [...notifications] }`
+**Response 200:** `{ "data": [...notifications] }` (last 50)
 
 ---
 
 #### `PATCH /api/notifications/:id/read`
-
-Mark a notification as read.
 
 **Auth: user.**
 
@@ -1405,8 +1494,6 @@ Mark a notification as read.
 
 #### `PATCH /api/notifications/read-all`
 
-Mark all notifications as read.
-
 **Auth: user.**
 
 **Response 200:** `{ "updated": N }`
@@ -1414,8 +1501,6 @@ Mark all notifications as read.
 ---
 
 #### `POST /api/admin/notifications/broadcast`
-
-Send a push notification to all users, all drivers, or a specific user.
 
 **Auth: admin.**
 
@@ -1433,13 +1518,23 @@ Send a push notification to all users, all drivers, or a specific user.
 
 ---
 
-### Wallet
+### Wallet (Passenger)
+
+#### `GET /api/wallet`
+
+Get the authenticated user's wallet details.
+
+**Auth: any.**
+
+**Response 200:** `{ "balance": 250.00, ... }`
+
+---
 
 #### `GET /api/wallet/balance`
 
-Get the authenticated user's wallet balance.
+Alias for wallet balance only.
 
-**Auth: user.**
+**Auth: any.**
 
 **Response 200:** `{ "balance": 250.00 }`
 
@@ -1447,9 +1542,7 @@ Get the authenticated user's wallet balance.
 
 #### `GET /api/wallet/transactions`
 
-Get the authenticated user's wallet transaction history.
-
-**Auth: user.**
+**Auth: any.**
 
 **Query params:** `page`, `limit`
 
@@ -1459,43 +1552,24 @@ Get the authenticated user's wallet transaction history.
 
 #### `POST /api/wallet/topup`
 
-Top up the user's wallet.
+Top up the user's wallet balance.
 
-**Auth: user.**
-
-**Request body:**
-```json
-{ "amount": 100.00, "method": "card|bank|fawry" }
-```
-
-**Response 201:** Updated wallet balance.
-
----
-
-#### `GET /api/admin/wallet/transactions`
-
-List all wallet transactions platform-wide.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`, `userId`, `type`
-
-**Response 200:** Paginated transaction list with joined user info.
-
----
-
-#### `POST /api/admin/wallet/adjust`
-
-Admin adjusts a user's wallet balance.
-
-**Auth: admin.**
+**Auth: any.**
 
 **Request body:**
 ```json
-{ "userId": N, "amount": 50.00, "description": "string" }
+{ "amount": 100.00 }
 ```
 
-**Response 200:** `{ "walletBalance": 300.00 }`
+**Business logic:** Atomically increments `users.walletBalance` and inserts a `wallet_transactions` record with type `"deposit"`.
+
+**Response 200:**
+```json
+{
+  "transaction": { "id": N, "amount": 100.00, "type": "deposit", "description": "Wallet top-up — 100 EGP", "createdAt": "..." },
+  "balance": 350.00
+}
+```
 
 ---
 
@@ -1503,25 +1577,11 @@ Admin adjusts a user's wallet balance.
 
 #### `GET /api/payments`
 
-Get the authenticated user's payment history.
-
 **Auth: user.**
 
 **Query params:** `page`, `limit`
 
 **Response 200:** `{ "data": [...payments], "total": N }`
-
----
-
-#### `GET /api/admin/payments`
-
-List all payments platform-wide.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`, `status`, `userId`
-
-**Response 200:** Paginated payment list.
 
 ---
 
@@ -1550,16 +1610,6 @@ Get a specific shuttle line with upcoming trips.
 
 ---
 
-#### `GET /api/shuttle/assignments`
-
-Get the authenticated driver's shuttle trip assignments.
-
-**No auth (public query, returns all active trips if no driver filter).**
-
-**Response 200:** List of trips.
-
----
-
 #### `POST /api/bookings`
 
 Book seats on a shuttle trip.
@@ -1578,10 +1628,8 @@ Book seats on a shuttle trip.
 ```
 
 **Business logic:**
-- Minimum 7 seats must be booked (platform-wide) for a trip to activate.
 - Seat availability checked atomically.
-- Fare = route `basePrice` × `seatCount` (adjusted for segment pricing if stations differ).
-- Promo codes apply a percentage or fixed discount.
+- Fare = route `basePrice` × `seatCount` (adjusted for station-segment pricing if applicable).
 - Payment escrowed from wallet immediately.
 
 **Response 201:** Booking object.
@@ -1590,13 +1638,11 @@ Book seats on a shuttle trip.
 
 #### `GET /api/bookings`
 
-List the authenticated user's shuttle bookings.
+List all bookings.
 
-**Auth: user.**
+**Auth: admin.**
 
-**Query params:** `page`, `limit`, `status`
-
-**Response 200:** `{ "data": [...bookings], "total": N }`
+**Query params:** `page`, `limit`, `status`, `search`
 
 ---
 
@@ -1604,13 +1650,11 @@ List the authenticated user's shuttle bookings.
 
 Get a specific booking.
 
-**Auth: user.**
-
-**Response 200:** Booking object.
+**Auth: user or admin.**
 
 ---
 
-#### `POST /api/bookings/:id/cancel`
+#### `PATCH /api/bookings/:id/cancel`
 
 Cancel a booking and refund the wallet.
 
@@ -1620,35 +1664,19 @@ Cancel a booking and refund the wallet.
 
 ---
 
-#### `GET /api/admin/bookings`
-
-List all bookings platform-wide.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`, `status`, `search`
-
-**Response 200:** Paginated bookings with joined user and route info.
-
----
-
 ### Routes
 
 #### `GET /api/routes`
 
-List all shuttle routes.
-
 **No auth required.**
 
-**Query params:** `search` (filters by route name)
+**Query params:** `search`
 
 **Response 200:** `{ "data": [...routes], "total": N }`
 
 ---
 
 #### `POST /api/routes`
-
-Create a new route.
 
 **Auth: admin.**
 
@@ -1670,31 +1698,21 @@ Create a new route.
 
 #### `GET /api/routes/:id`
 
-Get a specific route.
-
 **No auth required.**
-
-**Response 200:** Route object.
 
 ---
 
 #### `PATCH /api/routes/:id`
 
-Update a route.
-
-**Auth: admin.**
-
-**Request body:** Any fields from the create body (all optional).
-
-**Response 200:** Updated route.
+**Auth: admin.** All fields optional.
 
 ---
 
 #### `DELETE /api/routes/:id`
 
-Delete a route. Also cascade-deletes all trips and bookings for the route.
-
 **Auth: admin.**
+
+**Side effects:** Cascade-deletes all trips and bookings for this route.
 
 **Response 204.**
 
@@ -1702,17 +1720,13 @@ Delete a route. Also cascade-deletes all trips and bookings for the route.
 
 #### `GET /api/routes/:id/stations`
 
-List stations for a route ordered by `order` field.
-
 **No auth required.**
 
-**Response 200:** Array of station objects.
+**Response 200:** Array of station objects ordered by `order` field.
 
 ---
 
 #### `POST /api/routes/:id/stations`
-
-Add a station stop to a route.
 
 **Auth: admin.**
 
@@ -1734,19 +1748,11 @@ Add a station stop to a route.
 
 #### `PATCH /api/routes/:id/stations/:stationId`
 
-Update a station.
-
-**Auth: admin.**
-
-**Request body:** Any fields from the create body (all optional).
-
-**Response 200:** Updated station.
+**Auth: admin.** All fields optional.
 
 ---
 
 #### `DELETE /api/routes/:id/stations/:stationId`
-
-Delete a station.
 
 **Auth: admin.**
 
@@ -1758,42 +1764,22 @@ Delete a station.
 
 #### `GET /api/trips`
 
-List trips.
-
 **No auth required.**
 
-**Query params:**
-| Param | Type | Description |
-|-------|------|-------------|
-| `routeId` | int | Filter by route |
-| `status` | string | `scheduled\|active\|completed\|cancelled` |
-| `date` | string | Filter by date (YYYY-MM-DD) |
-| `page` | int | Default 1 |
-| `limit` | int | Default 20 |
-
-**Response 200:** `{ "data": [...trips], "total": N, "page": N, "limit": N }`
+**Query params:** `routeId`, `status`, `date` (YYYY-MM-DD), `page`, `limit`
 
 ---
 
 #### `POST /api/trips`
 
-Create a trip manually.
-
 **Auth: admin.**
 
 **Request body:**
 ```json
-{
-  "routeId": N,
-  "busId": N,
-  "driverId": N,
-  "departureTime": "ISO8601",
-  "arrivalTime": "ISO8601",
-  "price": 15.00
-}
+{ "routeId": N, "busId": N, "driverId": N, "departureTime": "ISO8601", "arrivalTime": "ISO8601", "price": 15.00 }
 ```
 
-Seat count is auto-set from the bus capacity.
+Seat count auto-set from bus capacity.
 
 **Response 201:** Trip object.
 
@@ -1801,29 +1787,17 @@ Seat count is auto-set from the bus capacity.
 
 #### `GET /api/trips/:id`
 
-Get a specific trip.
-
 **No auth required.**
-
-**Response 200:** Trip object.
 
 ---
 
 #### `PATCH /api/trips/:id`
 
-Update a trip.
-
-**Auth: admin.**
-
-**Request body:** Any modifiable fields (all optional).
-
-**Response 200:** Updated trip.
+**Auth: admin.** All modifiable fields optional.
 
 ---
 
 #### `PATCH /api/trips/:id/cancel`
-
-Cancel a trip.
 
 **Auth: admin.**
 
@@ -1833,9 +1807,7 @@ Cancel a trip.
 
 #### `DELETE /api/trips/:id`
 
-Delete a trip (not allowed if `active`).
-
-**Auth: admin.**
+**Auth: admin.** Not allowed if status is `active`.
 
 **Side effects:** Cascade-deletes all bookings for the trip.
 
@@ -1845,80 +1817,37 @@ Delete a trip (not allowed if `active`).
 
 #### `POST /api/admin/trips/:id/cancel`
 
-Admin cancel with passenger refunds.
+Admin cancel with automatic passenger refunds.
 
 **Auth: admin.**
 
-**Business logic:** Cancels the trip, then refunds all passengers with active bookings.
-
-**Response 200:** Updated trip.
+**Business logic:** Cancels the trip and refunds all passengers with active bookings.
 
 ---
 
 ### Buses
 
-#### `GET /api/buses`
+#### `GET /api/buses` — **Auth: admin.**
 
-List all buses.
+#### `POST /api/buses` — **Auth: admin.**
 
-**Auth: admin.**
-
-**Query params:** `page`, `limit`
-
-**Response 200:** `{ "data": [...buses], "total": N }`
-
----
-
-#### `POST /api/buses`
-
-Create a bus.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 { "plateNumber": "string", "model": "string", "capacity": 40, "isActive": true }
 ```
 
-**Response 201:** Bus object.
+#### `GET /api/buses/:id` — **Auth: admin.**
 
----
+#### `PATCH /api/buses/:id` — **Auth: admin.**
 
-#### `GET /api/buses/:id`
+#### `DELETE /api/buses/:id` — **Auth: admin.**
 
-Get a specific bus.
-
-**Auth: admin.**
-
-**Response 200:** Bus object.
-
----
-
-#### `PATCH /api/buses/:id`
-
-Update a bus.
-
-**Auth: admin.**
-
-**Response 200:** Updated bus.
-
----
-
-#### `DELETE /api/buses/:id`
-
-Delete a bus.
-
-**Auth: admin.**
-
-**Response 204.**
+All bus mutations are audit-logged via `writeAuditLog`.
 
 ---
 
 ### Vehicles
 
 #### `GET /api/vehicles`
-
-List all registered driver vehicles.
 
 **Auth: admin.**
 
@@ -1928,13 +1857,8 @@ List all registered driver vehicles.
 
 ---
 
-#### `POST /api/vehicles`
+#### `POST /api/vehicles` — **Auth: admin.**
 
-Create a vehicle record.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 {
   "driverId": N,
@@ -1949,37 +1873,13 @@ Create a vehicle record.
 }
 ```
 
-**Response 201:** Vehicle object.
+#### `GET /api/vehicles/:id` — **Auth: admin.**
 
----
+#### `PATCH /api/vehicles/:id` — **Auth: admin.**
 
-#### `GET /api/vehicles/:id`
+#### `DELETE /api/vehicles/:id` — **Auth: admin.**
 
-Get a specific vehicle.
-
-**Auth: admin.**
-
-**Response 200:** Vehicle with joined driver name/phone.
-
----
-
-#### `PATCH /api/vehicles/:id`
-
-Update a vehicle.
-
-**Auth: admin.**
-
-**Response 200:** Updated vehicle.
-
----
-
-#### `DELETE /api/vehicles/:id`
-
-Delete a vehicle record.
-
-**Auth: admin.**
-
-**Response 204.**
+All vehicle mutations are audit-logged via `writeAuditLog`.
 
 ---
 
@@ -1987,7 +1887,7 @@ Delete a vehicle record.
 
 #### `POST /api/schedules`
 
-Create a recurring schedule for a route (auto-generates trip records).
+Create a recurring schedule (auto-generates trip records).
 
 **Auth: admin.**
 
@@ -2006,52 +1906,27 @@ Create a recurring schedule for a route (auto-generates trip records).
 
 `dayOfWeek`: 0=Sunday … 6=Saturday.
 
-**Side effects:** Generates trip rows for every matching weekday between `effectiveFrom` and `effectiveTo` (in batches of 500). Each trip gets 14 seats (`SHUTTLE_TOTAL_SEATS`).
-
 **Response 201:** `{ "schedule": {...}, "slots": [...], "tripsCreated": N }`
 
 ---
 
 #### `GET /api/schedules`
 
-List all schedules (with slot and trip stats).
-
 **Auth: admin.**
 
 **Query params:** `routeId` (optional filter)
 
-**Response 200:** `{ "data": [ { ...schedule, "slots": [...], "tripStats": { "total": N, "open": N, "active": N, ... } } ], "total": N }`
+**Response 200:** `{ "data": [ { ...schedule, "slots": [...], "tripStats": {...} } ], "total": N }`
 
 ---
 
-#### `GET /api/schedules/:id`
+#### `GET /api/schedules/:id` — **Auth: admin.**
 
-Get a specific schedule with slots and trip stats.
-
-**Auth: admin.**
-
-**Response 200:** Schedule object with slots and tripStats.
-
----
-
-#### `PATCH /api/schedules/:id`
-
-Update schedule metadata (does not regenerate trips).
-
-**Auth: admin.**
-
-**Request body (all optional):**
-```json
-{ "effectiveFrom": "YYYY-MM-DD", "effectiveTo": "YYYY-MM-DD", "defaultCapacity": N, "isActive": true }
-```
-
-**Response 200:** Updated schedule.
-
----
+#### `PATCH /api/schedules/:id` — **Auth: admin.** Does not regenerate trips.
 
 #### `POST /api/schedules/:id/generate`
 
-Re-run trip generation for an existing active schedule (idempotent — skips existing trips).
+Re-run trip generation for an existing schedule (idempotent).
 
 **Auth: admin.**
 
@@ -2061,7 +1936,7 @@ Re-run trip generation for an existing active schedule (idempotent — skips exi
 
 #### `DELETE /api/schedules/:id`
 
-Deactivate a schedule and cancel all future `scheduled` / `waiting_driver` trips linked to it.
+Deactivates the schedule and cancels all future `scheduled`/`waiting_driver` trips linked to it.
 
 **Auth: admin.**
 
@@ -2069,68 +1944,82 @@ Deactivate a schedule and cancel all future `scheduled` / `waiting_driver` trips
 
 ---
 
-### Chat
+### Chat (Shuttle Trips Only)
 
-#### `GET /api/chat/:rideId`
+> **Important:** Chat is available only on **shuttle trips** (the `trips` table, identified by `tripId`). There is no in-ride chat for on-demand rides. `tripId` and `rideId` are distinct identifiers from separate tables and services.
 
-Get chat messages for a ride.
+#### `GET /api/trips/:id/chat`
 
-**Auth: user or driver.**
+Retrieve chat messages for a shuttle trip.
+
+**Auth: user or driver (must be a party to the trip).**
 
 **Response 200:** `{ "data": [...messages] }`
 
 ---
 
-#### `POST /api/chat/:rideId`
+#### `POST /api/trips/:id/chat`
 
-Send a chat message on a ride.
+Send a chat message on a shuttle trip.
 
 **Auth: user or driver.**
 
 **Request body:**
 ```json
-{ "message": "string" }
+{ "message": "string (min 1, max 2000 chars)" }
 ```
 
-**Side effects:** Emits real-time message to the other party via Socket.IO.
+**Side effects:** Emits `trip:chat:message` Socket.IO event to `trip:{tripId}` room and `admin:chat:new` to `admin:room`.
 
 **Response 201:** Message object.
 
 ---
 
-### Ratings (Shared)
+#### `GET /api/admin/chat` — All chat messages (admin). **Auth: admin.**
 
-#### `GET /api/ratings`
+#### `GET /api/admin/chat/stats` — Chat statistics. **Auth: admin.**
 
-Get ratings/reviews for the authenticated user (driver).
+#### `GET /api/admin/chat/trip/:id` — Messages for a specific trip. **Auth: admin.**
 
-**Auth: driver.**
+#### `POST /api/admin/chat/trip/:id` — Admin sends a message to a trip chat. **Auth: admin.**
 
-**Response 200:** `{ "data": [...ratings], "averageRating": 4.8 }`
+#### `PATCH /api/admin/chat/messages/:id/read` — Mark message as read. **Auth: admin.**
 
 ---
 
 ### Promo Codes
 
-#### `GET /api/promo`
+> **Access control note:** `GET /api/promo` currently has **no role guard** — any authenticated user can call it and receive the full admin promo list. A `requireRole("admin")` guard should be added. Passengers should use `POST /api/promo/validate` instead.
 
-List all promo codes.
+#### `POST /api/promo/validate`
 
-**Auth: admin.**
+Validate a specific promo code. **Use this for the passenger checkout flow.**
 
-**Query params:** `page`, `limit`, `isActive`
+**Auth: any.**
 
-**Response 200:** `{ "data": [...codes], "total": N }`
+**Request body:**
+```json
+{ "code": "string" }
+```
+
+**Response 200:** Promo code details (type, discount value, expiry) if valid.  
+**Error 404:** Code not found or inactive.  
+**Error 400:** Expired or usage limit reached.
 
 ---
 
-#### `POST /api/promo`
+#### `GET /api/promo`
 
-Create a promo code.
+List all promo codes. *(Should be admin-only — role guard currently missing. See note above.)*
 
-**Auth: admin.**
+**Auth: any (bug — should be admin).**
 
-**Request body:**
+**Query params:** `page`, `limit`
+
+---
+
+#### `POST /api/promo` — **Auth: admin.**
+
 ```json
 {
   "code": "string",
@@ -2142,50 +2031,15 @@ Create a promo code.
 }
 ```
 
-**Response 201:** Promo code object.
+#### `PATCH /api/promo/:id` — **Auth: admin.**
 
----
-
-#### `PATCH /api/promo/:id`
-
-Update a promo code.
-
-**Auth: admin.**
-
-**Response 200:** Updated promo code.
-
----
-
-#### `DELETE /api/promo/:id`
-
-Delete a promo code.
-
-**Auth: admin.**
-
-**Response 204.**
-
----
-
-#### `POST /api/promo/validate`
-
-Validate a promo code before applying it.
-
-**Auth: user.**
-
-**Request body:**
-```json
-{ "code": "string", "amount": 100.00 }
-```
-
-**Response 200:** `{ "valid": true, "discount": 20.00, "finalAmount": 80.00 }`
+#### `DELETE /api/promo/:id` — **Auth: admin.** Response 204.
 
 ---
 
 ### Support Tickets
 
 #### `POST /api/support/tickets`
-
-Create a support ticket.
 
 **No auth required.** Public endpoint.
 
@@ -2206,50 +2060,28 @@ Create a support ticket.
 
 ---
 
-#### `GET /api/support/tickets`
-
-List support tickets.
-
-**Auth: admin.**
+#### `GET /api/support/tickets` — **Auth: admin.**
 
 **Query params:** `page`, `limit`, `status`, `priority`, `type`, `search`
 
-**Response 200:** Paginated ticket list.
-
 ---
 
-#### `GET /api/support/tickets/:id`
-
-Get a specific ticket with its messages.
-
-**Auth: admin.**
+#### `GET /api/support/tickets/:id` — **Auth: admin.**
 
 **Response 200:** Ticket object with `messages` array.
 
 ---
 
-#### `PATCH /api/support/tickets/:id`
+#### `PATCH /api/support/tickets/:id` — **Auth: admin.**
 
-Update ticket status, assignment, or priority.
-
-**Auth: admin.**
-
-**Request body (all optional):**
 ```json
-{ "status": "open|pending|resolved|closed", "priority": "string", "assignedTo": N }
+{ "status": "open | pending | resolved | closed", "priority": "string", "assignedTo": N }
 ```
-
-**Response 200:** Updated ticket.
 
 ---
 
-#### `POST /api/support/tickets/:id/messages`
+#### `POST /api/support/tickets/:id/messages` — **Auth: admin.**
 
-Reply to a support ticket.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 { "message": "string" }
 ```
@@ -2260,113 +2092,37 @@ Reply to a support ticket.
 
 ### Zones & Zone Pricing
 
-#### `GET /api/zones`
+#### `GET /api/zones` — **Auth: admin.**
 
-List all geographic zones.
+#### `POST /api/zones` — **Auth: admin.**
 
-**Auth: admin.**
-
-**Response 200:** `{ "data": [...zones] }`
-
----
-
-#### `POST /api/zones`
-
-Create a zone.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 { "name": "string", "polygon": [[lat, lng], ...] }
 ```
 
-**Response 201:** Zone object.
+#### `PATCH /api/zones/:id` — **Auth: admin.**
+
+#### `DELETE /api/zones/:id` — **Auth: admin.** Response 204.
 
 ---
 
-#### `PATCH /api/zones/:id`
+#### `GET /api/zone-pricing` — **Auth: admin.**
 
-Update a zone.
+#### `POST /api/zone-pricing` — **Auth: admin.**
 
-**Auth: admin.**
-
-**Response 200:** Updated zone.
-
----
-
-#### `DELETE /api/zones/:id`
-
-Delete a zone.
-
-**Auth: admin.**
-
-**Response 204.**
-
----
-
-#### `GET /api/zone-pricing`
-
-List zone pricing rules.
-
-**Auth: admin.**
-
-**Response 200:** `{ "data": [...pricingRules] }`
-
----
-
-#### `POST /api/zone-pricing`
-
-Create a zone pricing rule.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
-{ "zoneId": N, "vehicleType": "car|motorcycle|van|minibus", "basePrice": 10.00, "pricePerKm": 2.50 }
+{ "zoneId": N, "vehicleType": "car | motorcycle | van | minibus", "basePrice": 10.00, "perKmRate": 2.50 }
 ```
 
-**Response 201:** Pricing rule object.
+#### `PATCH /api/zone-pricing/:id` — **Auth: admin.**
 
----
-
-#### `PATCH /api/zone-pricing/:id`
-
-Update a zone pricing rule.
-
-**Auth: admin.**
-
-**Response 200:** Updated rule.
-
----
-
-#### `DELETE /api/zone-pricing/:id`
-
-Delete a pricing rule.
-
-**Auth: admin.**
-
-**Response 204.**
+#### `DELETE /api/zone-pricing/:id` — **Auth: admin.** Response 204.
 
 ---
 
 ### Suggestions
 
-#### `GET /api/suggestions`
-
-List route suggestions.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`, `status` (`pending|approved|rejected`), `type` (`new_route|new_station|route_edit`), `search`
-
-**Response 200:** `{ "data": [...suggestions], "total": N }`
-
----
-
 #### `POST /api/suggestions`
-
-Submit a route suggestion.
 
 **No auth required.** Public endpoint.
 
@@ -2387,85 +2143,58 @@ Submit a route suggestion.
 
 ---
 
-#### `GET /api/suggestions/:id`
+#### `GET /api/suggestions` — **Auth: admin.** Query params: `page`, `limit`, `status`, `type`, `search`
 
-Get a specific suggestion.
+#### `GET /api/suggestions/:id` — **Auth: admin.**
 
-**Auth: admin.**
+#### `PATCH /api/suggestions/:id` — **Auth: admin.**
 
-**Response 200:** Suggestion object with joined user/driver info.
-
----
-
-#### `PATCH /api/suggestions/:id`
-
-Review a suggestion.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
-{ "status": "pending|approved|rejected", "adminNotes": "string" }
+{ "status": "pending | approved | rejected", "adminNotes": "string" }
 ```
 
-**Response 200:** Updated suggestion.
-
 ---
 
-### Earnings (Admin & Driver)
+### Earnings
 
 #### `GET /api/earnings/summary`
 
-Earnings summary — role-aware.
+Role-aware earnings summary.
 
 **Auth: admin or driver.**
 
-- **Admin response:** `{ "summary": {...totals}, "byStatus": [...], "topDrivers": [...] }`
-- **Driver response:** `{ "driverId": N, "summary": {...totals}, "byStatus": [...], "recentEarnings": [...] }`
+- **Admin:** `{ "summary": {...totals}, "byStatus": [...], "topDrivers": [...] }`
+- **Driver:** `{ "driverId": N, "summary": {...totals}, "byStatus": [...], "recentEarnings": [...] }`
 
 ---
 
 #### `GET /api/earnings/weekly`
 
-Weekly breakdown — role-aware.
+Weekly breakdown.
 
 **Auth: admin or driver.**
 
-**Query params:**
-| Param | Type | Description |
-|-------|------|-------------|
-| `weeks` | int | Number of past weeks (default 8, max 52) |
-| `driverId` | int | Admin only — filter to specific driver |
-
-**Admin response includes:** `weeklyBreakdown` + optional `driverBreakdown`  
-**Driver response:** their own `weeklyBreakdown`
+**Query params:** `weeks` (default 8, max 52), `driverId` (admin only)
 
 ---
 
 #### `GET /api/earnings`
 
-Paginated list of all earnings records.
+Paginated all earnings records.
 
 **Auth: admin.**
 
 **Query params:** `page`, `limit`, `driverId`, `status` (`pending|confirmed|paid`)
 
-**Response 200:** `{ "data": [...earnings], "total": N }`
-
 ---
 
 #### `PATCH /api/earnings/:id/status`
 
-Update an earning record's status.
-
 **Auth: admin.**
 
-**Request body:**
 ```json
 { "status": "confirmed | paid" }
 ```
-
-**Response 200:** Updated earning record.
 
 ---
 
@@ -2473,11 +2202,9 @@ Update an earning record's status.
 
 Service types: `shuttle | car | motorcycle | delivery`
 
-#### `GET /api/services/control`
+#### `GET /api/services/control` — **Auth: any.**
 
-Get all service controls (public-facing fields only).
-
-**Auth: any authenticated user.**
+Returns public-facing fields for all service types.
 
 **Response 200:**
 ```json
@@ -2498,21 +2225,9 @@ Get all service controls (public-facing fields only).
 
 ---
 
-#### `GET /api/services/:type/control`
+#### `GET /api/services/:type/control` — **Auth: any.** Single service type.
 
-Get a single service control.
-
-**Auth: any authenticated user.**
-
-**Response 200:** Single service control object (public fields).
-
----
-
-#### `GET /api/services/:type/settings`
-
-Get service requirement settings.
-
-**Auth: any authenticated user.**
+#### `GET /api/services/:type/settings` — **Auth: any.**
 
 **Response 200:**
 ```json
@@ -2528,23 +2243,12 @@ Get service requirement settings.
 
 ---
 
-#### `GET /api/admin/services/:type/control`
-
-Get full admin view of service control (includes change log).
-
-**Auth: admin.**
-
-**Response 200:** Control object + `logs` array (last 10 changes).
-
----
+#### `GET /api/admin/services/:type/control` — **Auth: admin.** Includes change log.
 
 #### `PATCH /api/admin/services/:type/control`
 
-Update service control settings.
-
 **Auth: admin.**
 
-**Request body (all optional):**
 ```json
 {
   "isEnabled": true,
@@ -2552,46 +2256,30 @@ Update service control settings.
   "unavailableMessage": "string",
   "unavailableAction": "none | show_message | hide_service",
   "activeZoneIds": [1, 2],
-  "maintenanceEta": "ISO8601",
-  "maxActiveRides": null
+  "maintenanceEta": "ISO8601"
 }
 ```
 
-**Side effects:** Emits `service:control_changed` Socket.IO event to all connected clients and to `admin:room`.
-
-**Response 200:** Updated control + logs.
+**Side effects:** Emits `service:control:changed` to all connected clients and `admin:room`.
 
 ---
 
 #### `POST /api/admin/services/:type/control/reset`
 
-Reset a service control to defaults.
+Reset to defaults.
 
 **Auth: admin.**
 
-**Side effects:** Same Socket.IO broadcast as PATCH.
-
-**Response 200:** Reset control + logs.
+**Side effects:** Same broadcast as PATCH.
 
 ---
 
-#### `GET /api/admin/services/:type/settings`
-
-Get admin view of service settings.
-
-**Auth: admin.**
-
-**Response 200:** Full service settings object.
-
----
+#### `GET /api/admin/services/:type/settings` — **Auth: admin.**
 
 #### `PATCH /api/admin/services/:type/settings`
 
-Update service driver requirement settings.
-
 **Auth: admin.**
 
-**Request body (all optional):**
 ```json
 {
   "minDriverRating": 4.0,
@@ -2602,98 +2290,27 @@ Update service driver requirement settings.
 }
 ```
 
-**Side effects:** Emits `service:settings_changed` Socket.IO event.
-
-**Response 200:** Updated settings.
+**Side effects:** Emits `service:settings:changed`.
 
 ---
 
 ### Dashboard (Admin)
 
-#### `GET /api/dashboard/summary`
+#### `GET /api/dashboard/summary` — **Auth: admin.**
 
-High-level platform KPIs.
+High-level platform KPIs (routes, stations, trips, fleet, support, verifications, users).
 
-**Auth: admin.**
+#### `GET /api/dashboard/activity` — **Auth: admin.**
 
-**Response 200:**
-```json
-{
-  "routes": { "total": N, "active": N, "inactive": N },
-  "stations": { "total": N },
-  "trips": { "total": N, "active": N, "scheduled": N, "boarding": N, "upcoming": N, "cancelled": N },
-  "fleet": { "totalBuses": N, "activeBuses": N, "totalDrivers": N, "onlineDrivers": N },
-  "support": { "openTickets": N, "pendingTickets": N, "totalMessages": N },
-  "verifications": { "pending": N },
-  "suggestions": { "pending": N },
-  "users": { "total": N, "passengers": N, "drivers": N },
-  "generatedAt": "ISO8601"
-}
-```
+Recent activity feed (tickets, pending documents, suggestions, departures, active trips, bookings).
 
----
+#### `GET /api/dashboard/analytics` — **Auth: admin.**
 
-#### `GET /api/dashboard/activity`
+30-day analytics (trips/day, route popularity, status breakdown, driver activity, busiest stations, bookings/day).
 
-Recent activity feed for the admin dashboard.
+#### `GET /api/dashboard/today` — **Auth: admin.**
 
-**Auth: admin.**
-
-**Response 200:**
-```json
-{
-  "recentTickets": [...],
-  "pendingDocuments": [...],
-  "recentSuggestions": [...],
-  "upcomingDepartures": [...],
-  "activeTrips": [...],
-  "recentBookings": [...]
-}
-```
-
----
-
-#### `GET /api/dashboard/analytics`
-
-30-day analytics charts.
-
-**Auth: admin.**
-
-**Response 200:**
-```json
-{
-  "tripsPerDay": [...],
-  "routePopularity": [...],
-  "tripStatusBreakdown": [...],
-  "driverActivity": [...],
-  "busiestStations": [...],
-  "bookingsPerDay": [...]
-}
-```
-
----
-
-#### `GET /api/dashboard/today`
-
-Today's snapshot with live/yesterday comparison.
-
-**Auth: admin.**
-
-**Response 200:**
-```json
-{
-  "tripsToday": N,
-  "tripsYesterday": N,
-  "revenueToday": N,
-  "revenueYesterday": N,
-  "driversOnline": N,
-  "passengersActive": N,
-  "last7DaysTrips": [...],
-  "last7DaysRevenue": [...],
-  "activeTrips": [...],
-  "generatedAt": "ISO8601"
-}
-```
+Today's snapshot with yesterday comparison and 7-day trend arrays.
 
 ---
 
@@ -2701,11 +2318,11 @@ Today's snapshot with live/yesterday comparison.
 
 #### `DELETE /api/admin/users/:id`
 
-Delete a user account with cascade.
+Delete a user account with full cascade.
 
 **Auth: admin.**
 
-**Cascade order:** Nulls driver references in trips/rides → deletes rides, bookings, wallet transactions, notifications, SOS events, driver record, user.
+**Cascade order:** Nulls driver refs in trips/rides → deletes rides, bookings, wallet transactions, notifications, SOS events, driver record, user.
 
 **Response 200:** `{ "success": true, "deleted": N }`
 
@@ -2713,11 +2330,9 @@ Delete a user account with cascade.
 
 #### `DELETE /api/admin/drivers/:id`
 
-Delete a driver account with cascade.
+Delete a driver account with full cascade.
 
 **Auth: admin.**
-
-**Cascade order:** Nulls driver references in trips/rides → deletes rides, bookings, wallet transactions, notifications, SOS events, driver record, user account.
 
 **Response 200:** `{ "success": true }`
 
@@ -2725,94 +2340,32 @@ Delete a driver account with cascade.
 
 ### Admin: Analytics
 
-#### `GET /api/admin/analytics/rides`
+#### `GET /api/admin/analytics/rides` — Ride status, vehicle type, revenue, top passengers, daily activity.
 
-Ride analytics (status breakdown, vehicle type distribution, revenue, top passengers, daily activity).
+#### `GET /api/admin/analytics/drivers` — Active count, avg rating, top drivers.
 
-**Auth: admin.**
+#### `GET /api/admin/analytics/passengers` — Registrations, active users, top spenders.
 
-**Response 200:** Multi-dimensional ride analytics object.
+#### `GET /api/admin/analytics/services` — Booking counts and revenue by service type.
 
----
+#### `GET /api/admin/analytics/promo` — Promo code usage and discount impact.
 
-#### `GET /api/admin/analytics/drivers`
+#### `GET /api/admin/analytics/complaints` — Support ticket type/status breakdown and resolution time.
 
-Driver analytics (active count, average rating, top drivers by rides/earnings, daily registrations).
-
-**Auth: admin.**
-
-**Response 200:** Driver analytics object.
-
----
-
-#### `GET /api/admin/analytics/passengers`
-
-Passenger analytics (new registrations, active users, top spenders, top cancellers, daily activity).
-
-**Auth: admin.**
-
-**Response 200:** Passenger analytics object.
-
----
-
-#### `GET /api/admin/analytics/services`
-
-Service type analytics (booking counts, revenue, monthly breakdown by service type).
-
-**Auth: admin.**
-
-**Response 200:**
-```json
-{ "serviceUsage": [...], "serviceRevenue": [...], "serviceMonthly": [...] }
-```
-
----
-
-#### `GET /api/admin/analytics/promo`
-
-Promo code analytics (top codes, discount totals, monthly impact).
-
-**Auth: admin.**
-
-**Response 200:**
-```json
-{ "topPromos": [...], "totalPromoBookings": N, "revenueOnPromoBookings": N, "monthlyImpact": [...] }
-```
-
----
-
-#### `GET /api/admin/analytics/complaints`
-
-Support ticket analytics (type/status breakdown, average resolution time, priority breakdown, 30-day trend).
-
-**Auth: admin.**
-
-**Response 200:**
-```json
-{ "typeBreakdown": [...], "avgResolutionHours": N, "priorityBreakdown": [...], "trend": [...] }
-```
+All analytics endpoints: **Auth: admin.**
 
 ---
 
 ### Admin: Settings
 
-#### `GET /api/admin/settings`
+#### `GET /api/admin/settings` — **Auth: admin.**
 
-Get all platform settings (key-value pairs).
-
-**Auth: admin.**
-
-**Response 200:** `{ "data": [ { "key": "...", "value": "..." } ] }`
+All platform key-value settings.
 
 ---
 
-#### `PATCH /api/admin/settings`
+#### `PATCH /api/admin/settings` — **Auth: admin.**
 
-Update one or more platform settings.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 { "key1": "value1", "key2": "value2" }
 ```
@@ -2821,8 +2374,8 @@ Update one or more platform settings.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `driver_commission_rate` | float | `0.15` | Platform commission (15% default) |
-| `waiting_charge_per_minute` | float | `2.00` | EGP per minute after free window |
+| `driver_commission_rate` | float | `0.15` | Platform commission (15%) |
+| `waiting_charge_per_minute` | float | `2.00` | EGP/min after free window |
 | `max_waiting_charge` | float | `20.00` | Cap on waiting charge |
 | `cancellation_fee_assigned` | float | `2.00` | Fee when driver is assigned |
 | `cancellation_fee_arrived` | float | `5.00` | Fee when driver has arrived |
@@ -2830,53 +2383,24 @@ Update one or more platform settings.
 | `dispatch_peak_windows` | JSON | `[{7,9},{17,19}]` | Peak hour windows |
 | `dispatch_drivers_per_round` | int | `3` | Batch size off-peak |
 | `dispatch_drivers_per_round_peak` | int | `5` | Batch size during peak |
-| `dispatch_radius_steps_km` | JSON | `[5,8,12]` | Search radius expansion off-peak |
-| `dispatch_radius_steps_km_peak` | JSON | `[3,5,8]` | Search radius expansion during peak |
-
-**Response 200:** Updated settings.
+| `dispatch_radius_steps_km` | JSON | `[5,8,12]` | Radius expansion off-peak |
+| `dispatch_radius_steps_km_peak` | JSON | `[3,5,8]` | Radius expansion during peak |
 
 ---
 
-#### `GET /api/admin/settings/app`
+#### `GET /api/admin/settings/app` — **Auth: admin.**
 
-Get app-level settings (name, support contacts, social links, policy URLs).
+App-level settings (name, support contacts, social links, policy URLs).
 
-**Auth: admin.**
+#### `PATCH /api/admin/settings/app` — **Auth: admin.** Partial update.
 
-**Response 200:**
-```json
-{
-  "appName": "ShuttleOps",
-  "supportEmail": "support@shuttleops.com",
-  "supportPhone": "+20-100-000-0000",
-  "facebookUrl": "",
-  "twitterUrl": "",
-  "instagramUrl": "",
-  "privacyPolicyUrl": "",
-  "termsUrl": ""
-}
-```
+*(Deprecated alias: `PUT /api/admin/settings/app` — same behaviour.)*
 
 ---
 
-#### `PATCH /api/admin/settings/app`
-
-Update app settings (partial update).
-
-**Auth: admin.**  
-**Deprecated alias:** `PUT /api/admin/settings/app` (same logic, PATCH semantics).
-
-**Request body:** Any fields from app settings (all optional).
-
-**Response 200:** Updated app settings.
-
----
-
-### Admin: Dispatch (Peak Settings)
+### Admin: Dispatch / Peak Settings
 
 #### `GET /api/admin/dispatch/peak-settings`
-
-Get all five dispatch/peak-hours settings with a live `isPeak` flag.
 
 **Auth: admin.**
 
@@ -2900,11 +2424,10 @@ Get all five dispatch/peak-hours settings with a live `isPeak` flag.
 
 #### `PUT /api/admin/dispatch/peak-settings`
 
-Update any subset of the five dispatch settings.
-
 **Auth: admin.**
 
-**Request body (all optional):**
+Any subset of the five dispatch settings may be updated. Changes take effect within 60 seconds (cache TTL).
+
 ```json
 {
   "dispatch_peak_windows": [{"startHour": 7, "endHour": 9}],
@@ -2915,9 +2438,7 @@ Update any subset of the five dispatch settings.
 }
 ```
 
-**Note:** Changes take effect within 60 seconds (dispatch-manager cache TTL).
-
-**Response 200:** `{ "success": true, "updated": ["key1", "key2"], "note": "..." }`
+**Response 200:** `{ "success": true, "updated": ["key1", ...], "note": "..." }`
 
 ---
 
@@ -2925,23 +2446,14 @@ Update any subset of the five dispatch settings.
 
 #### `GET /api/admin/sos-events`
 
-List SOS emergency events.
-
 **Auth: admin.**
 
-**Query params:**
-| Param | Type | Description |
-|-------|------|-------------|
-| `status` | `active\|resolved` | Filter |
-| `from` | ISO date | Inclusive lower bound |
-| `to` | ISO date | Inclusive upper bound |
-| `limit` | int | Max 200, default 50 |
-| `offset` | int | Default 0 |
+**Query params:** `status` (`active|resolved`), `from` (ISO date), `to` (ISO date), `limit` (max 200, default 50), `offset`
 
 **Response 200:**
 ```json
 {
-  "data": [ { "id": N, "userId": N, "rideId": N, "role": "passenger|driver", "latitude": N, "longitude": N, "triggeredAt": "...", "status": "active|resolved", "notes": null, "userName": "...", "userPhone": "..." } ],
+  "data": [ { "id": N, "userId": N, "rideId": N, "role": "passenger | driver", "latitude": N, "longitude": N, "triggeredAt": "...", "status": "active | resolved", "notes": null, "userName": "...", "userPhone": "..." } ],
   "meta": { "limit": 50, "offset": 0, "returned": N }
 }
 ```
@@ -2949,8 +2461,6 @@ List SOS emergency events.
 ---
 
 #### `POST /api/admin/sos-events/:id/resolve`
-
-Resolve an SOS event.
 
 **Auth: admin.**
 
@@ -2967,52 +2477,17 @@ Resolve an SOS event.
 
 #### `GET /api/admin/audit-logs`
 
-Paginated list of admin audit log entries.
-
 **Auth: admin.**
 
-**Query params:**
-| Param | Type | Description |
-|-------|------|-------------|
-| `page` | int | Default 1 |
-| `limit` | int | Max 100, default 25 |
-| `action` | string | Filter by action (CREATE, UPDATE, DELETE) |
-| `entityType` | string | Filter by entity type (bus, vehicle, etc.) |
-| `userId` | int | Filter by admin user |
-| `from` | ISO datetime | Range start |
-| `to` | ISO datetime | Range end |
-
-**Response 200:** `{ "data": [...logs], "total": N, "page": N, "limit": N }`
+**Query params:** `page`, `limit` (max 100), `action` (CREATE/UPDATE/DELETE), `entityType`, `userId`, `from`, `to`
 
 ---
 
-#### `GET /api/admin/audit-logs/:id`
+#### `GET /api/admin/audit-logs/:id` — Full entry with `oldData`, `newData`, `ipAddress`, `userAgent`.
 
-Get a specific audit log entry.
+#### `GET /api/admin/audit-logs/distinct/actions` — `["CREATE", "DELETE", "UPDATE"]`
 
-**Auth: admin.**
-
-**Response 200:** Audit log with `oldData`, `newData`, `ipAddress`, `userAgent`.
-
----
-
-#### `GET /api/admin/audit-logs/distinct/actions`
-
-Get distinct action values for filter dropdowns.
-
-**Auth: admin.**
-
-**Response 200:** `["CREATE", "DELETE", "UPDATE"]`
-
----
-
-#### `GET /api/admin/audit-logs/distinct/entity-types`
-
-Get distinct entity type values.
-
-**Auth: admin.**
-
-**Response 200:** `["bus", "vehicle", "driver", ...]`
+#### `GET /api/admin/audit-logs/distinct/entity-types` — `["bus", "vehicle", ...]`
 
 ---
 
@@ -3020,82 +2495,30 @@ Get distinct entity type values.
 
 #### `GET /api/admin/permissions/all`
 
-List all available permission strings.
-
 **Auth: admin.**
-
-**Response 200:** `{ "permissions": ["view_dashboard", "edit_routes", ...] }`
 
 Full permission list: `view_dashboard`, `view_routes`, `edit_routes`, `view_trips`, `edit_trips`, `view_drivers`, `edit_drivers`, `view_buses`, `edit_buses`, `view_passengers`, `edit_passengers`, `view_bookings`, `edit_bookings`, `view_wallet`, `edit_wallet`, `view_support`, `edit_support`, `view_suggestions`, `view_verification`, `edit_verification`, `view_analytics`, `view_staff`, `edit_staff`, `view_settings`, `edit_settings`, `view_promo`, `edit_promo`, `view_live_tracking`, `view_driver_analytics`, `view_notifications`
 
 ---
 
-#### `GET /api/admin/roles`
+#### `GET /api/admin/roles` — **Auth: admin.**
 
-List all staff roles.
+#### `POST /api/admin/roles` — **Auth: admin.**
 
-**Auth: admin.**
-
-**Response 200:** `{ "data": [...roles], "total": N }`
-
----
-
-#### `POST /api/admin/roles`
-
-Create a staff role.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 { "name": "string", "description": "string (optional)", "permissions": ["view_dashboard", ...] }
 ```
 
-**Response 201:** Role object.
+#### `PATCH /api/admin/roles/:id` — **Auth: admin.**
+
+#### `DELETE /api/admin/roles/:id` — **Auth: admin.** Removes role assignment from all users.
 
 ---
 
-#### `PATCH /api/admin/roles/:id`
+#### `GET /api/admin/staff` — **Auth: admin.** Query: `search`
 
-Update a staff role.
+#### `POST /api/admin/staff` — **Auth: admin.**
 
-**Auth: admin.**
-
-**Request body:** Any fields from create (all optional).
-
-**Response 200:** Updated role.
-
----
-
-#### `DELETE /api/admin/roles/:id`
-
-Delete a staff role. Removes the role assignment from all users who had it.
-
-**Auth: admin.**
-
-**Response 200:** `{ "success": true }`
-
----
-
-#### `GET /api/admin/staff`
-
-List all admin users.
-
-**Auth: admin.**
-
-**Query params:** `search`
-
-**Response 200:** `{ "data": [ { ...adminUser, "staffRole": { ...role } } ], "total": N }`
-
----
-
-#### `POST /api/admin/staff`
-
-Create a new admin/staff user.
-
-**Auth: admin.**
-
-**Request body:**
 ```json
 {
   "name": "string",
@@ -3106,60 +2529,31 @@ Create a new admin/staff user.
 }
 ```
 
-**Response 201:** Created admin user (without password).
+#### `PATCH /api/admin/staff/:id` — **Auth: admin.**
 
----
-
-#### `PATCH /api/admin/staff/:id`
-
-Update a staff user's profile, role assignment, or block status.
-
-**Auth: admin.**
-
-**Request body (all optional):**
 ```json
 { "name": "string", "email": "string", "phone": "string", "staffRoleId": N, "isBlocked": false, "password": "string" }
 ```
 
-**Response 200:** Updated staff user.
+#### `DELETE /api/admin/staff/:id` — **Auth: admin.** Cannot delete your own account.
 
 ---
 
-#### `DELETE /api/admin/staff/:id`
+### Admin: Bookings & Transactions
 
-Delete a staff/admin user. Cannot delete your own account.
+#### `GET /api/admin/bookings` — All shuttle bookings with passenger, trip, and route details. **Auth: admin.**
 
-**Auth: admin.**
+#### `GET /api/admin/payments` — All payments. **Auth: admin.** Query: `page`, `limit`, `status`, `userId`
 
-**Response 200:** `{ "success": true }`
+#### `GET /api/admin/wallet/transactions` — All wallet transactions with user info. **Auth: admin.**
 
----
+#### `POST /api/admin/wallet/adjust` — Admin wallet credit/debit. **Auth: admin.**
 
-### Admin: Bookings
+```json
+{ "userId": N, "amount": 50.00, "description": "string" }
+```
 
-#### `GET /api/admin/bookings`
-
-List all shuttle bookings with passenger, trip, and route details.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`, `status`, `search`
-
-**Response 200:** Paginated bookings list.
-
----
-
-### Admin: Transactions
-
-#### `GET /api/admin/transactions`
-
-Alias for wallet transactions list with joined user info.
-
-**Auth: admin.**
-
-**Query params:** `page`, `limit`
-
-**Response 200:** Paginated transactions with user details.
+#### `POST /api/admin/wallet/refund` — Admin issues a wallet refund. **Auth: admin.**
 
 ---
 
@@ -3167,23 +2561,19 @@ Alias for wallet transactions list with joined user info.
 
 #### `GET /api/admin/driver-locations`
 
-Paginated GPS location history for a driver.
+Paginated GPS history for a driver.
 
 **Auth: admin.**
 
 **Query params:** `driverId` (required), `page`, `limit` (max 200)
 
-**Response 200:** `{ "data": [...locations], "total": N, "page": N, "limit": N }`
-
 ---
 
 #### `GET /api/admin/driver-locations/:driverId/latest`
 
-Get the most recent GPS location for a driver.
+Most recent GPS location for a driver.
 
 **Auth: admin.**
-
-**Response 200:** Single location record.
 
 ---
 
@@ -3205,185 +2595,208 @@ Get the most recent GPS location for a driver.
 | `drivers:available:{vehicleType}` | Online drivers for a vehicle type (e.g., `drivers:available:car`) |
 | `trip:{tripId}` | All parties to a shuttle trip |
 
-### Events: Rides
+---
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `ride:new_request` | `drivers:available:{vehicleType}` | `{ rideId, vehicleType, pickupAddress, dropoffAddress, distanceKm, estimatedPrice }` |
-| `ride:driver_assigned` | `passenger:{userId}` | `{ rideId, driverId, driverName, driver: { name, phone, vehicle, rating }, eta }` |
-| `ride:driver_arrived` | `passenger:{userId}` | `{ rideId, driverId }` |
-| `ride:started` | `passenger:{userId}` | `{ rideId, driverId }` |
-| `ride:completed` | `passenger:{userId}` | `{ rideId, finalPrice, fare, waitingCharge }` |
-| `ride:cancelled` | `passenger:{userId}` | `{ rideId, reason }` |
-| `ride:driver_cancelled` | `passenger:{userId}` | `{ rideId, message }` |
-| `ride:location_updated` | `passenger:{userId}` | `{ rideId, driverId, latitude, longitude, heading }` |
-| `ride:deviation_warning` | `admin:room` + `passenger:{userId}` | `{ rideId, driverId, latitude, longitude, deviationM }` |
-| `ride:timeout` | `passenger:{userId}` | `{ rideId }` |
-| `ride:offer_expired` | `driver:{userId}` | `{ rideId }` |
+### Events: Rides (Server → Passenger)
 
-### Events: Waiting Timer
+| Event string | Payload |
+|-------------|---------|
+| `ride:driver_assigned` | `{ rideId, driverId, driverName, driver: { name, phone, vehicle, rating }, eta }` |
+| `ride:driver_arrived` | `{ rideId, driverId }` |
+| `ride:started` | `{ rideId, driverId }` |
+| `ride:completed` | `{ rideId, finalPrice, fare, waitingCharge }` |
+| `ride:cancelled` | `{ rideId, reason }` |
+| `ride:driver_cancelled` | `{ rideId, message }` |
+| `ride:no_show_cancelled` | `{ rideId, arrivedFlatFee, waitingCharge, totalFee, refundAmount }` |
+| `ride:driver_location` | `{ rideId, driverId, latitude, longitude, heading }` |
+| `ride:deviation:warning` | `{ rideId, driverId, latitude, longitude, deviationM }` |
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `ride:free_window_ended` | `passenger:{userId}` | `{ rideId, ratePerMinute }` |
-| `ride:waiting_charge_updated` | `passenger:{userId}` + `driver:{userId}` | `{ rideId, chargedMinutes, totalCharge, ratePerMinute }` |
-| `ride:waiting_charge_capped` | `passenger:{userId}` + `driver:{userId}` | `{ rideId, totalCharge, maxCharge }` |
+---
 
-### Events: No-Show
+### Events: Waiting Timer (Server → Passenger + Driver)
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `ride:no_show` | `passenger:{userId}` + `driver:{userId}` + `admin:room` | `{ rideId, arrivedFlatFee, waitingCharge, totalFee, refundAmount }` |
+| Event string | When emitted | Payload |
+|-------------|-------------|---------|
+| `ride:waiting:charge:started` | Free window (3 min) ends | `{ rideId, ratePerMinute }` |
+| `ride:waiting:charge:updated` | Every minute while charging | `{ rideId, chargedMinutes, totalCharge, ratePerMinute }` |
+| `ride:waiting:charge:capped` | Maximum charge reached | `{ rideId, totalCharge, maxCharge }` |
 
-### Events: Driver Status
+> **These events are live and emit today.** Passengers without UI listeners are being charged silently.
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `driver:location_updated` | `driver:{userId}` | `{ latitude, longitude, heading }` |
-| `driver:online` | `drivers:available:{vehicleType}` | `{ driverId }` |
-| `driver:offline` | `drivers:available:{vehicleType}` | `{ driverId }` |
+---
 
-### Events: Driver Check-In
+### Events: Dispatch (Server → Available Drivers)
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `driver:checkin_required` | `driver:{userId}` | `{ driverId, deadline: ISO8601 }` |
-| `driver:checkin_rejected` | `driver:{userId}` | `{ driverId, reason: "No check-in within deadline" }` |
+| Event string | Payload |
+|-------------|---------|
+| `ride:offer` | `{ rideId, vehicleType, pickupAddress, dropoffAddress, distanceKm, estimatedPrice }` |
+| `ride:new_request` | Same as above |
+| `ride:offer_expired` | `{ rideId }` |
+| `ride:no_longer_available` | `{ rideId }` |
+| `ride:status_update` | `{ rideId, status }` |
 
-### Events: Shuttle / Bookings
+---
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
+### Events: Driver (Server → Driver)
+
+| Event string | Payload |
+|-------------|---------|
+| `driver:location:ack` | Acknowledgement of location update |
+| `driver:checkin:required` | `{ driverId, deadline: ISO8601 }` |
+| `driver:checkin:approved` | `{ driverId }` |
+| `driver:checkin:rejected` | `{ driverId, reason: "No check-in within deadline" }` |
+| `driver:cooldown:cleared` | `{ driverId }` — admin lifted dispatch cooldown |
+
+---
+
+### Events: Shuttle (Server → Trip Room / Passengers)
+
+| Event string | Emitted To | Payload |
+|-------------|-----------|---------|
 | `booking:boarded` | `passenger:{userId}` | `{ bookingId, tripId, timestamp }` |
-| `trip:activated` | `admin:room` + `passengers:all` | `{ tripId }` |
-| `trip:cancelled` | `admin:room` + `passengers:all` | `{ tripId }` |
+| `passenger:trip:tracking` | `trip:{tripId}` | Trip tracking data |
+| `trip:chat:message` | `trip:{tripId}` | Chat message object |
+| `admin:chat:new` | `admin:room` | New chat message notification |
+| `admin:track:trip` | `admin:room` | Trip tracking update |
 
-### Events: Surge Pricing
+---
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `surge:update` | All connected clients | `{ vehicleType, multiplier, tier: "none|low|medium|high", ratio, isActive }` |
+### Events: Surge Pricing (Server → All Passengers)
 
-### Events: Service Controls
+| Event string | Payload |
+|-------------|---------|
+| `surge:updated` | `{ vehicleType, multiplier, tier: "none\|low\|medium\|high", ratio, isActive }` |
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `service:control_changed` | All clients + `admin:room` | `{ serviceType, isEnabled, displayMode, unavailableMessage, unavailableAction, activeZoneIds, maintenanceEta, changedBy, changedAt }` |
-| `service:settings_changed` | All clients + `admin:room` | `{ serviceType, minDriverRating, requiredLicenseTypes, requireInsurance, requireBackgroundCheck, maxActiveRidesPerDriver, changedBy, changedAt }` |
+---
 
-### Events: SOS
+### Events: Service Controls (Server → All Clients)
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `sos:triggered` | `admin:room` | `{ sosId, rideId, userId, role, latitude, longitude, notes, triggeredAt }` |
+| Event string | Payload |
+|-------------|---------|
+| `service:control:changed` | `{ serviceType, isEnabled, displayMode, unavailableMessage, unavailableAction, activeZoneIds, maintenanceEta, changedBy, changedAt }` |
+| `service:settings:changed` | `{ serviceType, minDriverRating, requiredLicenseTypes, requireInsurance, requireBackgroundCheck, maxActiveRidesPerDriver, changedBy, changedAt }` |
 
-### Events: Chat
+---
 
-| Event | Emitted To | Payload |
-|-------|-----------|---------|
-| `chat:message` | `trip:{tripId}` or passenger/driver rooms | `{ rideId, senderId, message, timestamp }` |
+### Events: SOS (Server → Admin)
+
+| Event string | Payload |
+|-------------|---------|
+| `sos:triggered` | `{ sosId, rideId, userId, role, latitude, longitude, notes, triggeredAt }` |
+
+---
+
+### Client → Server Events
+
+| Event string | Sender | Payload | Description |
+|-------------|--------|---------|-------------|
+| `driver:location:update` | driver | `{ latitude, longitude, heading }` | GPS update (also accepted as `driver:ride:location`) |
+| `driver:status:online` | driver | — | Driver going online |
+| `driver:status:offline` | driver | — | Driver going offline |
+| `driver:status:busy` | driver | — | Driver marked busy |
+| `passenger:join:trip` | user | bare `tripId` (number) | Subscribe to shuttle trip tracking room |
+| `driver:trip:start` | driver | bare `tripId` (number) | Signal trip started via socket |
+| `driver:trip:complete` | driver | bare `tripId` (number) | Signal trip completed via socket |
+| `join` | any | — | Generic room join |
+
+> **Payload note on `passenger:join:trip`:** The handler accepts a bare number (`(tripId: number) => {}`), not an object `{ tripId }`. Send the number directly.
 
 ---
 
 ## Background Jobs
 
-All background jobs start automatically at server boot.
+All jobs start automatically at server boot.
 
-### Ride Timeout Job (`lib/ride-timeout.ts`)
+### Ride Timeout (`lib/ride-timeout.ts`)
 
-**Interval:** Every 60 seconds  
-**Env var:** `RIDE_TIMEOUT_MINUTES` (default: `5`)
+**Interval:** 60 s  
+**Env var:** `RIDE_TIMEOUT_MINUTES` (default 5)
 
-Scans for rides stuck in `searching` status beyond the timeout window. For each timed-out ride:
-1. Sets status → `cancelled` (reason: `"timeout"`)
-2. Refunds the escrowed fare to the passenger's wallet
-3. Emits `ride:timeout` to `passenger:{userId}`
+Scans for rides stuck in `searching` beyond the timeout. For each:
+1. Status → `cancelled` (reason: `timeout`)
+2. Escrowed fare refunded to passenger wallet
+3. Emits `ride:cancelled` to `passenger:{userId}`
 
 ---
 
 ### Dispatch Manager (`lib/dispatch-manager.ts`)
 
-**Recovery:** Runs once at startup to re-dispatch rides in `searching` status  
-**Round timeout:** 15 seconds per dispatch round
+**Startup:** Recovers in-flight `searching` rides immediately.  
+**Round timeout:** 15 s per dispatch round.
 
-Handles all ride dispatch logic:
-- **Dynamic radius expansion:** Searches at expanding radius steps (configurable off-peak/peak)
-- **Peak hours mode:** Uses different batch sizes and tighter radius steps during peak windows
-- **Cooldown:** Drivers who decline 3 consecutive rides are cooled down for 10 minutes
-- **Fair distribution:** Drivers recently offered a ride in the past 10 minutes get a scoring penalty
-- **Driver scoring:** Factors distance, rating, and recency into priority
-- **Round timeout:** After 15s with no acceptance, the offer expires and the next batch of drivers is notified
+- **Dynamic radius expansion:** `[5, 8, 12]` km off-peak; `[3, 5, 8]` km during peak.
+- **Peak hours mode:** Larger batch size (5 vs 3) and tighter radius steps.
+- **Cooldown:** 3 consecutive rejections → 10-minute dispatch cooldown for that driver.
+- **Fair distribution penalty:** Drivers offered a ride within the past 10 minutes get a score deduction.
+- **Driver scoring:** Factors distance, rating, and recency.
+- **Settings cache:** Peak settings are cached for 60 s; `PUT /admin/dispatch/peak-settings` takes effect within one cache TTL.
 
 ---
 
-### Surge Pricing Job (`lib/surge-pricing.ts`)
+### Surge Pricing (`lib/surge-pricing.ts`)
 
-**Interval:** Every 5 minutes (configurable via `SURGE_INTERVAL_MS`)  
-**Vehicle types evaluated:** `car`, `bike`
+**Interval:** 5 min (configurable via `SURGE_INTERVAL_MS`).  
+**Vehicle types:** `car`, `bike`.
 
-Calculates the demand/supply ratio (searching rides ÷ online drivers) per vehicle type and sets a surge tier:
+Demand/supply ratio = searching rides ÷ online drivers:
 
 | Ratio | Tier | Multiplier |
 |-------|------|-----------|
 | < 2.0 | `none` | 1.0× |
 | 2.0 – 3.0 | `low` | 1.3× |
 | 3.0 – 5.0 | `medium` | 1.6× |
-| ≥ 5.0 | `high` | 2.0× |
+| ≥ 5.0 | `high` | 2.0× (hard cap) |
 
-Surge state is persisted to DB settings and broadcast via `surge:update` Socket.IO event.
+State persisted to DB settings; broadcast via `surge:updated`.
 
 ---
 
 ### Waiting Timer (`lib/waiting-timer.ts`)
 
-**Triggered:** When driver arrives at pickup (`PATCH /driver/rides/:id/arrived`)  
-**Free window:** 3 minutes  
-**Charge tick:** Every 60 seconds after free window
+**Trigger:** When driver marks arrival (`PATCH /driver/rides/:id/arrived`).
 
-Charges the passenger per minute after the free window expires:
-- Rate: `waiting_charge_per_minute` setting (default: 2.00 EGP/min)
-- Cap: `max_waiting_charge` setting (default: 20.00 EGP)
-- Emits `ride:free_window_ended`, `ride:waiting_charge_updated`, `ride:waiting_charge_capped`
-- Waiting charge is locked in at ride-start and added to final price on completion
+- **Free window:** 3 minutes before charges begin.
+- **Charge rate:** `waiting_charge_per_minute` setting (default 2.00 EGP/min).
+- **Cap:** `max_waiting_charge` setting (default 20.00 EGP).
+- **Events emitted:** `ride:waiting:charge:started`, `ride:waiting:charge:updated` (every minute), `ride:waiting:charge:capped`.
+- Waiting charge is locked on ride-start and added to final price on completion.
 
 ---
 
 ### No-Show Monitor (`lib/no-show-monitor.ts`)
 
-**Triggered:** When driver arrives at pickup (in parallel with waiting timer)  
-**Timeout:** `no_show_timeout_minutes` setting (default: 10 minutes)
+**Trigger:** Alongside waiting timer on driver arrival.  
+**Timeout:** `no_show_timeout_minutes` setting (default 10 min).
 
-If the passenger does not board within the window:
-1. Stops waiting timer and captures accrued charge
-2. Charges cancellation fee (`cancellation_fee_arrived` setting, default 5.00 EGP) + waiting charge
-3. Refunds remainder of escrow to passenger
-4. Sets ride to `cancelled`, driver to `online`
-5. Creates driver earnings record for the no-show fee
-6. Emits `ride:no_show` to all parties and `admin:room`
+If passenger doesn't board within the window:
+1. Stops waiting timer; captures accrued charge.
+2. Total fee = `cancellation_fee_arrived` (default 5.00) + waiting charge.
+3. Refund = escrowed amount − total fee (floored at 0).
+4. Ride → `cancelled`; driver → `online`; driver earnings record inserted for the fee.
+5. Emits `ride:no_show_cancelled` to both parties and `admin:room`.
 
 ---
 
 ### Check-In Monitor (`lib/checkin-monitor.ts`)
 
-**Interval:** Every 60 seconds  
-**Phase 1 prompt after:** `CHECKIN_PROMPT_HOURS` env var (default: 10 hours online)  
-**Phase 2 deadline:** `CHECKIN_DEADLINE_MINUTES` env var (default: 30 minutes)
+**Interval:** 60 s.  
+**Phase 1 prompt after:** `CHECKIN_PROMPT_HOURS` env var (default 10 h online).  
+**Phase 2 deadline:** `CHECKIN_DEADLINE_MINUTES` env var (default 30 min).
 
-**Phase 1 (Prompt):** Finds drivers online ≥ N hours without a recent face-detected check-in. Sets `checkInRequired = true`, assigns a deadline, emits `driver:checkin_required`.
-
-**Phase 2 (Enforce):** Finds drivers with an expired `checkInDeadline`. Sets them offline, clears check-in state, emits `driver:checkin_rejected`.
+**Phase 1:** Drivers online ≥ N hours without a recent face-detected check-in → `checkInRequired = true`, deadline set, `driver:checkin:required` emitted.  
+**Phase 2:** Expired deadline → driver forced offline, `driver:checkin:rejected` emitted.
 
 ---
 
 ### Shuttle Status Job (`lib/shuttle-job.ts`)
 
-**Interval:** Every 15 minutes  
-**Look-ahead window:** 8 hours
+**Interval:** 15 min.  
+**Look-ahead:** 8 hours.
 
-Evaluates all `scheduled` or `active` trips departing within the next 8 hours:
-- **Trips with < 7 bookings** → set to `cancelled`; passengers refunded via wallet
-- **`scheduled` trips with ≥ 7 bookings** → set to `active`
-- Emits `trip:cancelled` or `trip:activated` Socket.IO events
+Evaluates `scheduled` / `active` trips departing within 8 hours:
+- **< 7 bookings** → trip cancelled; passengers refunded.
+- **`scheduled` with ≥ 7 bookings** → trip activated.
+- Emits `trip:cancelled` or `trip:activated` (via Socket.IO to admin + `passengers:all`).
 
 ---
 
@@ -3392,16 +2805,16 @@ Evaluates all `scheduled` or `active` trips departing within the next 8 hours:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
-| `JWT_SECRET` | Yes | — | Secret for JWT signing |
-| `JWT_REFRESH_SECRET` | Yes | — | Secret for refresh token signing |
+| `JWT_SECRET` | Yes | — | Access token signing secret |
+| `JWT_REFRESH_SECRET` | Yes | — | Refresh token signing secret |
 | `PORT` | No | `8080` | HTTP server port |
-| `SUPABASE_URL` | Yes (for file uploads) | — | Supabase project URL |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes (for file uploads) | — | Supabase service role key |
+| `SUPABASE_URL` | For uploads | — | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | For uploads | — | Supabase service role key |
 | `SUPABASE_BUCKET` | No | `uploads` | Supabase storage bucket name |
 | `RIDE_TIMEOUT_MINUTES` | No | `5` | Minutes before un-accepted rides are cancelled |
-| `RIDE_RATE_LIMIT_WINDOW_MS` | No | `120000` | Ride request rate limit window |
+| `RIDE_RATE_LIMIT_WINDOW_MS` | No | `120000` | Ride request rate limit window (ms) |
 | `RIDE_RATE_LIMIT_MAX` | No | `3` | Max ride requests per window |
-| `SURGE_INTERVAL_MS` | No | `300000` | Surge pricing recalculation interval |
+| `SURGE_INTERVAL_MS` | No | `300000` | Surge pricing recalculation interval (ms) |
 | `CHECKIN_PROMPT_HOURS` | No | `10` | Hours online before check-in prompt |
 | `CHECKIN_DEADLINE_MINUTES` | No | `30` | Minutes to complete check-in after prompt |
-| `REPLIT_DEV_DOMAIN` | No | — | Used to construct share-link URLs in Replit environment |
+| `REPLIT_DEV_DOMAIN` | No | — | Used to construct share-link URLs in Replit |
