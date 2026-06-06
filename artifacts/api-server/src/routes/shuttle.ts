@@ -1,9 +1,19 @@
 import { Router } from "express";
-import { db, routesTable, stationsTable, tripsTable, driversTable, busesTable, usersTable, bookingsTable } from "@workspace/db";
-import { eq, sql, and, inArray, desc } from "drizzle-orm";
+import { db, routesTable, stationsTable, tripsTable, driversTable, busesTable, usersTable, bookingsTable, routeTimeSlotsTable, driverShuttleBookingsTable } from "@workspace/db";
+import { eq, sql, and, inArray, desc, asc } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS } from "../lib/socket-events";
+
+function getUpcomingWeekStartStr(): string {
+  const now = new Date();
+  const day = now.getUTCDay();
+  const daysToAdd = day === 0 ? 7 : 7 - day;
+  const sunday = new Date(now);
+  sunday.setUTCDate(sunday.getUTCDate() + daysToAdd);
+  sunday.setUTCHours(0, 0, 0, 0);
+  return sunday.toISOString().split("T")[0]!;
+}
 
 const router = Router();
 
@@ -65,8 +75,9 @@ router.get("/shuttle/lines", authenticate, async (_req, res): Promise<void> => {
   }
 
   const routeIds = routes.map((r) => r.id);
+  const upcomingWeekStart = getUpcomingWeekStartStr();
 
-  const [stationCounts, tripStats] = await Promise.all([
+  const [stationCounts, tripStats, allSlots, bookedSlots] = await Promise.all([
     db
       .select({
         routeId: stationsTable.routeId,
@@ -91,13 +102,55 @@ router.get("/shuttle/lines", authenticate, async (_req, res): Promise<void> => {
         ),
       )
       .groupBy(tripsTable.routeId),
+
+    db
+      .select({
+        id: routeTimeSlotsTable.id,
+        routeId: routeTimeSlotsTable.routeId,
+        departureTime: routeTimeSlotsTable.departureTime,
+      })
+      .from(routeTimeSlotsTable)
+      .where(
+        and(
+          inArray(routeTimeSlotsTable.routeId, routeIds),
+          eq(routeTimeSlotsTable.isActive, true),
+        ),
+      )
+      .orderBy(asc(routeTimeSlotsTable.departureTime)),
+
+    db
+      .select({
+        routeId: driverShuttleBookingsTable.routeId,
+        timeSlotId: driverShuttleBookingsTable.timeSlotId,
+      })
+      .from(driverShuttleBookingsTable)
+      .where(
+        and(
+          inArray(driverShuttleBookingsTable.routeId, routeIds),
+          eq(driverShuttleBookingsTable.weekStart, upcomingWeekStart),
+          inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+        ),
+      ),
   ]);
 
   const stationMap = new Map(stationCounts.map((s) => [s.routeId, s.stationCount]));
   const tripMap = new Map(tripStats.map((t) => [t.routeId, t]));
 
+  const slotsByRoute = new Map<number, typeof allSlots>();
+  for (const slot of allSlots) {
+    const list = slotsByRoute.get(slot.routeId) ?? [];
+    list.push(slot);
+    slotsByRoute.set(slot.routeId, list);
+  }
+  const bookedSet = new Set(bookedSlots.map((b) => `${b.routeId}:${b.timeSlotId}`));
+
   const data = routes.map((r) => {
     const trips = tripMap.get(r.id);
+    const slots = (slotsByRoute.get(r.id) ?? []).map((s) => ({
+      id: s.id,
+      departureTime: s.departureTime,
+      isBooked: bookedSet.has(`${r.id}:${s.id}`),
+    }));
     return {
       id: r.id,
       name: r.name,
@@ -114,6 +167,10 @@ router.get("/shuttle/lines", authenticate, async (_req, res): Promise<void> => {
       minRequired: SHUTTLE_MIN_REQUIRED,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
+      upcomingWeekStart,
+      timeSlots: slots,
+      availableSlots: slots.filter((s) => !s.isBooked).length,
+      totalSlots: slots.length,
     };
   });
 
