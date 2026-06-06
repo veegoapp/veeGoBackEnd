@@ -502,9 +502,18 @@ router.get("/driver/trips/:id", authenticate, requireRole("driver"), async (req,
     .where(and(eq(tripsTable.id, tripId), eq(tripsTable.driverId, driver.id)));
   if (!trip) { res.status(404).json({ error: "Trip not found or not assigned to you" }); return; }
 
-  const bookings = await db.select().from(bookingsTable).where(eq(bookingsTable.tripId, tripId));
+  const bookings = await db
+    .select({
+      id: bookingsTable.id,
+      passengerName: usersTable.name,
+      passengerPhone: usersTable.phone,
+      passengerAvatar: usersTable.avatar,
+    })
+    .from(bookingsTable)
+    .leftJoin(usersTable, eq(bookingsTable.userId, usersTable.id))
+    .where(eq(bookingsTable.tripId, tripId));
 
-  res.json({ ...fmtTrip(trip as Record<string, unknown>), bookings: bookings.map(b => fmtBooking(b as Record<string, unknown>)) });
+  res.json({ ...fmtTrip(trip as Record<string, unknown>), bookings });
 });
 
 router.patch("/driver/trips/:id/accept", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
@@ -997,61 +1006,6 @@ router.get("/driver/wallet/balance", authenticate, requireRole("driver"), async 
     balance:      parseFloat(totals?.totalConfirmed ?? "0"),
     totalPaid:    parseFloat(totals?.totalPaid ?? "0"),
     totalPending: parseFloat(totals?.totalPending ?? "0"),
-  });
-});
-
-// FIXED: driver settings endpoints (GET /driver/settings)
-router.get("/driver/settings", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
-  const [driver] = await db.select({ id: driversTable.id }).from(driversTable).where(eq(driversTable.userId, req.user!.id));
-  if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
-
-  const notifKey = `driver_${driver.id}_notifications`;
-  const langKey  = `driver_${driver.id}_language`;
-  const settings = await db.select().from(settingsTable)
-    .where(inArray(settingsTable.key, [notifKey, langKey]));
-  const map = Object.fromEntries(settings.map(s => [s.key, s.value]));
-
-  res.json({
-    notifications: map[notifKey] !== undefined ? map[notifKey] === "true" : true,
-    language:      map[langKey] ?? "en",
-  });
-});
-
-// FIXED: driver settings endpoints (PATCH /driver/settings)
-const DriverSettingsLangBody = z.object({
-  notifications: z.boolean().optional(),
-  language:      z.string().min(2).max(10).optional(),
-});
-
-router.patch("/driver/settings", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
-  const parsed = DriverSettingsLangBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid data" }); return; }
-
-  const [driver] = await db.select({ id: driversTable.id }).from(driversTable).where(eq(driversTable.userId, req.user!.id));
-  if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
-
-  const { notifications, language } = parsed.data;
-
-  if (notifications !== undefined) {
-    const key = `driver_${driver.id}_notifications`;
-    await db.insert(settingsTable).values({ key, value: String(notifications) })
-      .onConflictDoUpdate({ target: settingsTable.key, set: { value: String(notifications) } });
-  }
-  if (language !== undefined) {
-    const key = `driver_${driver.id}_language`;
-    await db.insert(settingsTable).values({ key, value: language })
-      .onConflictDoUpdate({ target: settingsTable.key, set: { value: language } });
-  }
-
-  const notifKey = `driver_${driver.id}_notifications`;
-  const langKey  = `driver_${driver.id}_language`;
-  const allSettings = await db.select().from(settingsTable)
-    .where(inArray(settingsTable.key, [notifKey, langKey]));
-  const map = Object.fromEntries(allSettings.map(s => [s.key, s.value]));
-
-  res.json({
-    notifications: map[notifKey] !== undefined ? map[notifKey] === "true" : true,
-    language:      map[langKey] ?? "en",
   });
 });
 

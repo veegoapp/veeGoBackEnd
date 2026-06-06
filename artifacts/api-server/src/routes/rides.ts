@@ -923,6 +923,43 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
   }
 });
 
+// ─── DRIVER: ACTIVE RIDE ─────────────────────────────────────────────────────
+
+router.get("/driver/rides/active", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
+  try {
+    const [driver] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, req.user!.id));
+
+    if (!driver) {
+      res.status(404).json({ error: "Driver profile not found" });
+      return;
+    }
+
+    const [ride] = await db
+      .select()
+      .from(ridesTable)
+      .where(
+        and(
+          eq(ridesTable.driverId, driver.id),
+          sql`${ridesTable.status} IN ('driver_assigned', 'arrived', 'in_trip')`,
+        ),
+      )
+      .orderBy(desc(ridesTable.requestedAt))
+      .limit(1);
+
+    if (!ride) {
+      res.status(404).json({ error: "No active ride found" });
+      return;
+    }
+
+    res.json({ data: parseRide(ride as unknown as Record<string, unknown>) });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch active ride" });
+  }
+});
+
 // ─── DRIVER: AVAILABLE RIDES ─────────────────────────────────────────────────
 
 router.get("/driver/rides/available", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
@@ -1454,6 +1491,52 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
     res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {
     res.status(500).json({ error: "Failed to complete ride" });
+  }
+});
+
+// ─── DRIVER: PATCH /driver/rides/:id/decline (canonical) ─────────────────────
+
+router.patch("/driver/rides/:id/decline", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
+  try {
+    const rideId = parseInt(req.params.id as string);
+    const userId = req.user!.id;
+
+    const [driver] = await db.select({ id: driversTable.id }).from(driversTable).where(eq(driversTable.userId, userId));
+    if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
+
+    const [ride] = await db.select().from(ridesTable)
+      .where(and(eq(ridesTable.id, rideId), eq(ridesTable.driverId, driver.id)));
+    if (!ride) { res.status(404).json({ error: "Ride not found or not assigned to you" }); return; }
+    if (!["driver_assigned", "searching"].includes(ride.status)) {
+      res.status(400).json({ error: `Cannot decline ride with status '${ride.status}'` });
+      return;
+    }
+
+    const [updated] = await db.update(ridesTable)
+      .set({ status: "searching", driverId: null, driverAssignedAt: null })
+      .where(eq(ridesTable.id, rideId))
+      .returning();
+
+    await Promise.all([
+      db.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id)),
+      db.insert(rideEventsTable).values({ rideId, type: "RIDE_DECLINED", metadata: { driverId: driver.id } }),
+    ]);
+
+    const io = getIO();
+    if (io) {
+      io.to(`drivers:available:${ride.vehicleType}`).emit(SOCKET_EVENTS.RIDE_NEW_REQUEST, {
+        rideId,
+        vehicleType: ride.vehicleType,
+        pickupAddress: ride.pickupAddress,
+        dropoffAddress: ride.dropoffAddress,
+        distanceKm: ride.distanceKm ? parseFloat(ride.distanceKm as string) : null,
+        estimatedPrice: ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : null,
+      });
+    }
+
+    res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
+  } catch {
+    res.status(500).json({ error: "Failed to decline ride" });
   }
 });
 

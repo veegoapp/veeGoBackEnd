@@ -42,7 +42,7 @@ function formatShuttleTrip(
 
 // ─── GET /shuttle/lines ────────────────────────────────────────────────────────
 // Returns all active shuttle routes with station counts and booking stats.
-router.get("/shuttle/lines", async (_req, res): Promise<void> => {
+router.get("/shuttle/lines", authenticate, async (_req, res): Promise<void> => {
   const routes = await db
     .select({
       id: routesTable.id,
