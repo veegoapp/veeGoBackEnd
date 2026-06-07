@@ -1,0 +1,112 @@
+Prompt for Your Backend Developer
+
+Subject: Two broken sections in the Shuttle Booking screen — "Select Work Week" & "Departure Time"
+
+Hi, I need your help fixing two sections in the Shuttle driver booking screen. I'll describe exactly what the frontend expects and what seems to be missing or wrong on the backend side.
+Context
+
+The booking flow works like this:
+
+    Driver taps a route → a booking sheet opens
+    Driver picks a Work Week (e.g. Jun 7–11)
+    After selecting a week, driver picks a Departure Time
+    Driver confirms → booking is created
+
+The booking creation call sends:
+
+POST /shuttle/route-bookings
+Body: { routeId, timeSlotId, weekStart }
+
+where weekStart is the ISO date of the Sunday that starts the selected week (e.g. "2026-06-07").
+Problem 1 — SELECT WORK WEEK
+
+Current behavior: The work week options are generated entirely on the frontend with hardcoded logic. The app generates 8 future Sun–Thu weeks locally and displays them as chips (Jun 7–11, Jun 14–18, etc.).
+
+What we need from the backend:
+
+An endpoint (or a field in an existing endpoint) that tells the frontend which weeks are actually open for booking on a given route. Right now we have no way to know:
+
+    Which weeks does the backend accept bookings for this route?
+    Are there any blackout weeks (holidays, maintenance, etc.)?
+    How far in advance can a driver book?
+
+Proposed endpoint (or add to existing GET /shuttle/lines/:id):
+
+GET /shuttle/routes/:routeId/available-weeks
+
+Expected response shape:
+
+{
+  "weeks": [
+    {
+      "weekStart": "2026-06-07",   // ISO date, always the Sunday
+      "weekEnd": "2026-06-11",     // ISO date, always the Thursday
+      "label": "Jun 7–11",        // optional, frontend can build this itself
+      "isCurrentWeek": true,       // is this the ongoing week?
+      "bookingOpen": true          // can drivers still book this week?
+    },
+    {
+      "weekStart": "2026-06-14",
+      "weekEnd": "2026-06-18",
+      "isCurrentWeek": false,
+      "bookingOpen": true
+    }
+    // ...
+  ]
+}
+
+If you prefer not to add a new endpoint, please add a "availableWeeks" array to the response of GET /shuttle/lines/:id.
+Problem 2 — DEPARTURE TIME (most critical)
+
+Current behavior: The frontend calls:
+
+GET /shuttle/timeslots/:routeId
+
+This returns the time slots for the route (e.g. 07:00, 09:00, 11:00). The selected week is NOT sent to this endpoint. This means:
+
+    The available seat counts and booking status returned are not specific to the selected week
+    When a driver picks "Jun 14–18", they still see the same timeslot data as "Jun 7–11" — the availableSeats and isBooked are wrong or stale
+    The display shows "No time slots available for this route" because the current timeslot data doesn't match what the frontend expects
+
+What the frontend needs:
+
+The timeslots endpoint must accept a weekStart parameter so it returns availability specific to that week:
+
+GET /shuttle/timeslots/:routeId?weekStart=2026-06-14
+
+OR alternatively:
+
+GET /shuttle/routes/:routeId/timeslots?weekStart=2026-06-14
+
+Required response shape (array or wrapped):
+
+[
+  {
+    "id": 1,                        // timeslot ID used in booking creation
+    "departureTime": "07:00",       // display string, e.g. "07:00" or "7:00 AM"
+    "availableSeats": 3,            // seats still open for THIS week
+    "totalSeats": 10,               // total capacity
+    "isBooked": false               // has THIS driver already booked this slot for this week?
+  },
+  {
+    "id": 2,
+    "departureTime": "09:00",
+    "availableSeats": 0,
+    "totalSeats": 10,
+    "isBooked": true                // this driver already has this slot booked for this week
+  }
+]
+
+The key fields the frontend relies on:
+Field	Type	Purpose
+id	number or string	Sent to POST /shuttle/route-bookings as timeSlotId
+departureTime	string	Displayed as the departure time label
+availableSeats	number	Shows seat count badge
+totalSeats	number	Used for capacity display
+isBooked	boolean	Disables the chip if driver already booked
+Summary of what's needed
+#	What	Endpoint	Change needed
+1	Available weeks for a route	GET /shuttle/routes/:routeId/available-weeks	New endpoint (or add to line detail)
+2	Week-aware timeslots	GET /shuttle/timeslots/:routeId?weekStart=YYYY-MM-DD	Add weekStart query param and filter availability by week
+
+Once you confirm these endpoints and their exact response shape, I can immediately wire the frontend to use them correctly. Please share the exact field names your backend uses so I can match them precisely.
