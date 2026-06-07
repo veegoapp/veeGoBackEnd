@@ -325,26 +325,29 @@ router.get(
     );
 
     const weeks = sortedWeeks.map(({ weekStart, weekEnd }) => {
-      const slots = allSlots.map((slot) => {
-        const bookingKey = `${weekStart}:${slot.id}`;
-        const bookedDriverId = bookedByKey.get(bookingKey) ?? null;
-        const seatKey = `${weekStart}:${slot.departureTime}`;
-        const seats = seatByKey.get(seatKey) ?? null;
+      // Only include slots that have actual trips for this week (no ghost slots).
+      const slots = allSlots
+        .map((slot) => {
+          const bookingKey = `${weekStart}:${slot.id}`;
+          const bookedDriverId = bookedByKey.get(bookingKey) ?? null;
+          const seatKey = `${weekStart}:${slot.departureTime}`;
+          const seats = seatByKey.get(seatKey) ?? null;
 
-        return {
-          id: slot.id,
-          departureTime: slot.departureTime,
-          totalSeats: seats?.totalSeats ?? null,
-          availableSeats: seats?.availableSeats ?? null,
-          // isBooked = this driver already holds this slot this week
-          isBooked:
-            myDriverId !== null && bookedDriverId === myDriverId,
-          // isTaken = a DIFFERENT driver has claimed it
-          isTaken:
-            bookedDriverId !== null &&
-            bookedDriverId !== myDriverId,
-        };
-      });
+          return {
+            id: slot.id,
+            departureTime: slot.departureTime,
+            totalSeats: seats?.totalSeats ?? null,
+            availableSeats: seats?.availableSeats ?? null,
+            isBooked:
+              myDriverId !== null && bookedDriverId === myDriverId,
+            isTaken:
+              bookedDriverId !== null &&
+              bookedDriverId !== myDriverId,
+            _hasTrip: seats !== null,
+          };
+        })
+        .filter((s) => s._hasTrip)
+        .map(({ _hasTrip, ...s }) => s);
 
       return { weekStart, weekEnd, slots };
     });
@@ -504,13 +507,15 @@ router.get(
       allBookings.map((b) => [b.timeSlotId, b.driverId]),
     );
 
-    // "HH:MM" → { availableSeats, totalSeats }
+    // "HH:MM" (Cairo) → { availableSeats, totalSeats }
+    // FIX: use toCairoHHMM() — trips are stored in UTC but slots use Cairo local time.
+    // Using toISOString().substring(11,16) gave UTC time, causing a mismatch (e.g. "06:00" vs "09:00").
     const seatsByTime = new Map<
       string,
       { availableSeats: number; totalSeats: number }
     >();
     for (const trip of weekTrips) {
-      const hhmm = trip.departureTime.toISOString().substring(11, 16);
+      const hhmm = toCairoHHMM(trip.departureTime);
       const existing = seatsByTime.get(hhmm);
       if (!existing) {
         seatsByTime.set(hhmm, {
@@ -529,19 +534,25 @@ router.get(
     }
 
     // ── Build response ────────────────────────────────────────────────────
-    const data = slots.map((s) => {
-      const bookedDriverId = bookedBySlot.get(s.id) ?? null;
-      const seats = seatsByTime.get(s.departureTime) ?? null;
-      return {
-        id: s.id,
-        departureTime: s.departureTime,
-        availableSeats: seats?.availableSeats ?? null,
-        totalSeats: seats?.totalSeats ?? null,
-        isBooked: myDriverId !== null && bookedDriverId === myDriverId,
-        isTaken:
-          bookedDriverId !== null && bookedDriverId !== myDriverId,
-      };
-    });
+    // Only include slots that have actual trips scheduled for this week.
+    // Slots with no matching trip (seats === null) are ghost slots — skip them.
+    const data = slots
+      .map((s) => {
+        const bookedDriverId = bookedBySlot.get(s.id) ?? null;
+        const seats = seatsByTime.get(s.departureTime) ?? null;
+        return {
+          id: s.id,
+          departureTime: s.departureTime,
+          availableSeats: seats?.availableSeats ?? null,
+          totalSeats: seats?.totalSeats ?? null,
+          isBooked: myDriverId !== null && bookedDriverId === myDriverId,
+          isTaken:
+            bookedDriverId !== null && bookedDriverId !== myDriverId,
+          _hasTrip: seats !== null,
+        };
+      })
+      .filter((s) => s._hasTrip)
+      .map(({ _hasTrip, ...s }) => s);
 
     res.json({
       routeId,
