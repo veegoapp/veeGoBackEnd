@@ -237,7 +237,7 @@ export default function TripDetail() {
             {!trip.isActive && <Badge variant="secondary" className="text-[10px]">{t("tripDetail.inactive")}</Badge>}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {routeInfo?.name ?? `Route #${trip.routeId}`} · Created {new Date(trip.createdAt).toLocaleDateString([], { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' })}
+            {routeInfo?.name ?? `Route #${trip.routeId}`} · Created {new Date(trip.createdAt).toLocaleDateString([], { timeZone: 'Africa/Cairo', month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
         {canCancel && (
