@@ -10,6 +10,80 @@ const router = Router();
 const VEHICLE_TYPES = ["hiace", "minibus"] as const;
 type VehicleType = (typeof VEHICLE_TYPES)[number];
 
+// ─── Timezone helper ──────────────────────────────────────────────────────────
+// All times the admin enters are treated as Cairo local time (Africa/Cairo).
+// This function converts "HH:MM" Cairo time on a given UTC date to a proper
+// UTC Date — no hardcoded offset, handles DST automatically via Intl.
+const CAIRO_TZ = "Africa/Cairo";
+
+function cairoTimeToUtc(utcDate: Date, hhmm: string): Date {
+  const [hh, mm] = hhmm.split(":").map(Number);
+
+  // Build a date string that represents midnight of this day in Cairo
+  // by using Intl to find what UTC instant corresponds to Cairo midnight.
+  // We do this by binary-searching or by using the offset from a known point.
+
+  // Step 1: get the Cairo offset at noon of this UTC day (avoids DST edge cases)
+  const noonUtc = new Date(utcDate);
+  noonUtc.setUTCHours(12, 0, 0, 0);
+
+  // Format noon as Cairo local time to extract the Cairo date parts
+  const cairoNoon = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CAIRO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(noonUtc);
+
+  const parts = Object.fromEntries(cairoNoon.map((p) => [p.type, p.value]));
+  // parts.year, parts.month, parts.day are the Cairo local date at noon
+
+  // Step 2: construct an ISO string for the admin's chosen time in Cairo
+  const cairoIso = `${parts.year}-${parts.month}-${parts.day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
+
+  // Step 3: parse it as Cairo local time → UTC using Intl offset trick
+  // Create a Date from the ISO string (treated as LOCAL by Date constructor
+  // when no Z suffix), then correct for the environment's local offset vs Cairo.
+  // The safest cross-platform way: use the offset from a reference point.
+  const localDate = new Date(cairoIso); // parsed as system local time
+
+  // Get the system's UTC offset at this moment
+  const systemOffsetMs = localDate.getTimezoneOffset() * 60 * 1000; // positive = behind UTC
+
+  // Get Cairo's UTC offset at this moment using Intl
+  const cairoOffsetMs = getCairoOffsetMs(localDate);
+
+  // Correct: remove system offset, apply Cairo offset
+  const utcMs = localDate.getTime() + systemOffsetMs - cairoOffsetMs;
+
+  return new Date(utcMs);
+}
+
+/**
+ * Returns Cairo's UTC offset in milliseconds at a given moment.
+ * Positive = ahead of UTC (Cairo is UTC+2 or UTC+3).
+ */
+function getCairoOffsetMs(at: Date): number {
+  // Format the date in both UTC and Cairo, then diff
+  const utcStr = at.toLocaleString("en-US", { timeZone: "UTC", hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const cairoStr = at.toLocaleString("en-US", { timeZone: CAIRO_TZ, hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+  const utcParsed = new Date(utcStr);
+  const cairoParsed = new Date(cairoStr);
+
+  // cairoParsed - utcParsed = offset in ms (positive = Cairo ahead of UTC)
+  return cairoParsed.getTime() - utcParsed.getTime();
+}
+
+// ─── Schemas ──────────────────────────────────────────────────────────────────
+
 const CreateScheduleBody = z.object({
   routeId: z.number().int().positive(),
   effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD"),
@@ -19,7 +93,7 @@ const CreateScheduleBody = z.object({
     .array(
       z.object({
         dayOfWeek: z.number().int().min(0).max(6),
-        departureTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM"),
+        departureTime: z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM (Cairo local time)"),
       }),
     )
     .min(1, "At least one slot is required"),
@@ -33,19 +107,26 @@ const UpdateScheduleBody = z.object({
 
 const BATCH_SIZE = 500;
 
+// ─── Trip generator ───────────────────────────────────────────────────────────
+// Iterates day-by-day from effectiveFrom to effectiveTo (both Cairo dates),
+// finds slots whose dayOfWeek matches, converts the admin's HH:MM Cairo time
+// to UTC, and inserts trip rows. Skips duplicates.
+
 async function generateTripsForSchedule(
   scheduleId: number,
   routeId: number,
-  effectiveFrom: string,
-  effectiveTo: string,
+  effectiveFrom: string,   // "YYYY-MM-DD" — treated as Cairo local date
+  effectiveTo: string,     // "YYYY-MM-DD" — treated as Cairo local date
   vehicleType: VehicleType,
-  slots: Array<{ dayOfWeek: number; departureTime: string }>,
-  estimatedDuration: number,
+  slots: Array<{ dayOfWeek: number; departureTime: string }>, // departureTime = Cairo HH:MM
+  estimatedDuration: number, // minutes
   basePrice: string,
 ): Promise<number> {
   const totalSeats = VEHICLE_CAPACITY[vehicleType];
-  const start = new Date(effectiveFrom + "T00:00:00Z");
-  const end = new Date(effectiveTo + "T23:59:59Z");
+
+  // Treat effectiveFrom/To as Cairo midnight → convert to UTC for DB queries
+  const startUtc = cairoTimeToUtc(new Date(effectiveFrom + "T00:00:00Z"), "00:00");
+  const endUtc   = cairoTimeToUtc(new Date(effectiveTo   + "T00:00:00Z"), "23:59");
 
   const slotsByDay = new Map<number, string[]>();
   for (const slot of slots) {
@@ -54,6 +135,7 @@ async function generateTripsForSchedule(
     slotsByDay.set(slot.dayOfWeek, existing);
   }
 
+  // Fetch existing trips for this schedule to avoid duplicates
   const existingTrips = await db
     .select({ departureTime: tripsTable.departureTime })
     .from(tripsTable)
@@ -61,8 +143,8 @@ async function generateTripsForSchedule(
       and(
         eq(tripsTable.routeId, routeId),
         eq(tripsTable.scheduleId, scheduleId),
-        gte(tripsTable.departureTime, start),
-        lte(tripsTable.departureTime, end),
+        gte(tripsTable.departureTime, startUtc),
+        lte(tripsTable.departureTime, endUtc),
       ),
     );
 
@@ -85,19 +167,24 @@ async function generateTripsForSchedule(
     isActive: boolean;
   }> = [];
 
-  const cursor = new Date(start);
-  while (cursor <= end) {
-    const dayOfWeek = cursor.getUTCDay();
-    const times = slotsByDay.get(dayOfWeek);
+  // Walk day-by-day in Cairo time.
+  // We move a cursor through UTC dates but check the Cairo day-of-week.
+  const cursor = new Date(startUtc);
+  cursor.setUTCHours(0, 0, 0, 0);
+
+  const endDay = new Date(endUtc);
+  endDay.setUTCHours(23, 59, 59, 999);
+
+  while (cursor <= endDay) {
+    // Get the day-of-week for this cursor in Cairo time
+    const cairoDow = getCairoDayOfWeek(cursor);
+    const times = slotsByDay.get(cairoDow);
 
     if (times) {
       for (const time of times) {
-        const [hh, mm] = time.split(":").map(Number);
-        const departure = new Date(cursor);
-        departure.setUTCHours(hh!, mm!, 0, 0);
-        const arrival = new Date(
-          departure.getTime() + estimatedDuration * 60 * 1000,
-        );
+        // Convert admin's Cairo HH:MM on this cursor day → UTC
+        const departure = cairoTimeToUtc(cursor, time);
+        const arrival   = new Date(departure.getTime() + estimatedDuration * 60 * 1000);
 
         if (!existingSet.has(departure.toISOString())) {
           toInsert.push({
@@ -130,6 +217,25 @@ async function generateTripsForSchedule(
   return toInsert.length;
 }
 
+/**
+ * Returns the day-of-week (0=Sun … 6=Sat) for a UTC Date in Cairo local time.
+ */
+function getCairoDayOfWeek(utcDate: Date): number {
+  const cairoStr = utcDate.toLocaleString("en-US", {
+    timeZone: CAIRO_TZ,
+    weekday: "short",
+  });
+  const map: Record<string, number> = {
+    Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+  };
+  return map[cairoStr] ?? utcDate.getUTCDay();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROUTES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── POST /schedules ──────────────────────────────────────────────────────────
 router.post(
   "/schedules",
   authenticate,
@@ -178,7 +284,7 @@ router.post(
     const slotRows = slots.map((s) => ({
       scheduleId: schedule!.id,
       dayOfWeek: s.dayOfWeek,
-      departureTime: s.departureTime,
+      departureTime: s.departureTime, // stored as Cairo HH:MM — source of truth
     }));
 
     const insertedSlots = await db
@@ -201,10 +307,12 @@ router.post(
       schedule,
       slots: insertedSlots,
       tripsCreated,
+      note: "Departure times are interpreted as Cairo local time (Africa/Cairo) and stored in UTC.",
     });
   },
 );
 
+// ─── GET /schedules ───────────────────────────────────────────────────────────
 router.get(
   "/schedules",
   authenticate,
@@ -279,11 +387,7 @@ router.get(
       ...s,
       slots: slotMap.get(s.id) ?? [],
       tripStats: countMap.get(s.id) ?? {
-        total: 0,
-        waiting: 0,
-        assigned: 0,
-        completed: 0,
-        cancelled: 0,
+        total: 0, waiting: 0, assigned: 0, completed: 0, cancelled: 0,
       },
     }));
 
@@ -291,6 +395,7 @@ router.get(
   },
 );
 
+// ─── GET /schedules/:id ───────────────────────────────────────────────────────
 router.get(
   "/schedules/:id",
   authenticate,
@@ -350,16 +455,13 @@ router.get(
       ...schedule,
       slots,
       tripStats: tripStats[0] ?? {
-        total: 0,
-        waiting: 0,
-        assigned: 0,
-        completed: 0,
-        cancelled: 0,
+        total: 0, waiting: 0, assigned: 0, completed: 0, cancelled: 0,
       },
     });
   },
 );
 
+// ─── PATCH /schedules/:id ─────────────────────────────────────────────────────
 router.patch(
   "/schedules/:id",
   authenticate,
@@ -397,6 +499,8 @@ router.patch(
   },
 );
 
+// ─── POST /schedules/:id/generate ────────────────────────────────────────────
+// Re-generates trips for a schedule (e.g. after extending effectiveTo).
 router.post(
   "/schedules/:id/generate",
   authenticate,
@@ -459,6 +563,7 @@ router.post(
   },
 );
 
+// ─── DELETE /schedules/:id ────────────────────────────────────────────────────
 router.delete(
   "/schedules/:id",
   authenticate,
@@ -488,7 +593,11 @@ router.delete(
     const now = new Date();
     const cancelledCount = await db
       .update(tripsTable)
-      .set({ status: "cancelled", cancelledAt: now, cancelReason: "Schedule deactivated by admin" })
+      .set({
+        status: "cancelled",
+        cancelledAt: now,
+        cancelReason: "Schedule deactivated by admin",
+      })
       .where(
         and(
           eq(tripsTable.scheduleId, id),
@@ -497,7 +606,11 @@ router.delete(
         ),
       );
 
-    res.json({ ok: true, scheduleDeactivated: true, futureTripsCount: cancelledCount.rowCount ?? 0 });
+    res.json({
+      ok: true,
+      scheduleDeactivated: true,
+      futureTripsCount: cancelledCount.rowCount ?? 0,
+    });
   },
 );
 

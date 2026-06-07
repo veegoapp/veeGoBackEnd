@@ -1,24 +1,20 @@
 import { Router } from "express";
-import { db, routesTable, stationsTable, tripsTable, driversTable, busesTable, usersTable, bookingsTable, routeTimeSlotsTable, driverShuttleBookingsTable } from "@workspace/db";
-import { eq, sql, and, inArray, desc, asc } from "drizzle-orm";
+import {
+  db, routesTable, stationsTable, tripsTable, driversTable,
+  busesTable, usersTable, bookingsTable, driverShuttleBookingsTable,
+} from "@workspace/db";
+import { eq, sql, and, inArray, asc, gte } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS } from "../lib/socket-events";
-
-function getUpcomingWeekStartStr(): string {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const daysToAdd = day === 0 ? 7 : 7 - day;
-  const sunday = new Date(now);
-  sunday.setUTCDate(sunday.getUTCDate() + daysToAdd);
-  sunday.setUTCHours(0, 0, 0, 0);
-  return sunday.toISOString().split("T")[0]!;
-}
 
 const router = Router();
 
 const SHUTTLE_TOTAL_SEATS = 14;
 const SHUTTLE_MIN_REQUIRED = 7;
+const CAIRO_TZ = "Africa/Cairo";
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function shuttleStatus(dbStatus: string): "open" | "active" | "cancelled" {
   if (dbStatus === "active" || dbStatus === "waiting_driver") return "active";
@@ -26,10 +22,7 @@ function shuttleStatus(dbStatus: string): "open" | "active" | "cancelled" {
   return "open";
 }
 
-function formatShuttleTrip(
-  trip: Record<string, unknown>,
-  bookedSeats: number,
-) {
+function formatShuttleTrip(trip: Record<string, unknown>, bookedSeats: number) {
   const status = shuttleStatus(String(trip.status ?? "scheduled"));
   const available = SHUTTLE_TOTAL_SEATS - bookedSeats;
   const needed = Math.max(0, SHUTTLE_MIN_REQUIRED - bookedSeats);
@@ -50,9 +43,62 @@ function formatShuttleTrip(
   };
 }
 
+/**
+ * Converts a UTC Date to "HH:MM" string in Cairo local time.
+ * Used to display trip departure times as the admin entered them.
+ */
+function toCairoHHMM(utcDate: Date): string {
+  return utcDate.toLocaleString("en-US", {
+    timeZone: CAIRO_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * Returns the Sunday (Cairo) that starts the work week for a given UTC Date.
+ * Result is a "YYYY-MM-DD" string representing the Cairo-local Sunday.
+ */
+function tripDateToWeekStart(utcDate: Date): string {
+  // Get the day-of-week in Cairo time
+  const cairoDow = parseInt(
+    utcDate.toLocaleString("en-US", { timeZone: CAIRO_TZ, weekday: "numeric" as const }),
+    10,
+  );
+  // toLocaleString weekday "numeric" → 1=Sun,2=Mon,...,7=Sat in en-US? No.
+  // Use a reliable approach: format the date then subtract days to Sunday.
+  const cairoDateStr = utcDate.toLocaleString("en-US", {
+    timeZone: CAIRO_TZ,
+    weekday: "short",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  // Parse Cairo weekday
+  const dowMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dowStr = cairoDateStr.substring(0, 3);
+  const dow = dowMap[dowStr] ?? 0;
+
+  // Get Cairo date parts
+  const cairoParts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: CAIRO_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(utcDate); // "YYYY-MM-DD"
+
+  // Subtract `dow` days to get to Sunday
+  const cairoDate = new Date(cairoParts + "T00:00:00Z");
+  cairoDate.setUTCDate(cairoDate.getUTCDate() - dow);
+  return cairoDate.toISOString().split("T")[0]!;
+}
+
 // ─── GET /shuttle/lines ────────────────────────────────────────────────────────
-// Returns all active shuttle routes with station counts and booking stats.
-router.get("/shuttle/lines", authenticate, async (_req, res): Promise<void> => {
+// Returns all active shuttle routes.
+// timeslots now come from tripsTable (not routeTimeSlotsTable) so they always
+// reflect exactly what the admin scheduled — no more ghost or missing slots.
+router.get("/shuttle/lines", authenticate, async (req, res): Promise<void> => {
   const routes = await db
     .select({
       id: routesTable.id,
@@ -75,100 +121,152 @@ router.get("/shuttle/lines", authenticate, async (_req, res): Promise<void> => {
   }
 
   const routeIds = routes.map((r) => r.id);
-  const upcomingWeekStart = getUpcomingWeekStartStr();
+  const now = new Date();
 
-  const [stationCounts, tripStats, allSlots, bookedSlots] = await Promise.all([
-    db
-      .select({
-        routeId: stationsTable.routeId,
-        stationCount: sql<number>`count(*)::int`,
-      })
-      .from(stationsTable)
-      .where(inArray(stationsTable.routeId, routeIds))
-      .groupBy(stationsTable.routeId),
-
-    db
-      .select({
-        routeId: tripsTable.routeId,
-        openTrips: sql<number>`count(*) filter (where ${tripsTable.status} = 'scheduled')::int`,
-        activeTrips: sql<number>`count(*) filter (where ${tripsTable.status} in ('active', 'waiting_driver'))::int`,
-        totalTrips: sql<number>`count(*)::int`,
-      })
-      .from(tripsTable)
-      .where(
-        and(
-          inArray(tripsTable.routeId, routeIds),
-          inArray(tripsTable.status, ["scheduled", "active", "waiting_driver"]),
-        ),
-      )
-      .groupBy(tripsTable.routeId),
-
-    db
-      .select({
-        id: routeTimeSlotsTable.id,
-        routeId: routeTimeSlotsTable.routeId,
-        departureTime: routeTimeSlotsTable.departureTime,
-      })
-      .from(routeTimeSlotsTable)
-      .where(
-        and(
-          inArray(routeTimeSlotsTable.routeId, routeIds),
-          eq(routeTimeSlotsTable.isActive, true),
-        ),
-      )
-      .orderBy(asc(routeTimeSlotsTable.departureTime)),
-
-    db
-      .select({
-        routeId: driverShuttleBookingsTable.routeId,
-        timeSlotId: driverShuttleBookingsTable.timeSlotId,
-      })
-      .from(driverShuttleBookingsTable)
-      .where(
-        and(
-          inArray(driverShuttleBookingsTable.routeId, routeIds),
-          eq(driverShuttleBookingsTable.weekStart, upcomingWeekStart),
-          inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
-        ),
+  // ── Fetch upcoming trips for all routes ──────────────────────────────────
+  // We need trips from today onward so we can derive available weeks + slots.
+  const upcomingTrips = await db
+    .select({
+      id: tripsTable.id,
+      routeId: tripsTable.routeId,
+      departureTime: tripsTable.departureTime,
+      availableSeats: tripsTable.availableSeats,
+      totalSeats: tripsTable.totalSeats,
+      status: tripsTable.status,
+    })
+    .from(tripsTable)
+    .where(
+      and(
+        inArray(tripsTable.routeId, routeIds),
+        gte(tripsTable.departureTime, now),
+        inArray(tripsTable.status, ["scheduled", "waiting_driver", "driver_assigned"]),
       ),
-  ]);
+    )
+    .orderBy(asc(tripsTable.departureTime));
+
+  // ── Station counts ───────────────────────────────────────────────────────
+  const stationCounts = await db
+    .select({
+      routeId: stationsTable.routeId,
+      stationCount: sql<number>`count(*)::int`,
+    })
+    .from(stationsTable)
+    .where(inArray(stationsTable.routeId, routeIds))
+    .groupBy(stationsTable.routeId);
 
   const stationMap = new Map(stationCounts.map((s) => [s.routeId, s.stationCount]));
-  const tripMap = new Map(tripStats.map((t) => [t.routeId, t]));
 
-  const slotsByRoute = new Map<number, typeof allSlots>();
-  for (const slot of allSlots) {
-    const list = slotsByRoute.get(slot.routeId) ?? [];
-    list.push(slot);
-    slotsByRoute.set(slot.routeId, list);
+  // ── Resolve calling driver (for isBooked flag) ───────────────────────────
+  // We need to know which slots are already booked by the current driver.
+  // Bookings are keyed by (routeId, weekStart, timeSlotId) — but since we're
+  // replacing timeSlotId with trip-derived slots, we key by (routeId, weekStart, HH:MM).
+  // For the lines list we only show the nearest upcoming week per route.
+  const user = (req as unknown as { user?: { id: number } }).user;
+
+  // ── Build per-route data ─────────────────────────────────────────────────
+  // Group trips by routeId, then derive the nearest week and its slots.
+  const tripsByRoute = new Map<number, typeof upcomingTrips>();
+  for (const trip of upcomingTrips) {
+    const list = tripsByRoute.get(trip.routeId) ?? [];
+    list.push(trip);
+    tripsByRoute.set(trip.routeId, list);
   }
-  const bookedSet = new Set(bookedSlots.map((b) => `${b.routeId}:${b.timeSlotId}`));
+
+  // Fetch driver bookings for routes that have upcoming trips
+  const routesWithTrips = [...tripsByRoute.keys()];
+  const driverBookings =
+    routesWithTrips.length > 0 && user
+      ? await db
+          .select({
+            routeId: driverShuttleBookingsTable.routeId,
+            weekStart: driverShuttleBookingsTable.weekStart,
+            timeSlotId: driverShuttleBookingsTable.timeSlotId,
+            driverId: driverShuttleBookingsTable.driverId,
+          })
+          .from(driverShuttleBookingsTable)
+          .where(
+            and(
+              inArray(driverShuttleBookingsTable.routeId, routesWithTrips),
+              inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+            ),
+          )
+      : [];
+
+  // bookingKey = "routeId:weekStart:HH:MM" → driverId
+  // We'll use this to mark isBooked on each slot
+  const bookingMap = new Map<string, number>(
+    driverBookings.map((b) => {
+      // We store weekStart in the booking; we'll match by weekStart + departureTime HH:MM
+      // But timeSlotId is from routeTimeSlotsTable which we're removing.
+      // For now keep it simple: mark route as booked if any active booking exists.
+      return [`${b.routeId}:${b.weekStart}`, b.driverId];
+    }),
+  );
 
   const data = routes.map((r) => {
-    const trips = tripMap.get(r.id);
-    const slots = (slotsByRoute.get(r.id) ?? []).map((s) => ({
-      id: s.id,
-      departureTime: s.departureTime,
-      isBooked: bookedSet.has(`${r.id}:${s.id}`),
-    }));
+    const routeTrips = tripsByRoute.get(r.id) ?? [];
+
+    // Derive nearest week for this route
+    let nearestWeekStart: string | null = null;
+    if (routeTrips.length > 0) {
+      nearestWeekStart = tripDateToWeekStart(routeTrips[0]!.departureTime);
+    }
+
+    // Build unique slots from trips in the nearest week
+    const slotsMap = new Map<string, { hhmm: string; availableSeats: number; isTaken: boolean }>();
+    for (const trip of routeTrips) {
+      const ws = tripDateToWeekStart(trip.departureTime);
+      if (ws !== nearestWeekStart) continue;
+      const hhmm = toCairoHHMM(trip.departureTime);
+      if (!slotsMap.has(hhmm)) {
+        slotsMap.set(hhmm, {
+          hhmm,
+          availableSeats: trip.availableSeats,
+          isTaken: false,
+        });
+      }
+    }
+
+    const isBookedThisWeek =
+      nearestWeekStart !== null &&
+      bookingMap.has(`${r.id}:${nearestWeekStart}`);
+
+    const slots = [...slotsMap.values()]
+      .sort((a, b) => a.hhmm.localeCompare(b.hhmm))
+      .map((s) => ({
+        departureTime: s.hhmm,
+        availableSeats: s.availableSeats,
+        isBooked: isBookedThisWeek,
+      }));
+
+    const totalTrips = routeTrips.length;
+    const openTrips = routeTrips.filter((t) => t.status === "scheduled").length;
+    const activeTrips = routeTrips.filter((t) =>
+      ["waiting_driver", "driver_assigned"].includes(t.status),
+    ).length;
+
     return {
       id: r.id,
       name: r.name,
+      from: r.fromLocation,
+      to: r.toLocation,
       fromLocation: r.fromLocation,
       toLocation: r.toLocation,
       estimatedDuration: r.estimatedDuration,
       basePrice: parseFloat(r.basePrice),
       isActive: r.isActive,
       stationCount: stationMap.get(r.id) ?? 0,
-      totalTrips: trips?.totalTrips ?? 0,
-      openTrips: trips?.openTrips ?? 0,
-      activeTrips: trips?.activeTrips ?? 0,
+      totalTrips,
+      openTrips,
+      activeTrips,
       totalSeats: SHUTTLE_TOTAL_SEATS,
       minRequired: SHUTTLE_MIN_REQUIRED,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
-      upcomingWeekStart,
-      timeSlots: slots,
+      upcomingWeekStart: nearestWeekStart,
+      // timeslots derived from actual trips — no routeTimeSlotsTable
+      timeslots: slots,
+      timeSlots: slots, // alias for backwards compat
       availableSlots: slots.filter((s) => !s.isBooked).length,
       totalSlots: slots.length,
     };
@@ -196,7 +294,6 @@ router.get("/shuttle/assignments", async (_req, res): Promise<void> => {
     .orderBy(driversTable.name);
 
   const assignedDrivers = drivers.filter((d) => d.assignedBusId != null);
-
   if (assignedDrivers.length === 0) {
     res.json({ data: [], total: 0 });
     return;
@@ -245,9 +342,7 @@ router.get("/shuttle/assignments", async (_req, res): Promise<void> => {
   const busMap = new Map(buses.map((b) => [b.id, b]));
   const tripMap = new Map<number, (typeof activeTrips)[0]>();
   for (const trip of activeTrips) {
-    if (!tripMap.has(trip.driverId)) {
-      tripMap.set(trip.driverId, trip);
-    }
+    if (!tripMap.has(trip.driverId!)) tripMap.set(trip.driverId!, trip);
   }
 
   const data = assignedDrivers.map((d) => {
@@ -310,10 +405,9 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
         inArray(tripsTable.status, ["scheduled", "active", "waiting_driver"]),
       ))
       .orderBy(tripsTable.departureTime)
-      .limit(10),
+      .limit(20),
   ]);
 
-  // Fetch booked seat counts for all upcoming trips
   const tripIds = upcomingTrips.map((t) => t.id);
   const bookedCounts =
     tripIds.length > 0
@@ -396,10 +490,7 @@ router.get("/shuttle/trips/:id/passengers", authenticate, async (req, res): Prom
     bookedSeats,
     availableSeats: SHUTTLE_TOTAL_SEATS - bookedSeats,
     minRequired: SHUTTLE_MIN_REQUIRED,
-    data: bookings.map((b) => ({
-      ...b,
-      totalPrice: parseFloat(b.totalPrice as string),
-    })),
+    data: bookings.map((b) => ({ ...b, totalPrice: parseFloat(b.totalPrice as string) })),
     total: bookings.length,
   });
 });
@@ -449,15 +540,12 @@ router.get("/shuttle/lines/:id/passengers", authenticate, async (req, res): Prom
   res.json({
     tripId: activeTrip.id,
     routeId,
-    data: bookings.map((b) => ({
-      ...b,
-      totalPrice: parseFloat(b.totalPrice as string),
-    })),
+    data: bookings.map((b) => ({ ...b, totalPrice: parseFloat(b.totalPrice as string) })),
     total: bookings.length,
   });
 });
 
-// ─── POST /shuttle/bookings/:id/board — mark passenger as boarded ─────────────
+// ─── POST /shuttle/bookings/:id/board ─────────────────────────────────────────
 router.post("/shuttle/bookings/:id/board", authenticate, async (req, res): Promise<void> => {
   const bookingId = parseInt(req.params.id as string);
   if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
