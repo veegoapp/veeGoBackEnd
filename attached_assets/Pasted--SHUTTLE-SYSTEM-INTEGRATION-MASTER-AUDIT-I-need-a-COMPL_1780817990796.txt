@@ -1,0 +1,320 @@
+# SHUTTLE SYSTEM INTEGRATION MASTER AUDIT
+
+I need a COMPLETE technical integration report for the Shuttle system so the Driver App developer can implement every shuttle feature without opening the backend code.
+
+Do NOT summarize.
+
+Generate a detailed Markdown file named:
+
+SHUTTLE_INTEGRATION_REPORT.md
+
+The report must contain ALL of the following:
+
+## 1. System Overview
+
+Describe the complete shuttle architecture:
+
+* Driver flow
+* Passenger flow
+* Admin flow
+* Route flow
+* Booking flow
+* Check-in flow
+* Boarding flow
+* Trip lifecycle flow
+* Driver assignment flow
+* Live tracking flow
+
+Include diagrams where possible.
+
+---
+
+## 2. Database Structure
+
+For every shuttle-related table provide:
+
+* table name
+* purpose
+* primary key
+* foreign keys
+* indexes
+* relationships
+
+For every field provide:
+
+* field name
+* type
+* nullable
+* default value
+* meaning
+
+Include tables such as:
+
+* routes
+* route_stops
+* trips
+* scheduled_trips
+* bookings
+* passengers
+* drivers
+* vehicles
+* driver_assignments
+* checkins
+* ride_events
+* trip_events
+
+and every other shuttle-related table found.
+
+---
+
+## 3. Routes / Lines
+
+List every route in the system.
+
+For each route provide:
+
+* route id
+* route code
+* route name
+* start point
+* end point
+* stops
+* direction logic
+* status
+
+Show exact database source.
+
+---
+
+## 4. Scheduled Trips
+
+I need ALL scheduled trips.
+
+For every scheduled trip provide:
+
+* trip id
+* route id
+* route name
+* departure time
+* arrival time
+* days of operation
+* active status
+* assigned vehicle
+* assigned driver
+* capacity
+
+Show exact source table.
+
+---
+
+## 5. Booking Lifecycle
+
+Document step-by-step:
+
+Passenger creates booking
+→ Backend processing
+→ Driver assignment
+→ Check-in
+→ Boarding
+→ In-progress
+→ Completed
+→ Cancelled
+
+Show:
+
+* status values
+* state transitions
+* validation rules
+
+---
+
+## 6. API Documentation
+
+List EVERY shuttle-related API endpoint.
+
+For each endpoint provide:
+
+### Endpoint
+
+METHOD /url
+
+### Purpose
+
+### Authentication
+
+### Request Body
+
+### Query Parameters
+
+### Path Parameters
+
+### Response Example
+
+### Error Responses
+
+### Database Tables Touched
+
+### Used By
+
+(driver app / rider app / admin dashboard)
+
+Do not skip any endpoint.
+
+---
+
+## 7. Driver APIs
+
+Specifically identify all endpoints used by the Driver App.
+
+Include:
+
+* upcoming trips
+* assigned routes
+* assigned lines
+* active trip
+* start trip
+* end trip
+* driver status
+* check-in approval
+* boarding approval
+* trip progress
+* vehicle assignment
+* attendance
+
+For each endpoint explain exactly how it should be used.
+
+---
+
+## 8. Passenger APIs
+
+List all passenger-facing shuttle endpoints.
+
+Include:
+
+* route browsing
+* schedules
+* booking creation
+* booking history
+* active booking
+* cancellations
+* QR codes
+* check-ins
+
+---
+
+## 9. Admin APIs
+
+List all admin shuttle endpoints.
+
+Include:
+
+* route management
+* trip management
+* schedule management
+* driver assignment
+* vehicle assignment
+* reporting
+* analytics
+
+---
+
+## 10. Socket.IO Events
+
+List EVERY socket event in the backend.
+
+For each event provide:
+
+### Event Name
+
+### Direction
+
+(server → client or client → server)
+
+### Payload Schema
+
+### Trigger Condition
+
+### Consumer
+
+(driver app / rider app / admin)
+
+### Example Payload
+
+Especially include:
+
+* trip updates
+* booking updates
+* route updates
+* driver assignment updates
+* check-in approvals
+* boarding approvals
+* passenger status updates
+* vehicle tracking
+* shuttle tracking
+
+Do not skip hidden or internal events.
+
+---
+
+## 11. Driver App Integration Checklist
+
+Generate a checklist:
+
+| Feature | Backend Ready? | Endpoint | Socket Event | Notes |
+
+Include every shuttle feature.
+
+---
+
+## 12. Rider App Integration Checklist
+
+Generate same checklist for Rider App.
+
+---
+
+## 13. Missing Integrations
+
+Detect:
+
+* endpoints that exist but are never used
+* sockets that exist but are never consumed
+* routes that exist but have no UI
+* dead code
+* incomplete features
+* placeholder implementations
+
+For each issue provide:
+
+* severity
+* location
+* recommendation
+
+---
+
+## 14. Sample Payload Library
+
+Provide real payload examples for:
+
+* trip
+* route
+* booking
+* check-in
+* driver assignment
+* shuttle status
+* socket messages
+
+Use actual backend schemas.
+
+---
+
+## 15. Final Summary
+
+Create a final table:
+
+| Component | Status | Ready For Driver App? | Ready For Rider App? |
+
+and identify every missing integration required for a fully operational shuttle system.
+
+IMPORTANT:
+Do not provide a high-level summary.
+Inspect the actual backend source code, database schema, routes, services, controllers, socket handlers, repositories, cron jobs, schedulers, and middleware.

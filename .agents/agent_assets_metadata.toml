@@ -36,3 +36,9 @@ id = "BVSMSaSGIf2q3FEH4EUrJ"
 uri = "file://shuttle-rider-api-contract.md"
 type = "text"
 title = "Shuttle Rider API Contract (FINAL)"
+
+[[outputs]]
+id = "zk9Uz76cAUvd7M2SjbQkC"
+uri = "file://SHUTTLE_INTEGRATION_REPORT.md"
+type = "text"
+title = "SHUTTLE_INTEGRATION_REPORT.md"
