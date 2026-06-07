@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { db, routeSchedulesTable, scheduleSlotsTable, tripsTable, routesTable } from "@workspace/db";
+import { db, routeSchedulesTable, scheduleSlotsTable, tripsTable, routesTable, routeTimeSlotsTable } from "@workspace/db";
 import { eq, and, gte, lte, inArray, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { VEHICLE_CAPACITY } from "@workspace/db";
@@ -106,6 +106,23 @@ const UpdateScheduleBody = z.object({
 });
 
 const BATCH_SIZE = 500;
+
+// ─── Route time-slot sync ─────────────────────────────────────────────────────
+// Ensures that every distinct Cairo HH:MM departure time in a schedule's slots
+// has a matching active row in route_time_slots (used by the driver booking app).
+// Uses INSERT ... ON CONFLICT DO NOTHING so existing rows are untouched.
+async function syncRouteTimeSlots(
+  routeId: number,
+  slots: Array<{ departureTime: string }>, // Cairo HH:MM
+): Promise<void> {
+  const distinct = [...new Set(slots.map((s) => s.departureTime))];
+  if (distinct.length === 0) return;
+
+  await db
+    .insert(routeTimeSlotsTable)
+    .values(distinct.map((t) => ({ routeId, departureTime: t, isActive: true })))
+    .onConflictDoNothing();
+}
 
 // ─── Trip generator ───────────────────────────────────────────────────────────
 // Iterates day-by-day from effectiveFrom to effectiveTo (both Cairo dates),
@@ -302,6 +319,9 @@ router.post(
       route.estimatedDuration,
       route.basePrice,
     );
+
+    // Keep driver-app route_time_slots in sync with this schedule's times
+    await syncRouteTimeSlots(routeId, slots);
 
     res.status(201).json({
       schedule,
@@ -558,6 +578,9 @@ router.post(
       schedule.estimatedDuration!,
       schedule.basePrice!,
     );
+
+    // Keep driver-app route_time_slots in sync with this schedule's times
+    await syncRouteTimeSlots(schedule.routeId, slots);
 
     res.json({ ok: true, tripsCreated });
   },

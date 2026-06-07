@@ -61,13 +61,7 @@ function toCairoHHMM(utcDate: Date): string {
  * Result is a "YYYY-MM-DD" string representing the Cairo-local Sunday.
  */
 function tripDateToWeekStart(utcDate: Date): string {
-  // Get the day-of-week in Cairo time
-  const cairoDow = parseInt(
-    utcDate.toLocaleString("en-US", { timeZone: CAIRO_TZ, weekday: "numeric" as const }),
-    10,
-  );
-  // toLocaleString weekday "numeric" → 1=Sun,2=Mon,...,7=Sat in en-US? No.
-  // Use a reliable approach: format the date then subtract days to Sunday.
+  // Format the Cairo local date + weekday, then subtract days back to Sunday.
   const cairoDateStr = utcDate.toLocaleString("en-US", {
     timeZone: CAIRO_TZ,
     weekday: "short",

@@ -43,6 +43,19 @@ function toDateStr(d: Date): string {
 }
 
 /**
+ * Converts a UTC Date to a Cairo local "HH:MM" string (Africa/Cairo = UTC+2/+3).
+ * Trips are stored in UTC; slots are stored as Cairo HH:MM — this bridges the gap.
+ */
+function toCairoHHMM(d: Date): string {
+  return d.toLocaleTimeString("en-US", {
+    timeZone: "Africa/Cairo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).substring(0, 5); // "HH:MM"
+}
+
+/**
  * Given a trip's departureTime (a full timestamp), returns the Sunday that
  * starts the ISO work week it belongs to (Sun–Thu Egyptian work week).
  * e.g. 2026-06-23 (Tuesday) → "2026-06-21" (Sunday)
@@ -283,10 +296,9 @@ router.get(
     >();
     for (const trip of upcomingTrips) {
       const ws = tripDateToWeekStart(trip.departureTime);
-      // trip.departureTime is a full ISO timestamp; extract HH:MM in UTC
-      const hhmm = trip.departureTime
-        .toISOString()
-        .substring(11, 16); // "HH:MM"
+      // trip.departureTime is a UTC timestamp; convert to Cairo HH:MM so it
+      // matches slot.departureTime which is stored as Cairo local time.
+      const hhmm = toCairoHHMM(trip.departureTime);
       const key = `${ws}:${hhmm}`;
       const existing = seatByKey.get(key);
       if (!existing) {
