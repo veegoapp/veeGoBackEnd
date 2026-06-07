@@ -8,7 +8,7 @@ import {
   notificationsTable,
   tripsTable,
 } from "@workspace/db";
-import { eq, and, inArray, desc, asc, sql, isNull, isNotNull, gte, lte } from "drizzle-orm";
+import { eq, and, inArray, desc, asc, sql, isNotNull, gte, lte, between } from "drizzle-orm";
 import { z } from "zod";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
@@ -19,30 +19,47 @@ const router = Router();
 
 // ─── Week helpers ─────────────────────────────────────────────────────────────
 
-function getUpcomingWeekStart(): Date {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const daysToAdd = day === 0 ? 7 : 7 - day;
-  const sunday = new Date(now);
-  sunday.setUTCDate(sunday.getUTCDate() + daysToAdd);
-  sunday.setUTCHours(0, 0, 0, 0);
-  return sunday;
+/**
+ * Given any date string "YYYY-MM-DD", returns true if it is a Sunday in UTC.
+ */
+function isSunday(dateStr: string): boolean {
+  return new Date(dateStr + "T00:00:00Z").getUTCDay() === 0;
 }
 
-function isSunday(d: Date): boolean {
-  return d.getUTCDay() === 0;
+/**
+ * Given a Sunday date string, returns the corresponding Thursday (end of work week).
+ */
+function weekEndFromStart(weekStartStr: string): string {
+  const d = new Date(weekStartStr + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 4); // Sunday + 4 = Thursday
+  return d.toISOString().split("T")[0]!;
 }
 
-function weekEndFromStart(weekStart: Date): Date {
-  const thursday = new Date(weekStart);
-  thursday.setUTCDate(thursday.getUTCDate() + 4);
-  return thursday;
-}
-
+/**
+ * Extracts the UTC date string "YYYY-MM-DD" from a Date object or ISO string.
+ */
 function toDateStr(d: Date): string {
   return d.toISOString().split("T")[0]!;
 }
 
+/**
+ * Given a trip's departureTime (a full timestamp), returns the Sunday that
+ * starts the ISO work week it belongs to (Sun–Thu Egyptian work week).
+ * e.g. 2026-06-23 (Tuesday) → "2026-06-21" (Sunday)
+ *      2026-06-21 (Sunday)  → "2026-06-21"
+ */
+function tripDateToWeekStart(departureTime: Date): string {
+  const day = departureTime.getUTCDay(); // 0=Sun,1=Mon,...,6=Sat
+  const offset = day === 0 ? 0 : day; // days since last Sunday
+  const sunday = new Date(departureTime);
+  sunday.setUTCDate(departureTime.getUTCDate() - offset);
+  sunday.setUTCHours(0, 0, 0, 0);
+  return toDateStr(sunday);
+}
+
+/**
+ * Formats a booking row (with joined fields) into the API response shape.
+ */
 function formatBooking(b: Record<string, unknown>) {
   return {
     id: b.id,
@@ -104,333 +121,773 @@ const bookingFields = {
   driverPhone: driversTable.phone,
 };
 
-// ─── GET /shuttle/timeslots/:routeId ─────────────────────────────────────────
-// Returns all active time slots for a route with week-aware availability.
-// Accepts optional ?weekStart=YYYY-MM-DD (must be a Sunday).
-// Defaults to the upcoming week if not provided.
-// Returns per-slot: availableSeats, totalSeats (from trips), and
-// isBooked = whether THIS driver already booked the slot for that week.
-router.get("/shuttle/timeslots/:routeId", authenticate, async (req, res): Promise<void> => {
-  const routeId = parseInt(req.params.routeId as string);
-  if (isNaN(routeId)) { res.status(400).json({ error: "Invalid route ID" }); return; }
-
-  // ── Resolve weekStart ────────────────────────────────────────────────────
-  let weekStartStr: string;
-  const qWeekStart = req.query.weekStart as string | undefined;
-  if (qWeekStart) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(qWeekStart)) {
-      res.status(400).json({ error: "weekStart must be YYYY-MM-DD" }); return;
+// ═══════════════════════════════════════════════════════════════════════════════
+// NEW: GET /shuttle/lines/:routeId/available-weeks
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// The single endpoint the driver app needs to show the booking sheet.
+// Returns ONLY weeks that actually have trips in the DB — no client-side
+// week generation allowed. Each week contains its time slots with full
+// availability and booking state for the calling driver.
+//
+// Response shape:
+// {
+//   routeId: number,
+//   routeName: string,
+//   weeks: [
+//     {
+//       weekStart: "YYYY-MM-DD",   // always a Sunday
+//       weekEnd:   "YYYY-MM-DD",   // always a Thursday
+//       slots: [
+//         {
+//           id: number,
+//           departureTime: "HH:MM",
+//           totalSeats: number | null,
+//           availableSeats: number | null,
+//           isBooked: boolean,   // this driver already has this slot this week
+//           isTaken: boolean,    // another driver has this slot this week
+//         }
+//       ]
+//     }
+//   ],
+//   total: number   // number of weeks returned
+// }
+//
+router.get(
+  "/shuttle/lines/:routeId/available-weeks",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const routeId = parseInt(req.params.routeId as string);
+    if (isNaN(routeId)) {
+      res.status(400).json({ error: "Invalid route ID" });
+      return;
     }
-    weekStartStr = qWeekStart;
-  } else {
-    weekStartStr = toDateStr(getUpcomingWeekStart());
-  }
-  const weekStartDate = new Date(weekStartStr + "T00:00:00Z");
-  const weekEndDate   = weekEndFromStart(weekStartDate);
-  const weekEndStr    = toDateStr(weekEndDate);
 
-  // ── Route existence check ────────────────────────────────────────────────
-  const [route] = await db
-    .select({ id: routesTable.id, name: routesTable.name })
-    .from(routesTable)
-    .where(eq(routesTable.id, routeId));
-  if (!route) { res.status(404).json({ error: "Route not found" }); return; }
+    // ── Route existence check ──────────────────────────────────────────────
+    const [route] = await db
+      .select({ id: routesTable.id, name: routesTable.name })
+      .from(routesTable)
+      .where(eq(routesTable.id, routeId));
+    if (!route) {
+      res.status(404).json({ error: "Route not found" });
+      return;
+    }
 
-  // ── Resolve calling driver's internal ID ─────────────────────────────────
-  const user = req.user!;
-  const [driverRow] = await db
-    .select({ id: driversTable.id })
-    .from(driversTable)
-    .where(eq(driversTable.userId, user.id));
+    // ── Resolve calling driver's internal ID ───────────────────────────────
+    const user = req.user!;
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, user.id));
+    const myDriverId = driverRow?.id ?? null;
 
-  const myDriverId = driverRow?.id ?? null;
+    // ── Find all future/current trips for this route ───────────────────────
+    // We look from today's date forward so we never show expired weeks.
+    const todayUtc = new Date();
+    todayUtc.setUTCHours(0, 0, 0, 0);
 
-  // ── Run all three queries in parallel ────────────────────────────────────
-  const [slots, allBookings, weekTrips] = await Promise.all([
-
-    // 1. All active time slots for the route
-    db
-      .select()
-      .from(routeTimeSlotsTable)
-      .where(and(
-        eq(routeTimeSlotsTable.routeId, routeId),
-        eq(routeTimeSlotsTable.isActive, true),
-      ))
-      .orderBy(asc(routeTimeSlotsTable.departureTime)),
-
-    // 2. All driver bookings for this route+week (any driver)
-    db
+    const upcomingTrips = await db
       .select({
-        timeSlotId: driverShuttleBookingsTable.timeSlotId,
-        driverId:   driverShuttleBookingsTable.driverId,
-      })
-      .from(driverShuttleBookingsTable)
-      .where(and(
-        eq(driverShuttleBookingsTable.routeId, routeId),
-        eq(driverShuttleBookingsTable.weekStart, weekStartStr),
-        inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
-      )),
-
-    // 3. Trips for this route whose departure falls within the week
-    //    Used to derive availableSeats and totalSeats per time slot
-    db
-      .select({
+        id: tripsTable.id,
         departureTime: tripsTable.departureTime,
         availableSeats: tripsTable.availableSeats,
-        totalSeats:     tripsTable.totalSeats,
+        totalSeats: tripsTable.totalSeats,
       })
       .from(tripsTable)
-      .where(and(
-        eq(tripsTable.routeId, routeId),
-        gte(tripsTable.departureTime, weekStartDate),
-        lte(tripsTable.departureTime, new Date(weekEndStr + "T23:59:59Z")),
-        inArray(tripsTable.status, ["scheduled", "active", "waiting_driver", "driver_assigned"]),
-      )),
-  ]);
+      .where(
+        and(
+          eq(tripsTable.routeId, routeId),
+          gte(tripsTable.departureTime, todayUtc),
+          inArray(tripsTable.status, [
+            "scheduled",
+            "waiting_driver",
+            "driver_assigned",
+          ]),
+        ),
+      )
+      .orderBy(asc(tripsTable.departureTime));
 
-  // ── Build lookup maps ─────────────────────────────────────────────────────
-
-  // slotId → driverId who booked it (any driver)
-  const bookedBySlot = new Map<number, number>(
-    allBookings.map((b) => [b.timeSlotId, b.driverId]),
-  );
-
-  // "HH:MM" → { availableSeats, totalSeats } (lowest availableSeats across the week)
-  const seatsByTime = new Map<string, { availableSeats: number; totalSeats: number }>();
-  for (const trip of weekTrips) {
-    const hhmm = trip.departureTime.toISOString().substring(11, 16); // "HH:MM"
-    const existing = seatsByTime.get(hhmm);
-    if (!existing) {
-      seatsByTime.set(hhmm, { availableSeats: trip.availableSeats, totalSeats: trip.totalSeats });
-    } else {
-      // Keep the most restrictive (lowest) seat count for the week
-      seatsByTime.set(hhmm, {
-        availableSeats: Math.min(existing.availableSeats, trip.availableSeats),
-        totalSeats: existing.totalSeats,
-      });
+    if (upcomingTrips.length === 0) {
+      // No trips yet — nothing for the driver to book
+      res.json({ routeId, routeName: route.name, weeks: [], total: 0 });
+      return;
     }
-  }
 
-  // ── Build response ────────────────────────────────────────────────────────
-  const data = slots.map((s) => {
-    const bookedDriverId = bookedBySlot.get(s.id) ?? null;
-    const seats          = seatsByTime.get(s.departureTime) ?? null;
-    return {
-      id:             s.id,
-      departureTime:  s.departureTime,
-      availableSeats: seats?.availableSeats ?? null,
-      totalSeats:     seats?.totalSeats     ?? null,
-      // isBooked  = current driver already holds this slot for this week
-      isBooked:       myDriverId !== null && bookedDriverId === myDriverId,
-      // isTaken   = another driver has claimed it (slot unavailable)
-      isTaken:        bookedDriverId !== null && bookedDriverId !== myDriverId,
-    };
-  });
+    // ── Derive distinct weeks from the trips ──────────────────────────────
+    // Group trips by the Sunday that starts their work week.
+    const weekMap = new Map<
+      string,
+      { weekStart: string; weekEnd: string; trips: typeof upcomingTrips }
+    >();
 
-  res.json({
-    routeId,
-    routeName: route.name,
-    weekStart:  weekStartStr,
-    weekEnd:    weekEndStr,
-    data,
-    total: data.length,
-  });
-});
+    for (const trip of upcomingTrips) {
+      const ws = tripDateToWeekStart(trip.departureTime);
+      if (!weekMap.has(ws)) {
+        weekMap.set(ws, {
+          weekStart: ws,
+          weekEnd: weekEndFromStart(ws),
+          trips: [],
+        });
+      }
+      weekMap.get(ws)!.trips.push(trip);
+    }
+
+    // ── Fetch all active time slots for this route ─────────────────────────
+    const allSlots = await db
+      .select({
+        id: routeTimeSlotsTable.id,
+        departureTime: routeTimeSlotsTable.departureTime,
+      })
+      .from(routeTimeSlotsTable)
+      .where(
+        and(
+          eq(routeTimeSlotsTable.routeId, routeId),
+          eq(routeTimeSlotsTable.isActive, true),
+        ),
+      )
+      .orderBy(asc(routeTimeSlotsTable.departureTime));
+
+    // ── Fetch all driver bookings for these weeks ─────────────────────────
+    const weekStarts = [...weekMap.keys()];
+    const allBookings =
+      weekStarts.length > 0
+        ? await db
+            .select({
+              timeSlotId: driverShuttleBookingsTable.timeSlotId,
+              driverId: driverShuttleBookingsTable.driverId,
+              weekStart: driverShuttleBookingsTable.weekStart,
+            })
+            .from(driverShuttleBookingsTable)
+            .where(
+              and(
+                eq(driverShuttleBookingsTable.routeId, routeId),
+                inArray(driverShuttleBookingsTable.weekStart, weekStarts),
+                inArray(driverShuttleBookingsTable.status, [
+                  "active",
+                  "pending_renewal",
+                ]),
+              ),
+            )
+        : [];
+
+    // bookingKey = "weekStart:timeSlotId" → driverId who booked it
+    const bookedByKey = new Map<string, number>(
+      allBookings.map((b) => [`${b.weekStart}:${b.timeSlotId}`, b.driverId]),
+    );
+
+    // ── Build seat lookup per week per departure-time "HH:MM" ─────────────
+    // seatKey = "weekStart:HH:MM" → { totalSeats, availableSeats }
+    const seatByKey = new Map<
+      string,
+      { totalSeats: number; availableSeats: number }
+    >();
+    for (const trip of upcomingTrips) {
+      const ws = tripDateToWeekStart(trip.departureTime);
+      // trip.departureTime is a full ISO timestamp; extract HH:MM in UTC
+      const hhmm = trip.departureTime
+        .toISOString()
+        .substring(11, 16); // "HH:MM"
+      const key = `${ws}:${hhmm}`;
+      const existing = seatByKey.get(key);
+      if (!existing) {
+        seatByKey.set(key, {
+          totalSeats: trip.totalSeats,
+          availableSeats: trip.availableSeats,
+        });
+      } else {
+        // Keep the most restrictive (lowest available) across the week
+        seatByKey.set(key, {
+          totalSeats: existing.totalSeats,
+          availableSeats: Math.min(
+            existing.availableSeats,
+            trip.availableSeats,
+          ),
+        });
+      }
+    }
+
+    // ── Build response ─────────────────────────────────────────────────────
+    // Sort weeks chronologically
+    const sortedWeeks = [...weekMap.values()].sort((a, b) =>
+      a.weekStart.localeCompare(b.weekStart),
+    );
+
+    const weeks = sortedWeeks.map(({ weekStart, weekEnd }) => {
+      const slots = allSlots.map((slot) => {
+        const bookingKey = `${weekStart}:${slot.id}`;
+        const bookedDriverId = bookedByKey.get(bookingKey) ?? null;
+        const seatKey = `${weekStart}:${slot.departureTime}`;
+        const seats = seatByKey.get(seatKey) ?? null;
+
+        return {
+          id: slot.id,
+          departureTime: slot.departureTime,
+          totalSeats: seats?.totalSeats ?? null,
+          availableSeats: seats?.availableSeats ?? null,
+          // isBooked = this driver already holds this slot this week
+          isBooked:
+            myDriverId !== null && bookedDriverId === myDriverId,
+          // isTaken = a DIFFERENT driver has claimed it
+          isTaken:
+            bookedDriverId !== null &&
+            bookedDriverId !== myDriverId,
+        };
+      });
+
+      return { weekStart, weekEnd, slots };
+    });
+
+    res.json({
+      routeId,
+      routeName: route.name,
+      weeks,
+      total: weeks.length,
+    });
+  },
+);
+
+// ─── GET /shuttle/timeslots/:routeId ─────────────────────────────────────────
+// Returns all active time slots for a route with week-aware availability.
+// Accepts optional ?weekStart=YYYY-MM-DD (must be a Sunday in UTC).
+// Defaults to the first upcoming week that has trips if not provided.
+router.get(
+  "/shuttle/timeslots/:routeId",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const routeId = parseInt(req.params.routeId as string);
+    if (isNaN(routeId)) {
+      res.status(400).json({ error: "Invalid route ID" });
+      return;
+    }
+
+    // ── Resolve weekStart ────────────────────────────────────────────────
+    let weekStartStr: string;
+    const qWeekStart = req.query.weekStart as string | undefined;
+
+    if (qWeekStart) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(qWeekStart)) {
+        res
+          .status(400)
+          .json({ error: "weekStart must be YYYY-MM-DD" });
+        return;
+      }
+      // Validate it is actually a Sunday in UTC
+      if (!isSunday(qWeekStart)) {
+        res
+          .status(400)
+          .json({
+            error:
+              "weekStart must be a Sunday (UTC). Check your timezone handling.",
+          });
+        return;
+      }
+      weekStartStr = qWeekStart;
+    } else {
+      // Default: derive weekStart from the earliest upcoming trip
+      const todayUtc = new Date();
+      todayUtc.setUTCHours(0, 0, 0, 0);
+      const [firstTrip] = await db
+        .select({ departureTime: tripsTable.departureTime })
+        .from(tripsTable)
+        .where(
+          and(
+            eq(tripsTable.routeId, routeId),
+            gte(tripsTable.departureTime, todayUtc),
+            inArray(tripsTable.status, [
+              "scheduled",
+              "waiting_driver",
+              "driver_assigned",
+            ]),
+          ),
+        )
+        .orderBy(asc(tripsTable.departureTime))
+        .limit(1);
+
+      if (!firstTrip) {
+        res.json({ routeId, weekStart: null, weekEnd: null, data: [], total: 0 });
+        return;
+      }
+      weekStartStr = tripDateToWeekStart(firstTrip.departureTime);
+    }
+
+    const weekEndStr = weekEndFromStart(weekStartStr);
+    const weekStartDate = new Date(weekStartStr + "T00:00:00Z");
+    const weekEndDate = new Date(weekEndStr + "T23:59:59Z");
+
+    // ── Route existence check ────────────────────────────────────────────
+    const [route] = await db
+      .select({ id: routesTable.id, name: routesTable.name })
+      .from(routesTable)
+      .where(eq(routesTable.id, routeId));
+    if (!route) {
+      res.status(404).json({ error: "Route not found" });
+      return;
+    }
+
+    // ── Resolve calling driver's internal ID ─────────────────────────────
+    const user = req.user!;
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, user.id));
+    const myDriverId = driverRow?.id ?? null;
+
+    // ── Run all three queries in parallel ────────────────────────────────
+    const [slots, allBookings, weekTrips] = await Promise.all([
+      // 1. All active time slots for the route
+      db
+        .select()
+        .from(routeTimeSlotsTable)
+        .where(
+          and(
+            eq(routeTimeSlotsTable.routeId, routeId),
+            eq(routeTimeSlotsTable.isActive, true),
+          ),
+        )
+        .orderBy(asc(routeTimeSlotsTable.departureTime)),
+
+      // 2. All driver bookings for this route+week (any driver)
+      db
+        .select({
+          timeSlotId: driverShuttleBookingsTable.timeSlotId,
+          driverId: driverShuttleBookingsTable.driverId,
+        })
+        .from(driverShuttleBookingsTable)
+        .where(
+          and(
+            eq(driverShuttleBookingsTable.routeId, routeId),
+            eq(driverShuttleBookingsTable.weekStart, weekStartStr),
+            inArray(driverShuttleBookingsTable.status, [
+              "active",
+              "pending_renewal",
+            ]),
+          ),
+        ),
+
+      // 3. Trips for this route whose departure falls within the week
+      db
+        .select({
+          departureTime: tripsTable.departureTime,
+          availableSeats: tripsTable.availableSeats,
+          totalSeats: tripsTable.totalSeats,
+        })
+        .from(tripsTable)
+        .where(
+          and(
+            eq(tripsTable.routeId, routeId),
+            gte(tripsTable.departureTime, weekStartDate),
+            lte(tripsTable.departureTime, weekEndDate),
+            inArray(tripsTable.status, [
+              "scheduled",
+              "active",
+              "waiting_driver",
+              "driver_assigned",
+            ]),
+          ),
+        ),
+    ]);
+
+    // ── Build lookup maps ─────────────────────────────────────────────────
+    const bookedBySlot = new Map<number, number>(
+      allBookings.map((b) => [b.timeSlotId, b.driverId]),
+    );
+
+    // "HH:MM" → { availableSeats, totalSeats }
+    const seatsByTime = new Map<
+      string,
+      { availableSeats: number; totalSeats: number }
+    >();
+    for (const trip of weekTrips) {
+      const hhmm = trip.departureTime.toISOString().substring(11, 16);
+      const existing = seatsByTime.get(hhmm);
+      if (!existing) {
+        seatsByTime.set(hhmm, {
+          availableSeats: trip.availableSeats,
+          totalSeats: trip.totalSeats,
+        });
+      } else {
+        seatsByTime.set(hhmm, {
+          availableSeats: Math.min(
+            existing.availableSeats,
+            trip.availableSeats,
+          ),
+          totalSeats: existing.totalSeats,
+        });
+      }
+    }
+
+    // ── Build response ────────────────────────────────────────────────────
+    const data = slots.map((s) => {
+      const bookedDriverId = bookedBySlot.get(s.id) ?? null;
+      const seats = seatsByTime.get(s.departureTime) ?? null;
+      return {
+        id: s.id,
+        departureTime: s.departureTime,
+        availableSeats: seats?.availableSeats ?? null,
+        totalSeats: seats?.totalSeats ?? null,
+        isBooked: myDriverId !== null && bookedDriverId === myDriverId,
+        isTaken:
+          bookedDriverId !== null && bookedDriverId !== myDriverId,
+      };
+    });
+
+    res.json({
+      routeId,
+      routeName: route.name,
+      weekStart: weekStartStr,
+      weekEnd: weekEndStr,
+      data,
+      total: data.length,
+    });
+  },
+);
 
 // ─── POST /shuttle/route-bookings ─────────────────────────────────────────────
-// Driver books a route+timeslot for the upcoming week (Sunday–Thursday).
+// Driver books a route+timeslot for a specific week (Sunday–Thursday).
+// The weekStart MUST be a real Sunday in UTC — validated server-side.
 // Prevents double-booking via unique DB constraint + explicit pre-check.
 const BookRouteBody = z.object({
   routeId: z.number().int().positive(),
   timeSlotId: z.number().int().positive(),
-  weekStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "weekStart must be YYYY-MM-DD (a Sunday)"),
+  weekStart: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "weekStart must be YYYY-MM-DD"),
 });
 
-router.post("/shuttle/route-bookings", authenticate, async (req, res): Promise<void> => {
-  const driver = req.user;
-  if (!driver || driver.role !== "driver") {
-    res.status(403).json({ error: "Only drivers can book shuttle routes" });
-    return;
-  }
-
-  const parsed = BookRouteBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { routeId, timeSlotId, weekStart } = parsed.data;
-
-  const weekStartDate = new Date(weekStart + "T00:00:00Z");
-  if (!isSunday(weekStartDate)) {
-    res.status(400).json({ error: "weekStart must be a Sunday (day of week = 0)" });
-    return;
-  }
-
-  const minAllowed = toDateStr(getUpcomingWeekStart());
-  if (weekStart < minAllowed) {
-    res.status(400).json({ error: `weekStart must be the upcoming week (${minAllowed} or later)` });
-    return;
-  }
-
-  const weekEnd = toDateStr(weekEndFromStart(weekStartDate));
-
-  const [driverRow] = await db
-    .select({ id: driversTable.id })
-    .from(driversTable)
-    .where(eq(driversTable.userId, driver.id));
-  if (!driverRow) { res.status(404).json({ error: "Driver profile not found" }); return; }
-
-  const [slot] = await db
-    .select({ id: routeTimeSlotsTable.id, routeId: routeTimeSlotsTable.routeId })
-    .from(routeTimeSlotsTable)
-    .where(and(eq(routeTimeSlotsTable.id, timeSlotId), eq(routeTimeSlotsTable.isActive, true)));
-  if (!slot) { res.status(404).json({ error: "Time slot not found or inactive" }); return; }
-  if (slot.routeId !== routeId) { res.status(400).json({ error: "Time slot does not belong to that route" }); return; }
-
-  const [conflict] = await db
-    .select({ id: driverShuttleBookingsTable.id, driverId: driverShuttleBookingsTable.driverId })
-    .from(driverShuttleBookingsTable)
-    .where(
-      and(
-        eq(driverShuttleBookingsTable.routeId, routeId),
-        eq(driverShuttleBookingsTable.timeSlotId, timeSlotId),
-        eq(driverShuttleBookingsTable.weekStart, weekStart),
-        inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
-      ),
-    );
-  if (conflict) {
-    const msg =
-      conflict.driverId === driverRow.id
-        ? "You already have an active booking for this route+timeslot this week"
-        : "That route+timeslot is already booked for this week";
-    res.status(409).json({ error: msg });
-    return;
-  }
-
-  try {
-    const [booking] = await db
-      .insert(driverShuttleBookingsTable)
-      .values({
-        driverId: driverRow.id,
-        routeId,
-        timeSlotId,
-        weekStart,
-        weekEnd,
-        status: "active",
-      })
-      .returning();
-
-    logger.info({ bookingId: booking!.id, driverId: driverRow.id, routeId, timeSlotId, weekStart }, "Driver shuttle booking created");
-    res.status(201).json({ ok: true, booking });
-  } catch (err: unknown) {
-    const pg = err as { code?: string };
-    if (pg.code === "23505") {
-      res.status(409).json({ error: "That route+timeslot was just booked by another driver" });
+router.post(
+  "/shuttle/route-bookings",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const driver = req.user;
+    if (!driver || driver.role !== "driver") {
+      res
+        .status(403)
+        .json({ error: "Only drivers can book shuttle routes" });
       return;
     }
-    throw err;
-  }
-});
+
+    const parsed = BookRouteBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
+    const { routeId, timeSlotId, weekStart } = parsed.data;
+
+    // ── Validate weekStart is a real Sunday in UTC ─────────────────────
+    if (!isSunday(weekStart)) {
+      res.status(400).json({
+        error:
+          "weekStart must be a Sunday (UTC). Ensure you are sending the date " +
+          "derived from the server's available-weeks response, not computed client-side.",
+      });
+      return;
+    }
+
+    // ── Validate the week actually has trips for this route ────────────
+    const weekEnd = weekEndFromStart(weekStart);
+    const weekStartDate = new Date(weekStart + "T00:00:00Z");
+    const weekEndDate = new Date(weekEnd + "T23:59:59Z");
+
+    const [tripExists] = await db
+      .select({ id: tripsTable.id })
+      .from(tripsTable)
+      .where(
+        and(
+          eq(tripsTable.routeId, routeId),
+          gte(tripsTable.departureTime, weekStartDate),
+          lte(tripsTable.departureTime, weekEndDate),
+          inArray(tripsTable.status, [
+            "scheduled",
+            "waiting_driver",
+            "driver_assigned",
+          ]),
+        ),
+      )
+      .limit(1);
+
+    if (!tripExists) {
+      res.status(400).json({
+        error:
+          "No active trips exist for this route during the selected week. " +
+          "Only weeks shown in the app (from the server) are bookable.",
+      });
+      return;
+    }
+
+    // ── Resolve driver ─────────────────────────────────────────────────
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, driver.id));
+    if (!driverRow) {
+      res.status(404).json({ error: "Driver profile not found" });
+      return;
+    }
+
+    // ── Validate time slot belongs to this route and is active ─────────
+    const [slot] = await db
+      .select({
+        id: routeTimeSlotsTable.id,
+        routeId: routeTimeSlotsTable.routeId,
+      })
+      .from(routeTimeSlotsTable)
+      .where(
+        and(
+          eq(routeTimeSlotsTable.id, timeSlotId),
+          eq(routeTimeSlotsTable.isActive, true),
+        ),
+      );
+    if (!slot) {
+      res.status(404).json({ error: "Time slot not found or inactive" });
+      return;
+    }
+    if (slot.routeId !== routeId) {
+      res
+        .status(400)
+        .json({ error: "Time slot does not belong to that route" });
+      return;
+    }
+
+    // ── Check for existing booking (pre-check before DB unique constraint) ──
+    const [conflict] = await db
+      .select({
+        id: driverShuttleBookingsTable.id,
+        driverId: driverShuttleBookingsTable.driverId,
+      })
+      .from(driverShuttleBookingsTable)
+      .where(
+        and(
+          eq(driverShuttleBookingsTable.routeId, routeId),
+          eq(driverShuttleBookingsTable.timeSlotId, timeSlotId),
+          eq(driverShuttleBookingsTable.weekStart, weekStart),
+          inArray(driverShuttleBookingsTable.status, [
+            "active",
+            "pending_renewal",
+          ]),
+        ),
+      );
+    if (conflict) {
+      const msg =
+        conflict.driverId === driverRow.id
+          ? "You already have an active booking for this route+timeslot this week"
+          : "That route+timeslot is already booked for this week";
+      res.status(409).json({ error: msg });
+      return;
+    }
+
+    // ── Insert booking ─────────────────────────────────────────────────
+    try {
+      const [booking] = await db
+        .insert(driverShuttleBookingsTable)
+        .values({
+          driverId: driverRow.id,
+          routeId,
+          timeSlotId,
+          weekStart,
+          weekEnd,
+          status: "active",
+        })
+        .returning();
+
+      logger.info(
+        {
+          bookingId: booking!.id,
+          driverId: driverRow.id,
+          routeId,
+          timeSlotId,
+          weekStart,
+        },
+        "Driver shuttle booking created",
+      );
+      res.status(201).json({ ok: true, booking });
+    } catch (err: unknown) {
+      const pg = err as { code?: string };
+      if (pg.code === "23505") {
+        res.status(409).json({
+          error:
+            "That route+timeslot was just booked by another driver. Please refresh and try again.",
+        });
+        return;
+      }
+      throw err;
+    }
+  },
+);
 
 // ─── GET /shuttle/route-bookings ──────────────────────────────────────────────
 // Driver's own bookings (all time, newest first).
-router.get("/shuttle/route-bookings", authenticate, async (req, res): Promise<void> => {
-  const driver = req.user;
-  if (!driver || driver.role !== "driver") {
-    res.status(403).json({ error: "Only drivers can view shuttle route bookings" });
-    return;
-  }
+router.get(
+  "/shuttle/route-bookings",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const driver = req.user;
+    if (!driver || driver.role !== "driver") {
+      res
+        .status(403)
+        .json({ error: "Only drivers can view shuttle route bookings" });
+      return;
+    }
 
-  const [driverRow] = await db
-    .select({ id: driversTable.id })
-    .from(driversTable)
-    .where(eq(driversTable.userId, driver.id));
-  if (!driverRow) { res.status(404).json({ error: "Driver profile not found" }); return; }
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, driver.id));
+    if (!driverRow) {
+      res.status(404).json({ error: "Driver profile not found" });
+      return;
+    }
 
-  const bookings = await db
-    .select(bookingFields)
-    .from(driverShuttleBookingsTable)
-    .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
-    .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
-    .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
-    .where(eq(driverShuttleBookingsTable.driverId, driverRow.id))
-    .orderBy(desc(driverShuttleBookingsTable.weekStart));
+    const bookings = await db
+      .select(bookingFields)
+      .from(driverShuttleBookingsTable)
+      .innerJoin(
+        routesTable,
+        eq(driverShuttleBookingsTable.routeId, routesTable.id),
+      )
+      .innerJoin(
+        routeTimeSlotsTable,
+        eq(
+          driverShuttleBookingsTable.timeSlotId,
+          routeTimeSlotsTable.id,
+        ),
+      )
+      .innerJoin(
+        driversTable,
+        eq(driverShuttleBookingsTable.driverId, driversTable.id),
+      )
+      .where(eq(driverShuttleBookingsTable.driverId, driverRow.id))
+      .orderBy(desc(driverShuttleBookingsTable.weekStart));
 
-  res.json({ data: bookings.map(formatBooking), total: bookings.length });
-});
+    res.json({ data: bookings.map(formatBooking), total: bookings.length });
+  },
+);
 
 // ─── GET /shuttle/route-bookings/:id ─────────────────────────────────────────
-router.get("/shuttle/route-bookings/:id", authenticate, async (req, res): Promise<void> => {
-  const driver = req.user;
-  if (!driver || driver.role !== "driver") {
-    res.status(403).json({ error: "Only drivers can view shuttle route bookings" });
-    return;
-  }
+router.get(
+  "/shuttle/route-bookings/:id",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const driver = req.user;
+    if (!driver || driver.role !== "driver") {
+      res
+        .status(403)
+        .json({ error: "Only drivers can view shuttle route bookings" });
+      return;
+    }
 
-  const bookingId = parseInt(req.params.id as string);
-  if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    const bookingId = parseInt(req.params.id as string);
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
-  const [driverRow] = await db
-    .select({ id: driversTable.id })
-    .from(driversTable)
-    .where(eq(driversTable.userId, driver.id));
-  if (!driverRow) { res.status(404).json({ error: "Driver profile not found" }); return; }
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, driver.id));
+    if (!driverRow) {
+      res.status(404).json({ error: "Driver profile not found" });
+      return;
+    }
 
-  const [booking] = await db
-    .select(bookingFields)
-    .from(driverShuttleBookingsTable)
-    .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
-    .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
-    .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
-    .where(
-      and(
-        eq(driverShuttleBookingsTable.id, bookingId),
-        eq(driverShuttleBookingsTable.driverId, driverRow.id),
-      ),
-    );
+    const [booking] = await db
+      .select(bookingFields)
+      .from(driverShuttleBookingsTable)
+      .innerJoin(
+        routesTable,
+        eq(driverShuttleBookingsTable.routeId, routesTable.id),
+      )
+      .innerJoin(
+        routeTimeSlotsTable,
+        eq(
+          driverShuttleBookingsTable.timeSlotId,
+          routeTimeSlotsTable.id,
+        ),
+      )
+      .innerJoin(
+        driversTable,
+        eq(driverShuttleBookingsTable.driverId, driversTable.id),
+      )
+      .where(
+        and(
+          eq(driverShuttleBookingsTable.id, bookingId),
+          eq(driverShuttleBookingsTable.driverId, driverRow.id),
+        ),
+      );
 
-  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
-  res.json({ data: formatBooking(booking as Record<string, unknown>) });
-});
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    res.json({ data: formatBooking(booking as Record<string, unknown>) });
+  },
+);
 
 // ─── DELETE /shuttle/route-bookings/:id ──────────────────────────────────────
 // Driver cancels their own active booking.
-router.delete("/shuttle/route-bookings/:id", authenticate, async (req, res): Promise<void> => {
-  const driver = req.user;
-  if (!driver || driver.role !== "driver") {
-    res.status(403).json({ error: "Only drivers can cancel shuttle route bookings" });
-    return;
-  }
+router.delete(
+  "/shuttle/route-bookings/:id",
+  authenticate,
+  async (req, res): Promise<void> => {
+    const driver = req.user;
+    if (!driver || driver.role !== "driver") {
+      res
+        .status(403)
+        .json({ error: "Only drivers can cancel shuttle route bookings" });
+      return;
+    }
 
-  const bookingId = parseInt(req.params.id as string);
-  if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    const bookingId = parseInt(req.params.id as string);
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
-  const [driverRow] = await db
-    .select({ id: driversTable.id })
-    .from(driversTable)
-    .where(eq(driversTable.userId, driver.id));
-  if (!driverRow) { res.status(404).json({ error: "Driver profile not found" }); return; }
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, driver.id));
+    if (!driverRow) {
+      res.status(404).json({ error: "Driver profile not found" });
+      return;
+    }
 
-  const [existing] = await db
-    .select({ id: driverShuttleBookingsTable.id, status: driverShuttleBookingsTable.status })
-    .from(driverShuttleBookingsTable)
-    .where(
-      and(
-        eq(driverShuttleBookingsTable.id, bookingId),
-        eq(driverShuttleBookingsTable.driverId, driverRow.id),
-      ),
-    );
-  if (!existing) { res.status(404).json({ error: "Booking not found" }); return; }
-  if (!["active", "pending_renewal"].includes(existing.status)) {
-    res.status(400).json({ error: `Cannot cancel a booking with status '${existing.status}'` });
-    return;
-  }
+    const [existing] = await db
+      .select({
+        id: driverShuttleBookingsTable.id,
+        status: driverShuttleBookingsTable.status,
+      })
+      .from(driverShuttleBookingsTable)
+      .where(
+        and(
+          eq(driverShuttleBookingsTable.id, bookingId),
+          eq(driverShuttleBookingsTable.driverId, driverRow.id),
+        ),
+      );
+    if (!existing) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    if (!["active", "pending_renewal"].includes(existing.status)) {
+      res.status(400).json({
+        error: `Cannot cancel a booking with status '${existing.status}'`,
+      });
+      return;
+    }
 
-  const [updated] = await db
-    .update(driverShuttleBookingsTable)
-    .set({ status: "cancelled", cancelledAt: new Date(), cancelledBy: "driver" })
-    .where(eq(driverShuttleBookingsTable.id, bookingId))
-    .returning();
+    const [updated] = await db
+      .update(driverShuttleBookingsTable)
+      .set({
+        status: "cancelled",
+        cancelledAt: new Date(),
+        cancelledBy: "driver",
+      })
+      .where(eq(driverShuttleBookingsTable.id, bookingId))
+      .returning();
 
-  res.json({ ok: true, booking: updated });
-});
+    res.json({ ok: true, booking: updated });
+  },
+);
 
 // ─── POST /shuttle/route-bookings/:id/confirm-renewal ─────────────────────────
 // Driver confirms priority renewal — creates a booking for the next week.
@@ -440,18 +897,26 @@ router.post(
   async (req, res): Promise<void> => {
     const driver = req.user;
     if (!driver || driver.role !== "driver") {
-      res.status(403).json({ error: "Only drivers can confirm shuttle renewals" });
+      res
+        .status(403)
+        .json({ error: "Only drivers can confirm shuttle renewals" });
       return;
     }
 
     const bookingId = parseInt(req.params.id as string);
-    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
     const [driverRow] = await db
       .select({ id: driversTable.id })
       .from(driversTable)
       .where(eq(driversTable.userId, driver.id));
-    if (!driverRow) { res.status(404).json({ error: "Driver profile not found" }); return; }
+    if (!driverRow) {
+      res.status(404).json({ error: "Driver profile not found" });
+      return;
+    }
 
     const [booking] = await db
       .select({
@@ -462,7 +927,8 @@ router.post(
         weekStart: driverShuttleBookingsTable.weekStart,
         status: driverShuttleBookingsTable.status,
         renewalDeadline: driverShuttleBookingsTable.renewalDeadline,
-        renewalConfirmedAt: driverShuttleBookingsTable.renewalConfirmedAt,
+        renewalConfirmedAt:
+          driverShuttleBookingsTable.renewalConfirmedAt,
       })
       .from(driverShuttleBookingsTable)
       .where(
@@ -472,9 +938,14 @@ router.post(
         ),
       );
 
-    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
     if (booking.status !== "pending_renewal") {
-      res.status(400).json({ error: `Cannot confirm renewal for booking with status '${booking.status}'` });
+      res.status(400).json({
+        error: `Cannot confirm renewal for booking with status '${booking.status}'`,
+      });
       return;
     }
     if (booking.renewalConfirmedAt) {
@@ -483,35 +954,92 @@ router.post(
     }
 
     const now = new Date();
-    if (booking.renewalDeadline && new Date(booking.renewalDeadline) < now) {
-      res.status(400).json({ error: "Renewal window has expired — slot is now open to others" });
+    if (
+      booking.renewalDeadline &&
+      new Date(booking.renewalDeadline) < now
+    ) {
+      res.status(400).json({
+        error:
+          "Renewal window has expired — slot is now open to others",
+      });
       return;
     }
 
-    const nextWeekStart = getUpcomingWeekStart();
-    const nextWeekStartStr = toDateStr(nextWeekStart);
-    const nextWeekEndStr = toDateStr(weekEndFromStart(nextWeekStart));
+    // ── Derive next week start from the current booking's weekStart ───
+    // Next week = current weekStart + 7 days (still a Sunday)
+    const currentWeekStartDate = new Date(
+      booking.weekStart + "T00:00:00Z",
+    );
+    const nextWeekStartDate = new Date(currentWeekStartDate);
+    nextWeekStartDate.setUTCDate(currentWeekStartDate.getUTCDate() + 7);
+    const nextWeekStartStr = toDateStr(nextWeekStartDate);
+    const nextWeekEndStr = weekEndFromStart(nextWeekStartStr);
 
+    // ── Validate next week has trips for this route ───────────────────
+    const nextWeekEndDate = new Date(nextWeekEndStr + "T23:59:59Z");
+    const [nextTripExists] = await db
+      .select({ id: tripsTable.id })
+      .from(tripsTable)
+      .where(
+        and(
+          eq(tripsTable.routeId, booking.routeId),
+          gte(tripsTable.departureTime, nextWeekStartDate),
+          lte(tripsTable.departureTime, nextWeekEndDate),
+          inArray(tripsTable.status, [
+            "scheduled",
+            "waiting_driver",
+            "driver_assigned",
+          ]),
+        ),
+      )
+      .limit(1);
+
+    if (!nextTripExists) {
+      res.status(400).json({
+        error:
+          "No trips are scheduled for next week on this route yet. " +
+          "Renewal will be available once the admin schedules next week's trips.",
+      });
+      return;
+    }
+
+    // ── Check no conflict for next week ───────────────────────────────
     const [slotConflict] = await db
       .select({ id: driverShuttleBookingsTable.id })
       .from(driverShuttleBookingsTable)
       .where(
         and(
           eq(driverShuttleBookingsTable.routeId, booking.routeId),
-          eq(driverShuttleBookingsTable.timeSlotId, booking.timeSlotId),
-          eq(driverShuttleBookingsTable.weekStart, nextWeekStartStr),
-          inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+          eq(
+            driverShuttleBookingsTable.timeSlotId,
+            booking.timeSlotId,
+          ),
+          eq(
+            driverShuttleBookingsTable.weekStart,
+            nextWeekStartStr,
+          ),
+          inArray(driverShuttleBookingsTable.status, [
+            "active",
+            "pending_renewal",
+          ]),
         ),
       );
     if (slotConflict) {
-      res.status(409).json({ error: "That slot is already booked for next week" });
+      res
+        .status(409)
+        .json({ error: "That slot is already booked for next week" });
       return;
     }
 
+    // ── Confirm renewal + create next-week booking atomically ─────────
     const [updated, newBooking] = await Promise.all([
       db
         .update(driverShuttleBookingsTable)
-        .set({ renewalConfirmedAt: now, status: "active", updatedAt: now })
+        .set({
+          renewalConfirmedAt: now,
+          status: "active",
+          updatedAt: now,
+        })
         .where(eq(driverShuttleBookingsTable.id, bookingId))
         .returning(),
       db
@@ -527,7 +1055,11 @@ router.post(
         .returning(),
     ]);
 
-    res.json({ ok: true, currentBooking: updated[0], nextWeekBooking: newBooking[0] });
+    res.json({
+      ok: true,
+      currentBooking: updated[0],
+      nextWeekBooking: newBooking[0],
+    });
   },
 );
 
@@ -536,49 +1068,90 @@ router.post(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── GET /admin/shuttle/bookings ──────────────────────────────────────────────
-// List all driver shuttle bookings. Filter by ?week=YYYY-MM-DD (a Sunday),
-// ?routeId=N, ?driverId=N, ?status=active|cancelled|pending_renewal|expired.
 router.get(
   "/admin/shuttle/bookings",
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
-    const page = Math.max(1, parseInt((req.query.page as string) ?? "1") || 1);
-    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "50") || 50));
+    const page = Math.max(
+      1,
+      parseInt((req.query.page as string) ?? "1") || 1,
+    );
+    const limit = Math.min(
+      100,
+      Math.max(
+        1,
+        parseInt((req.query.limit as string) ?? "50") || 50,
+      ),
+    );
     const offset = (page - 1) * limit;
 
     const conditions: ReturnType<typeof eq>[] = [];
     if (req.query.week) {
-      conditions.push(eq(driverShuttleBookingsTable.weekStart, req.query.week as string));
+      conditions.push(
+        eq(
+          driverShuttleBookingsTable.weekStart,
+          req.query.week as string,
+        ),
+      );
     }
     if (req.query.routeId) {
       const rid = parseInt(req.query.routeId as string);
-      if (!isNaN(rid)) conditions.push(eq(driverShuttleBookingsTable.routeId, rid));
+      if (!isNaN(rid))
+        conditions.push(
+          eq(driverShuttleBookingsTable.routeId, rid),
+        );
     }
     if (req.query.driverId) {
       const did = parseInt(req.query.driverId as string);
-      if (!isNaN(did)) conditions.push(eq(driverShuttleBookingsTable.driverId, did));
+      if (!isNaN(did))
+        conditions.push(
+          eq(driverShuttleBookingsTable.driverId, did),
+        );
     }
     if (req.query.status) {
       conditions.push(
         eq(
           driverShuttleBookingsTable.status,
-          req.query.status as "active" | "cancelled" | "pending_renewal" | "expired",
+          req.query.status as
+            | "active"
+            | "cancelled"
+            | "pending_renewal"
+            | "expired",
         ),
       );
     }
 
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const where =
+      conditions.length > 0 ? and(...conditions) : undefined;
 
     const [bookings, countResult] = await Promise.all([
       db
         .select(bookingFields)
         .from(driverShuttleBookingsTable)
-        .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
-        .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
-        .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
+        .innerJoin(
+          routesTable,
+          eq(driverShuttleBookingsTable.routeId, routesTable.id),
+        )
+        .innerJoin(
+          routeTimeSlotsTable,
+          eq(
+            driverShuttleBookingsTable.timeSlotId,
+            routeTimeSlotsTable.id,
+          ),
+        )
+        .innerJoin(
+          driversTable,
+          eq(
+            driverShuttleBookingsTable.driverId,
+            driversTable.id,
+          ),
+        )
         .where(where)
-        .orderBy(desc(driverShuttleBookingsTable.weekStart), asc(driverShuttleBookingsTable.routeId))
+        .orderBy(
+          desc(driverShuttleBookingsTable.weekStart),
+          asc(driverShuttleBookingsTable.routeId),
+        )
         .limit(limit)
         .offset(offset),
       db
@@ -603,23 +1176,42 @@ router.get(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const bookingId = parseInt(req.params.id as string);
-    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
     const [booking] = await db
       .select(bookingFields)
       .from(driverShuttleBookingsTable)
-      .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
-      .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
-      .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
+      .innerJoin(
+        routesTable,
+        eq(driverShuttleBookingsTable.routeId, routesTable.id),
+      )
+      .innerJoin(
+        routeTimeSlotsTable,
+        eq(
+          driverShuttleBookingsTable.timeSlotId,
+          routeTimeSlotsTable.id,
+        ),
+      )
+      .innerJoin(
+        driversTable,
+        eq(driverShuttleBookingsTable.driverId, driversTable.id),
+      )
       .where(eq(driverShuttleBookingsTable.id, bookingId));
 
-    if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
-    res.json({ data: formatBooking(booking as Record<string, unknown>) });
+    if (!booking) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
+    res.json({
+      data: formatBooking(booking as Record<string, unknown>),
+    });
   },
 );
 
 // ─── PATCH /admin/shuttle/bookings/:id/reassign ───────────────────────────────
-// Manually assign a different driver to an existing booking.
 const ReassignBody = z.object({ driverId: z.number().int().positive() });
 
 router.patch(
@@ -628,10 +1220,16 @@ router.patch(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const bookingId = parseInt(req.params.id as string);
-    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
     const parsed = ReassignBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
     const { driverId } = parsed.data;
 
     const [existing] = await db
@@ -645,24 +1243,56 @@ router.patch(
         departureTime: routeTimeSlotsTable.departureTime,
       })
       .from(driverShuttleBookingsTable)
-      .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
-      .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
+      .innerJoin(
+        routesTable,
+        eq(driverShuttleBookingsTable.routeId, routesTable.id),
+      )
+      .innerJoin(
+        routeTimeSlotsTable,
+        eq(
+          driverShuttleBookingsTable.timeSlotId,
+          routeTimeSlotsTable.id,
+        ),
+      )
       .where(eq(driverShuttleBookingsTable.id, bookingId));
-    if (!existing) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!existing) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
 
     const [newDriverRow] = await db
-      .select({ id: driversTable.id, userId: driversTable.userId, name: driversTable.name })
+      .select({
+        id: driversTable.id,
+        userId: driversTable.userId,
+        name: driversTable.name,
+      })
       .from(driversTable)
-      .where(and(eq(driversTable.id, driverId), eq(driversTable.isActive, true)));
-    if (!newDriverRow) { res.status(404).json({ error: "Target driver not found or inactive" }); return; }
+      .where(
+        and(
+          eq(driversTable.id, driverId),
+          eq(driversTable.isActive, true),
+        ),
+      );
+    if (!newDriverRow) {
+      res
+        .status(404)
+        .json({ error: "Target driver not found or inactive" });
+      return;
+    }
 
     const [updated] = await db
       .update(driverShuttleBookingsTable)
-      .set({ driverId, status: "active", renewalNotifiedAt: null, renewalDeadline: null, renewalConfirmedAt: null, updatedAt: new Date() })
+      .set({
+        driverId,
+        status: "active",
+        renewalNotifiedAt: null,
+        renewalDeadline: null,
+        renewalConfirmedAt: null,
+        updatedAt: new Date(),
+      })
       .where(eq(driverShuttleBookingsTable.id, bookingId))
       .returning();
 
-    // ── Notify old driver (if different) ──────────────────────────────────────
     const io = getIO();
     if (existing.driverId !== driverId) {
       const [oldDriverRow] = await db
@@ -680,25 +1310,31 @@ router.patch(
           })
           .returning();
         if (io && oldNotif) {
-          io.to(SOCKET_ROOMS.PASSENGER(oldDriverRow.userId)).emit(SOCKET_EVENTS.SHUTTLE_BOOKING_REASSIGNED, {
+          io.to(
+            SOCKET_ROOMS.PASSENGER(oldDriverRow.userId),
+          ).emit(SOCKET_EVENTS.SHUTTLE_BOOKING_REASSIGNED, {
             bookingId,
             role: "removed",
             routeName: existing.routeName,
             departureTime: existing.departureTime,
             weekStart: existing.weekStart,
           });
-          io.to(SOCKET_ROOMS.PASSENGER(oldDriverRow.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+          io.to(
+            SOCKET_ROOMS.PASSENGER(oldDriverRow.userId),
+          ).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
             id: String(oldNotif.id),
             category: "shuttle",
             title: oldNotif.title,
             body: oldNotif.body,
-            time: oldNotif.createdAt instanceof Date ? oldNotif.createdAt.toISOString() : String(oldNotif.createdAt),
+            time:
+              oldNotif.createdAt instanceof Date
+                ? oldNotif.createdAt.toISOString()
+                : String(oldNotif.createdAt),
           });
         }
       }
     }
 
-    // ── Notify new driver ──────────────────────────────────────────────────────
     const [newNotif] = await db
       .insert(notificationsTable)
       .values({
@@ -708,20 +1344,29 @@ router.patch(
       })
       .returning();
     if (io && newNotif) {
-      io.to(SOCKET_ROOMS.PASSENGER(newDriverRow.userId)).emit(SOCKET_EVENTS.SHUTTLE_BOOKING_REASSIGNED, {
-        bookingId,
-        role: "assigned",
-        routeName: existing.routeName,
-        departureTime: existing.departureTime,
-        weekStart: existing.weekStart,
-      });
-      io.to(SOCKET_ROOMS.PASSENGER(newDriverRow.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
-        id: String(newNotif.id),
-        category: "shuttle",
-        title: newNotif.title,
-        body: newNotif.body,
-        time: newNotif.createdAt instanceof Date ? newNotif.createdAt.toISOString() : String(newNotif.createdAt),
-      });
+      io.to(SOCKET_ROOMS.PASSENGER(newDriverRow.userId)).emit(
+        SOCKET_EVENTS.SHUTTLE_BOOKING_REASSIGNED,
+        {
+          bookingId,
+          role: "assigned",
+          routeName: existing.routeName,
+          departureTime: existing.departureTime,
+          weekStart: existing.weekStart,
+        },
+      );
+      io.to(SOCKET_ROOMS.PASSENGER(newDriverRow.userId)).emit(
+        SOCKET_EVENTS.NOTIFICATION_NEW,
+        {
+          id: String(newNotif.id),
+          category: "shuttle",
+          title: newNotif.title,
+          body: newNotif.body,
+          time:
+            newNotif.createdAt instanceof Date
+              ? newNotif.createdAt.toISOString()
+              : String(newNotif.createdAt),
+        },
+      );
     }
 
     res.json({ ok: true, booking: updated });
@@ -737,10 +1382,16 @@ router.patch(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const bookingId = parseInt(req.params.id as string);
-    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
     const parsed = CancelBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
     const [existing] = await db
       .select({
@@ -752,16 +1403,27 @@ router.patch(
       })
       .from(driverShuttleBookingsTable)
       .where(eq(driverShuttleBookingsTable.id, bookingId));
-    if (!existing) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!existing) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
     if (existing.status === "cancelled") {
-      res.status(400).json({ error: "Booking is already cancelled" });
+      res
+        .status(400)
+        .json({ error: "Booking is already cancelled" });
       return;
     }
 
     const now = new Date();
     const [updated] = await db
       .update(driverShuttleBookingsTable)
-      .set({ status: "cancelled", cancelledAt: now, cancelledBy: "admin", cancelReason: parsed.data.reason ?? null, updatedAt: now })
+      .set({
+        status: "cancelled",
+        cancelledAt: now,
+        cancelledBy: "admin",
+        cancelReason: parsed.data.reason ?? null,
+        updatedAt: now,
+      })
       .where(eq(driverShuttleBookingsTable.id, bookingId))
       .returning();
 
@@ -783,13 +1445,19 @@ router.patch(
         .returning();
       const io = getIO();
       if (io && notif) {
-        io.to(SOCKET_ROOMS.PASSENGER(driver.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
-          id: String(notif.id),
-          category: "shuttle",
-          title: notif.title,
-          body: notif.body,
-          time: notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
-        });
+        io.to(SOCKET_ROOMS.PASSENGER(driver.userId)).emit(
+          SOCKET_EVENTS.NOTIFICATION_NEW,
+          {
+            id: String(notif.id),
+            category: "shuttle",
+            title: notif.title,
+            body: notif.body,
+            time:
+              notif.createdAt instanceof Date
+                ? notif.createdAt.toISOString()
+                : String(notif.createdAt),
+          },
+        );
       }
     }
 
@@ -798,7 +1466,6 @@ router.patch(
 );
 
 // ─── PATCH /admin/shuttle/bookings/:id/extend-window ─────────────────────────
-// Extend a driver's priority renewal deadline.
 const ExtendWindowBody = z.object({
   hours: z.number().int().min(1).max(72),
 });
@@ -809,10 +1476,16 @@ router.patch(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const bookingId = parseInt(req.params.id as string);
-    if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+    if (isNaN(bookingId)) {
+      res.status(400).json({ error: "Invalid booking ID" });
+      return;
+    }
 
     const parsed = ExtendWindowBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
     const [existing] = await db
       .select({
@@ -823,14 +1496,23 @@ router.patch(
       })
       .from(driverShuttleBookingsTable)
       .where(eq(driverShuttleBookingsTable.id, bookingId));
-    if (!existing) { res.status(404).json({ error: "Booking not found" }); return; }
+    if (!existing) {
+      res.status(404).json({ error: "Booking not found" });
+      return;
+    }
     if (existing.status !== "pending_renewal") {
-      res.status(400).json({ error: `Cannot extend window for booking with status '${existing.status}'` });
+      res.status(400).json({
+        error: `Cannot extend window for booking with status '${existing.status}'`,
+      });
       return;
     }
 
-    const base = existing.renewalDeadline ? new Date(existing.renewalDeadline) : new Date();
-    const newDeadline = new Date(base.getTime() + parsed.data.hours * 60 * 60 * 1000);
+    const base = existing.renewalDeadline
+      ? new Date(existing.renewalDeadline)
+      : new Date();
+    const newDeadline = new Date(
+      base.getTime() + parsed.data.hours * 60 * 60 * 1000,
+    );
 
     const [updated] = await db
       .update(driverShuttleBookingsTable)
@@ -854,15 +1536,21 @@ router.patch(
         .returning();
       const io = getIO();
       if (io && notif) {
-        io.to(SOCKET_ROOMS.PASSENGER(driver.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
-          id: String(notif.id),
-          category: "shuttle_renewal",
-          title: notif.title,
-          body: notif.body,
-          bookingId,
-          deadlineIso: newDeadline.toISOString(),
-          time: notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
-        });
+        io.to(SOCKET_ROOMS.PASSENGER(driver.userId)).emit(
+          SOCKET_EVENTS.NOTIFICATION_NEW,
+          {
+            id: String(notif.id),
+            category: "shuttle_renewal",
+            title: notif.title,
+            body: notif.body,
+            bookingId,
+            deadlineIso: newDeadline.toISOString(),
+            time:
+              notif.createdAt instanceof Date
+                ? notif.createdAt.toISOString()
+                : String(notif.createdAt),
+          },
+        );
       }
     }
 
@@ -871,9 +1559,6 @@ router.patch(
 );
 
 // ─── GET /admin/shuttle/availability ─────────────────────────────────────────
-// Availability matrix: for a given week (query ?week=YYYY-MM-DD), returns every
-// route × every active time slot with the booking (if any) occupying that slot.
-// Defaults to the upcoming week when ?week is omitted.
 router.get(
   "/admin/shuttle/availability",
   authenticate,
@@ -887,6 +1572,7 @@ router.get(
         return;
       }
     } else {
+      // Default to the next Sunday from today (UTC)
       const now = new Date();
       const day = now.getUTCDay();
       const daysToAdd = day === 0 ? 7 : 7 - day;
@@ -916,7 +1602,10 @@ router.get(
           isActive: routeTimeSlotsTable.isActive,
         })
         .from(routeTimeSlotsTable)
-        .orderBy(asc(routeTimeSlotsTable.routeId), asc(routeTimeSlotsTable.departureTime)),
+        .orderBy(
+          asc(routeTimeSlotsTable.routeId),
+          asc(routeTimeSlotsTable.departureTime),
+        ),
 
       db
         .select({
@@ -928,19 +1617,28 @@ router.get(
           driverName: driversTable.name,
           driverPhone: driversTable.phone,
           renewalDeadline: driverShuttleBookingsTable.renewalDeadline,
-          renewalNotifiedAt: driverShuttleBookingsTable.renewalNotifiedAt,
+          renewalNotifiedAt:
+            driverShuttleBookingsTable.renewalNotifiedAt,
         })
         .from(driverShuttleBookingsTable)
-        .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
+        .innerJoin(
+          driversTable,
+          eq(driverShuttleBookingsTable.driverId, driversTable.id),
+        )
         .where(
           and(
             eq(driverShuttleBookingsTable.weekStart, weekStart),
-            inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+            inArray(driverShuttleBookingsTable.status, [
+              "active",
+              "pending_renewal",
+            ]),
           ),
         ),
     ]);
 
-    const bookingMap = new Map(bookings.map((b) => [`${b.routeId}:${b.timeSlotId}`, b]));
+    const bookingMap = new Map(
+      bookings.map((b) => [`${b.routeId}:${b.timeSlotId}`, b]),
+    );
 
     const slotsByRoute = new Map<number, typeof slots>();
     for (const s of slots) {
@@ -990,23 +1688,46 @@ router.get(
 );
 
 // ─── GET /admin/shuttle/renewal-history ──────────────────────────────────────
-// All bookings that had a renewal notification sent (history of renewal events).
 router.get(
   "/admin/shuttle/renewal-history",
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
-    const page = Math.max(1, parseInt((req.query.page as string) ?? "1") || 1);
-    const limit = Math.min(100, Math.max(1, parseInt((req.query.limit as string) ?? "50") || 50));
+    const page = Math.max(
+      1,
+      parseInt((req.query.page as string) ?? "1") || 1,
+    );
+    const limit = Math.min(
+      100,
+      Math.max(
+        1,
+        parseInt((req.query.limit as string) ?? "50") || 50,
+      ),
+    );
     const offset = (page - 1) * limit;
 
     const [bookings, countResult] = await Promise.all([
       db
         .select(bookingFields)
         .from(driverShuttleBookingsTable)
-        .innerJoin(routesTable, eq(driverShuttleBookingsTable.routeId, routesTable.id))
-        .innerJoin(routeTimeSlotsTable, eq(driverShuttleBookingsTable.timeSlotId, routeTimeSlotsTable.id))
-        .innerJoin(driversTable, eq(driverShuttleBookingsTable.driverId, driversTable.id))
+        .innerJoin(
+          routesTable,
+          eq(driverShuttleBookingsTable.routeId, routesTable.id),
+        )
+        .innerJoin(
+          routeTimeSlotsTable,
+          eq(
+            driverShuttleBookingsTable.timeSlotId,
+            routeTimeSlotsTable.id,
+          ),
+        )
+        .innerJoin(
+          driversTable,
+          eq(
+            driverShuttleBookingsTable.driverId,
+            driversTable.id,
+          ),
+        )
         .where(isNotNull(driverShuttleBookingsTable.renewalNotifiedAt))
         .orderBy(desc(driverShuttleBookingsTable.renewalNotifiedAt))
         .limit(limit)
@@ -1014,7 +1735,9 @@ router.get(
       db
         .select({ count: sql<number>`count(*)::int` })
         .from(driverShuttleBookingsTable)
-        .where(isNotNull(driverShuttleBookingsTable.renewalNotifiedAt)),
+        .where(
+          isNotNull(driverShuttleBookingsTable.renewalNotifiedAt),
+        ),
     ]);
 
     res.json({
@@ -1028,7 +1751,6 @@ router.get(
 
 // ─── Admin: Time Slot Management ─────────────────────────────────────────────
 
-// GET /admin/shuttle/timeslots?routeId=N — list all time slots
 router.get(
   "/admin/shuttle/timeslots",
   authenticate,
@@ -1037,7 +1759,8 @@ router.get(
     const conditions: ReturnType<typeof eq>[] = [];
     if (req.query.routeId) {
       const rid = parseInt(req.query.routeId as string);
-      if (!isNaN(rid)) conditions.push(eq(routeTimeSlotsTable.routeId, rid));
+      if (!isNaN(rid))
+        conditions.push(eq(routeTimeSlotsTable.routeId, rid));
     }
 
     const slots = await db
@@ -1052,18 +1775,30 @@ router.get(
         toLocation: routesTable.toLocation,
       })
       .from(routeTimeSlotsTable)
-      .innerJoin(routesTable, eq(routeTimeSlotsTable.routeId, routesTable.id))
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(asc(routeTimeSlotsTable.routeId), asc(routeTimeSlotsTable.departureTime));
+      .innerJoin(
+        routesTable,
+        eq(routeTimeSlotsTable.routeId, routesTable.id),
+      )
+      .where(
+        conditions.length > 0 ? and(...conditions) : undefined,
+      )
+      .orderBy(
+        asc(routeTimeSlotsTable.routeId),
+        asc(routeTimeSlotsTable.departureTime),
+      );
 
     res.json({ data: slots, total: slots.length });
   },
 );
 
-// POST /admin/shuttle/timeslots — create a new time slot for a route
 const CreateSlotBody = z.object({
   routeId: z.number().int().positive(),
-  departureTime: z.string().regex(/^\d{2}:\d{2}$/, "departureTime must be HH:MM (e.g. 08:00)"),
+  departureTime: z
+    .string()
+    .regex(
+      /^\d{2}:\d{2}$/,
+      "departureTime must be HH:MM (e.g. 08:00)",
+    ),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -1073,13 +1808,19 @@ router.post(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const parsed = CreateSlotBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
 
     const [route] = await db
       .select({ id: routesTable.id })
       .from(routesTable)
       .where(eq(routesTable.id, parsed.data.routeId));
-    if (!route) { res.status(404).json({ error: "Route not found" }); return; }
+    if (!route) {
+      res.status(404).json({ error: "Route not found" });
+      return;
+    }
 
     try {
       const [slot] = await db
@@ -1090,7 +1831,10 @@ router.post(
     } catch (err: unknown) {
       const pg = err as { code?: string };
       if (pg.code === "23505") {
-        res.status(409).json({ error: "A time slot with that departure time already exists for this route" });
+        res.status(409).json({
+          error:
+            "A time slot with that departure time already exists for this route",
+        });
         return;
       }
       throw err;
@@ -1098,9 +1842,11 @@ router.post(
   },
 );
 
-// PATCH /admin/shuttle/timeslots/:id — update a time slot
 const UpdateSlotBody = z.object({
-  departureTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  departureTime: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -1110,10 +1856,16 @@ router.patch(
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const slotId = parseInt(req.params.id as string);
-    if (isNaN(slotId)) { res.status(400).json({ error: "Invalid slot ID" }); return; }
+    if (isNaN(slotId)) {
+      res.status(400).json({ error: "Invalid slot ID" });
+      return;
+    }
 
     const parsed = UpdateSlotBody.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.message });
+      return;
+    }
     if (Object.keys(parsed.data).length === 0) {
       res.status(400).json({ error: "No fields to update" });
       return;
@@ -1125,19 +1877,24 @@ router.patch(
       .where(eq(routeTimeSlotsTable.id, slotId))
       .returning();
 
-    if (!updated) { res.status(404).json({ error: "Time slot not found" }); return; }
+    if (!updated) {
+      res.status(404).json({ error: "Time slot not found" });
+      return;
+    }
     res.json({ ok: true, slot: updated });
   },
 );
 
-// DELETE /admin/shuttle/timeslots/:id — deactivate or remove a time slot
 router.delete(
   "/admin/shuttle/timeslots/:id",
   authenticate,
   requireRole("admin"),
   async (req, res): Promise<void> => {
     const slotId = parseInt(req.params.id as string);
-    if (isNaN(slotId)) { res.status(400).json({ error: "Invalid slot ID" }); return; }
+    if (isNaN(slotId)) {
+      res.status(400).json({ error: "Invalid slot ID" });
+      return;
+    }
 
     const [activeBookings] = await db
       .select({ count: sql<number>`count(*)::int` })
@@ -1145,7 +1902,10 @@ router.delete(
       .where(
         and(
           eq(driverShuttleBookingsTable.timeSlotId, slotId),
-          inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+          inArray(driverShuttleBookingsTable.status, [
+            "active",
+            "pending_renewal",
+          ]),
         ),
       );
 
@@ -1160,7 +1920,10 @@ router.delete(
       .delete(routeTimeSlotsTable)
       .where(eq(routeTimeSlotsTable.id, slotId))
       .returning();
-    if (!deleted) { res.status(404).json({ error: "Time slot not found" }); return; }
+    if (!deleted) {
+      res.status(404).json({ error: "Time slot not found" });
+      return;
+    }
     res.json({ ok: true, deleted });
   },
 );
