@@ -639,7 +639,7 @@ router.post(
 
     // ── Resolve driver ─────────────────────────────────────────────────
     const [driverRow] = await db
-      .select({ id: driversTable.id })
+      .select({ id: driversTable.id, assignedBusId: driversTable.assignedBusId })
       .from(driversTable)
       .where(eq(driversTable.userId, driver.id));
     if (!driverRow) {
@@ -652,6 +652,7 @@ router.post(
       .select({
         id: routeTimeSlotsTable.id,
         routeId: routeTimeSlotsTable.routeId,
+        departureTime: routeTimeSlotsTable.departureTime,
       })
       .from(routeTimeSlotsTable)
       .where(
@@ -711,6 +712,42 @@ router.post(
           status: "active",
         })
         .returning();
+
+      // ── Link driver to matching trips for this week ────────────────────
+      // Find all trips for this route+week whose Cairo local HH:MM matches
+      // the booked time slot, then stamp them with this driver (and their bus).
+      const weekStartDate = new Date(weekStart + "T00:00:00Z");
+      const weekEndDate   = new Date(weekEnd   + "T23:59:59Z");
+
+      const matchingTrips = await db
+        .select({ id: tripsTable.id })
+        .from(tripsTable)
+        .where(
+          and(
+            eq(tripsTable.routeId, routeId),
+            gte(tripsTable.departureTime, weekStartDate),
+            lte(tripsTable.departureTime, weekEndDate),
+            sql`to_char(${tripsTable.departureTime} AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${slot!.departureTime}`,
+            inArray(tripsTable.status, ["scheduled", "waiting_driver"]),
+          ),
+        );
+
+      if (matchingTrips.length > 0) {
+        const tripIds = matchingTrips.map((t) => t.id);
+        await db
+          .update(tripsTable)
+          .set({
+            driverId: driverRow.id,
+            busId: driverRow.assignedBusId ?? null,
+            status: "driver_assigned",
+          })
+          .where(inArray(tripsTable.id, tripIds));
+
+        logger.info(
+          { tripIds, driverId: driverRow.id, busId: driverRow.assignedBusId },
+          "Trips linked to driver via shuttle booking",
+        );
+      }
 
       logger.info(
         {
@@ -879,6 +916,10 @@ router.delete(
       .select({
         id: driverShuttleBookingsTable.id,
         status: driverShuttleBookingsTable.status,
+        routeId: driverShuttleBookingsTable.routeId,
+        timeSlotId: driverShuttleBookingsTable.timeSlotId,
+        weekStart: driverShuttleBookingsTable.weekStart,
+        weekEnd: driverShuttleBookingsTable.weekEnd,
       })
       .from(driverShuttleBookingsTable)
       .where(
@@ -908,6 +949,36 @@ router.delete(
       .where(eq(driverShuttleBookingsTable.id, bookingId))
       .returning();
 
+    // ── Unlink driver from trips for this booking's week ───────────────
+    const [cancelSlot] = await db
+      .select({ departureTime: routeTimeSlotsTable.departureTime })
+      .from(routeTimeSlotsTable)
+      .where(eq(routeTimeSlotsTable.id, existing.timeSlotId));
+
+    if (cancelSlot) {
+      const wStart = new Date(existing.weekStart + "T00:00:00Z");
+      const wEnd   = new Date(existing.weekEnd   + "T23:59:59Z");
+      const tripsToUnlink = await db
+        .select({ id: tripsTable.id })
+        .from(tripsTable)
+        .where(
+          and(
+            eq(tripsTable.routeId, existing.routeId),
+            eq(tripsTable.driverId, driverRow.id),
+            gte(tripsTable.departureTime, wStart),
+            lte(tripsTable.departureTime, wEnd),
+            sql`to_char(${tripsTable.departureTime} AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${cancelSlot.departureTime}`,
+            inArray(tripsTable.status, ["driver_assigned", "scheduled", "waiting_driver"]),
+          ),
+        );
+      if (tripsToUnlink.length > 0) {
+        await db
+          .update(tripsTable)
+          .set({ driverId: null, busId: null, status: "waiting_driver" })
+          .where(inArray(tripsTable.id, tripsToUnlink.map((t) => t.id)));
+      }
+    }
+
     res.json({ ok: true, booking: updated });
   },
 );
@@ -933,7 +1004,7 @@ router.post(
     }
 
     const [driverRow] = await db
-      .select({ id: driversTable.id })
+      .select({ id: driversTable.id, assignedBusId: driversTable.assignedBusId })
       .from(driversTable)
       .where(eq(driversTable.userId, driver.id));
     if (!driverRow) {
@@ -1077,6 +1148,39 @@ router.post(
         })
         .returning(),
     ]);
+
+    // ── Link driver to next-week's matching trips ─────────────────────
+    const [renewalSlot] = await db
+      .select({ departureTime: routeTimeSlotsTable.departureTime })
+      .from(routeTimeSlotsTable)
+      .where(eq(routeTimeSlotsTable.id, booking.timeSlotId));
+
+    if (renewalSlot) {
+      const nwStart = new Date(nextWeekStartStr + "T00:00:00Z");
+      const nwEnd   = new Date(nextWeekEndStr   + "T23:59:59Z");
+      const renewalTrips = await db
+        .select({ id: tripsTable.id })
+        .from(tripsTable)
+        .where(
+          and(
+            eq(tripsTable.routeId, booking.routeId),
+            gte(tripsTable.departureTime, nwStart),
+            lte(tripsTable.departureTime, nwEnd),
+            sql`to_char(${tripsTable.departureTime} AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${renewalSlot.departureTime}`,
+            inArray(tripsTable.status, ["scheduled", "waiting_driver"]),
+          ),
+        );
+      if (renewalTrips.length > 0) {
+        await db
+          .update(tripsTable)
+          .set({
+            driverId: driverRow.id,
+            busId: driverRow.assignedBusId ?? null,
+            status: "driver_assigned",
+          })
+          .where(inArray(tripsTable.id, renewalTrips.map((t) => t.id)));
+      }
+    }
 
     res.json({
       ok: true,
