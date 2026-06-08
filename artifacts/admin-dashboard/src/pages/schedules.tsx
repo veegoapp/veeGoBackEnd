@@ -483,37 +483,6 @@ export default function Schedules() {
         </CardContent>
       </Card>
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Existing Schedules</h2>
-          <Badge variant="outline">{schedules.length} total</Badge>
-        </div>
-
-        {schedulesLoading ? (
-          <div className="space-y-3">
-            {[1, 2].map(i => <Skeleton key={i} className="h-36 w-full rounded-xl" />)}
-          </div>
-        ) : schedules.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground">
-              <CalendarClock className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="font-medium">No schedules yet</p>
-              <p className="text-sm mt-1">Create your first schedule above to start generating trips.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {schedules.map(s => (
-              <ScheduleCard
-                key={s.id}
-                schedule={s}
-                onRegenerate={id => regenerateMutation.mutate(id)}
-                onDeactivate={id => deactivateMutation.mutate(id)}
-              />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
