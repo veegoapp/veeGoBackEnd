@@ -39,6 +39,7 @@ import AuditLogs from "@/pages/audit-logs";
 import Ratings from "@/pages/ratings";
 import ChatInbox from "@/pages/chat-inbox";
 import Schedules from "@/pages/schedules";
+import Buses from "@/pages/buses";
 import ShuttleTrips from "@/pages/shuttle-trips";
 import ShuttleTripDetail from "@/pages/shuttle-trip-detail";
 
@@ -134,6 +135,7 @@ function Router() {
         <Route path="/ratings" component={() => <ProtectedRoute component={Ratings} />} />
         <Route path="/chat-inbox" component={() => <ProtectedRoute component={ChatInbox} />} />
         <Route path="/schedules" component={() => <ProtectedRoute component={Schedules} />} />
+        <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
         <Route path="/shuttle-trips" component={() => <ProtectedRoute component={ShuttleTrips} />} />
         <Route path="/shuttle-trips/:id" component={() => <ProtectedRoute component={ShuttleTripDetail} />} />
         <Route component={NotFound} />
