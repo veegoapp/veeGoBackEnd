@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   useListVehicles,
   useCreateVehicle,
@@ -15,67 +16,108 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Car, Plus, Edit, Trash2, Search } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Car, Bike, PackageOpen, Plus, Edit, Trash2, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
-import { useTranslation } from "react-i18next";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+
+const STATUS_COLORS: Record<string, string> = {
+  verified:  "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
+  pending:   "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
+  rejected:  "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
+  suspended: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
+};
+
+interface ServiceConfig {
+  title: string;
+  subtitle: string;
+  Icon: React.ElementType;
+  color: string;
+  bg: string;
+  allowedTypes: { value: string; label: string }[];
+  defaultType: string;
+  fixedType: boolean;
+}
+
+const SERVICE_CONFIGS: Record<string, ServiceConfig> = {
+  car: {
+    title: "Car Vehicles",
+    subtitle: "Vehicles registered under the Car service",
+    Icon: Car,
+    color: "text-blue-600",
+    bg: "bg-blue-500/10",
+    allowedTypes: [{ value: "car", label: "Car" }],
+    defaultType: "car",
+    fixedType: true,
+  },
+  motorcycle: {
+    title: "Motorcycle Vehicles",
+    subtitle: "Vehicles registered under the Motorcycle service",
+    Icon: Bike,
+    color: "text-green-600",
+    bg: "bg-green-500/10",
+    allowedTypes: [{ value: "motorcycle", label: "Motorcycle" }],
+    defaultType: "motorcycle",
+    fixedType: true,
+  },
+  delivery: {
+    title: "Delivery Vehicles",
+    subtitle: "Vehicles registered under the Delivery service",
+    Icon: PackageOpen,
+    color: "text-orange-600",
+    bg: "bg-orange-500/10",
+    allowedTypes: [
+      { value: "van",     label: "Van" },
+      { value: "minibus", label: "Minibus" },
+    ],
+    defaultType: "van",
+    fixedType: false,
+  },
+};
 
 const vehicleSchema = z.object({
-  driverId: z.coerce.number().int().min(1, "Driver ID is required"),
+  driverId:    z.coerce.number().int().min(1, "Driver ID is required"),
   plateNumber: z.string().min(1, "Plate number is required"),
-  make: z.string().min(1, "Make is required"),
-  model: z.string().min(1, "Model is required"),
-  year: z.coerce.number().int().min(1900).max(new Date().getFullYear() + 1, "Invalid year"),
-  color: z.string().min(1, "Color is required"),
+  make:        z.string().min(1, "Make is required"),
+  model:       z.string().min(1, "Model is required"),
+  year:        z.coerce.number().int().min(1900).max(new Date().getFullYear() + 1, "Invalid year"),
+  color:       z.string().min(1, "Color is required"),
   vehicleType: z.enum(["car", "motorcycle", "van", "minibus"]),
-  status: z.enum(["pending", "verified", "rejected", "suspended"]).optional(),
-  isActive: z.boolean().optional(),
+  status:      z.enum(["pending", "verified", "rejected", "suspended"]).optional(),
+  isActive:    z.boolean().optional(),
 });
 
 type VehicleFormValues = z.infer<typeof vehicleSchema>;
 
-const STATUS_COLORS: Record<string, string> = {
-  verified: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
-  pending: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100",
-  rejected: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100",
-  suspended: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100",
-};
-
-const TYPE_LABELS: Record<string, string> = {
-  car: "Car",
-  motorcycle: "Motorcycle",
-  van: "Van",
-  minibus: "Minibus",
-};
-
-export default function Vehicles() {
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [searchInput, setSearchInput] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const { t } = useTranslation();
-
-  const { data, isLoading } = useListVehicles({
-    page,
-    limit: 10,
-    search: search || undefined,
-    status: statusFilter !== "all" ? (statusFilter as any) : undefined,
-    vehicleType: typeFilter !== "all" ? (typeFilter as any) : undefined,
-  });
-
-  const createMutation = useCreateVehicle();
-  const updateMutation = useUpdateVehicle();
-  const deleteMutation = useDeleteVehicle();
-
+function VehicleFormDialog({
+  open,
+  onClose,
+  title,
+  defaultValues,
+  allowedTypes,
+  onSubmit,
+  isLoading,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  defaultValues?: Partial<VehicleFormValues>;
+  allowedTypes: { value: string; label: string }[];
+  onSubmit: (v: VehicleFormValues) => void;
+  isLoading: boolean;
+}) {
   const form = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
@@ -85,297 +127,318 @@ export default function Vehicles() {
       model: "",
       year: new Date().getFullYear(),
       color: "",
-      vehicleType: "car",
+      vehicleType: (allowedTypes[0]?.value ?? "car") as VehicleFormValues["vehicleType"],
       status: "pending",
       isActive: true,
+      ...defaultValues,
     },
   });
 
-  const handleSearch = () => {
-    setSearch(searchInput);
-    setPage(1);
-  };
-
-  const handleFilterChange = () => {
-    setPage(1);
-  };
-
-  const onSubmitCreate = (values: VehicleFormValues) => {
-    createMutation.mutate({ data: values }, {
-      onSuccess: () => {
-        toast({ title: t("vehicles.added", "Vehicle added successfully") });
-        setIsCreateOpen(false);
-        form.reset();
-        queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
-      },
-      onError: (err: any) => {
-        toast({ title: t("common.error"), description: err?.message ?? "Failed to add vehicle", variant: "destructive" });
-      },
-    });
-  };
-
-  const onSubmitEdit = (values: VehicleFormValues) => {
-    if (!editId) return;
-    updateMutation.mutate({ id: editId, data: values }, {
-      onSuccess: () => {
-        toast({ title: t("vehicles.updated", "Vehicle updated") });
-        setEditId(null);
-        form.reset();
-        queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
-      },
-      onError: (err: any) => {
-        toast({ title: t("common.error"), description: err?.message ?? "Failed to update vehicle", variant: "destructive" });
-      },
-    });
-  };
-
-  const handleDelete = (id: number) => {
-    if (confirm(t("vehicles.deleteConfirm", "Are you sure you want to remove this vehicle?"))) {
-      deleteMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: t("vehicles.removed", "Vehicle removed") });
-          queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
-        },
+  React.useEffect(() => {
+    if (open) {
+      form.reset({
+        driverId: 0,
+        plateNumber: "",
+        make: "",
+        model: "",
+        year: new Date().getFullYear(),
+        color: "",
+        vehicleType: (allowedTypes[0]?.value ?? "car") as VehicleFormValues["vehicleType"],
+        status: "pending",
+        isActive: true,
+        ...defaultValues,
       });
     }
-  };
-
-  const handleOpenEdit = (vehicle: any) => {
-    form.reset({
-      driverId: vehicle.driverId,
-      plateNumber: vehicle.plateNumber,
-      make: vehicle.make,
-      model: vehicle.model,
-      year: vehicle.year,
-      color: vehicle.color,
-      vehicleType: vehicle.vehicleType,
-      status: vehicle.status,
-      isActive: vehicle.isActive,
-    });
-    setEditId(vehicle.id);
-  };
-
-  const VehicleForm = ({ onSubmit, submitLabel }: { onSubmit: (v: VehicleFormValues) => void; submitLabel: string }) => (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <FormField control={form.control} name="driverId" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.driverId", "Driver ID")}</FormLabel>
-              <FormControl><Input type="number" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="plateNumber" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.plateNumber", "Plate Number")}</FormLabel>
-              <FormControl><Input placeholder="ABC-123" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="make" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.make", "Make")}</FormLabel>
-              <FormControl><Input placeholder="Toyota" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="model" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.model", "Model")}</FormLabel>
-              <FormControl><Input placeholder="Corolla" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="year" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.year", "Year")}</FormLabel>
-              <FormControl><Input type="number" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="color" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.color", "Color")}</FormLabel>
-              <FormControl><Input placeholder="White" {...field} /></FormControl>
-              <FormMessage />
-            </FormItem>
-          )} />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField control={form.control} name="vehicleType" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("vehicles.type", "Vehicle Type")}</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                <SelectContent>
-                  <SelectItem value="car">Car</SelectItem>
-                  <SelectItem value="motorcycle">Motorcycle</SelectItem>
-                  <SelectItem value="van">Van</SelectItem>
-                  <SelectItem value="minibus">Minibus</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="status" render={({ field }) => (
-            <FormItem>
-              <FormLabel>{t("common.status")}</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="verified">Verified</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )} />
-        </div>
-        <DialogFooter>
-          <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>{submitLabel}</Button>
-        </DialogFooter>
-      </form>
-    </Form>
-  );
+  }, [open]);
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Car className="h-7 w-7 text-primary" />
-            {t("vehicles.title", "Vehicles")}
-          </h1>
-          <p className="text-muted-foreground text-sm">{t("vehicles.subtitle", "Manage all registered driver vehicles")}</p>
-        </div>
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="driverId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Driver ID</FormLabel>
+                  <FormControl><Input type="number" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="plateNumber" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Plate Number</FormLabel>
+                  <FormControl><Input placeholder="ABC-1234" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="make" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Make</FormLabel>
+                  <FormControl><Input placeholder="Toyota" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="model" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Model</FormLabel>
+                  <FormControl><Input placeholder="Corolla" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="year" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Year</FormLabel>
+                  <FormControl><Input type="number" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="color" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Color</FormLabel>
+                  <FormControl><Input placeholder="White" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField control={form.control} name="vehicleType" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vehicle Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={allowedTypes.length === 1}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {allowedTypes.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="status" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="verified">Verified</SelectItem>
+                      <SelectItem value="rejected">Rejected</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+              <Button type="submit" disabled={isLoading}>{isLoading ? "Saving..." : "Save"}</Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> {t("vehicles.addVehicle", "Add Vehicle")}
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{t("vehicles.addNewVehicle", "Add New Vehicle")}</DialogTitle>
-            </DialogHeader>
-            <VehicleForm onSubmit={onSubmitCreate} submitLabel={t("vehicles.addVehicle", "Add Vehicle")} />
-          </DialogContent>
-        </Dialog>
+export default function Vehicles() {
+  const params = useParams<{ serviceType?: string }>();
+  const serviceType = params.serviceType ?? "car";
+  const config = SERVICE_CONFIGS[serviceType] ?? SERVICE_CONFIGS.car;
+  const { Icon, title, subtitle, color, bg, allowedTypes, defaultType, fixedType } = config;
+
+  const [page, setPage]               = useState(1);
+  const [search, setSearch]           = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter]   = useState(defaultType);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editVehicle, setEditVehicle] = useState<any | null>(null);
+  const [deleteId, setDeleteId]       = useState<number | null>(null);
+
+  React.useEffect(() => {
+    setPage(1);
+    setSearch("");
+    setSearchInput("");
+    setStatusFilter("all");
+    setTypeFilter(config.defaultType);
+  }, [serviceType]);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data, isLoading } = useListVehicles({
+    page,
+    limit: 15,
+    search: search || undefined,
+    status: statusFilter !== "all" ? (statusFilter as any) : undefined,
+    vehicleType: typeFilter as any,
+  });
+
+  const createMutation = useCreateVehicle({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+        setIsCreateOpen(false);
+        toast({ title: "Vehicle added" });
+      },
+      onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    },
+  });
+
+  const updateMutation = useUpdateVehicle({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+        setEditVehicle(null);
+        toast({ title: "Vehicle updated" });
+      },
+      onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    },
+  });
+
+  const deleteMutation = useDeleteVehicle({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
+        setDeleteId(null);
+        toast({ title: "Vehicle removed" });
+      },
+      onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    },
+  });
+
+  const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg ${bg}`}>
+            <Icon className={`h-5 w-5 ${color}`} />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold">{title}</h1>
+            <p className="text-sm text-muted-foreground">{subtitle}</p>
+          </div>
+        </div>
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" /> Add Vehicle
+        </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 flex-1">
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder={t("vehicles.searchPlaceholder", "Search by plate, make or model...")}
+            className="pl-8 w-56"
+            placeholder="Search plate, make, model..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="max-w-xs"
+            onKeyDown={(e) => { if (e.key === "Enter") { setSearch(searchInput); setPage(1); } }}
           />
-          <Button variant="outline" size="icon" onClick={handleSearch}>
-            <Search className="h-4 w-4" />
-          </Button>
         </div>
-        <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); handleFilterChange(); }}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder={t("common.status")} />
+        <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="verified">Verified</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+            <SelectItem value="suspended">Suspended</SelectItem>
+          </SelectContent>
+        </Select>
+        {!fixedType && (
+          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
+            <SelectTrigger className="w-32">
+              <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">{t("common.all", "All Statuses")}</SelectItem>
-              <SelectItem value="pending">Pending</SelectItem>
-              <SelectItem value="verified">Verified</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
-              <SelectItem value="suspended">Suspended</SelectItem>
+              {allowedTypes.map((t) => (
+                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              ))}
             </SelectContent>
           </Select>
-          <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); handleFilterChange(); }}>
-            <SelectTrigger className="w-36">
-              <SelectValue placeholder={t("vehicles.type", "Type")} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("common.all", "All Types")}</SelectItem>
-              <SelectItem value="car">Car</SelectItem>
-              <SelectItem value="motorcycle">Motorcycle</SelectItem>
-              <SelectItem value="van">Van</SelectItem>
-              <SelectItem value="minibus">Minibus</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        )}
+        {search && (
+          <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>Clear</Button>
+        )}
       </div>
 
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
+      {/* Table */}
+      <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t("common.id", "ID")}</TableHead>
-              <TableHead>{t("vehicles.vehicle", "Vehicle")}</TableHead>
-              <TableHead>{t("vehicles.plateNumber", "Plate")}</TableHead>
-              <TableHead>{t("vehicles.type", "Type")}</TableHead>
-              <TableHead>{t("vehicles.year", "Year")}</TableHead>
-              <TableHead>{t("vehicles.driver", "Driver")}</TableHead>
-              <TableHead>{t("common.status")}</TableHead>
-              <TableHead className="text-right">{t("common.actions")}</TableHead>
+              <TableHead className="w-12">#</TableHead>
+              <TableHead>Vehicle</TableHead>
+              <TableHead>Plate</TableHead>
+              <TableHead>Year</TableHead>
+              <TableHead>Color</TableHead>
+              <TableHead>Driver</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              [...Array(5)].map((_, i) => (
+              Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i}>
-                  {[...Array(8)].map((__, j) => (
-                    <TableCell key={j}><Skeleton className="h-6 w-full" /></TableCell>
+                  {Array.from({ length: 8 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
-            ) : data?.data.length === 0 ? (
+            ) : !data?.data.length ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
-                  {t("vehicles.noVehicles", "No vehicles found")}
+                <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <Icon className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                  No vehicles found
                 </TableCell>
               </TableRow>
             ) : (
-              data?.data.map((vehicle: any) => (
+              data.data.map((vehicle: any, idx: number) => (
                 <TableRow key={vehicle.id}>
-                  <TableCell className="font-medium">#{vehicle.id}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{(page - 1) * 15 + idx + 1}</TableCell>
                   <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-semibold">{vehicle.make} {vehicle.model}</span>
-                      <span className="text-xs text-muted-foreground capitalize">{vehicle.color}</span>
+                    <div>
+                      <p className="font-medium">{vehicle.make} {vehicle.model}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{vehicle.vehicleType}</p>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono font-bold">{vehicle.plateNumber}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="capitalize">
-                      {TYPE_LABELS[vehicle.vehicleType] ?? vehicle.vehicleType}
-                    </Badge>
-                  </TableCell>
+                  <TableCell className="font-mono font-medium">{vehicle.plateNumber}</TableCell>
                   <TableCell>{vehicle.year}</TableCell>
+                  <TableCell className="capitalize">{vehicle.color}</TableCell>
                   <TableCell>
                     {vehicle.driverName ? (
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium">{vehicle.driverName}</span>
-                        <span className="text-xs text-muted-foreground">{vehicle.driverPhone}</span>
+                      <div>
+                        <p className="text-sm font-medium">{vehicle.driverName}</p>
+                        <p className="text-xs text-muted-foreground">{vehicle.driverPhone}</p>
                       </div>
                     ) : (
-                      <span className="text-muted-foreground text-xs">—</span>
+                      <span className="text-muted-foreground text-xs">Unassigned</span>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-center">
                     <Badge variant="secondary" className={STATUS_COLORS[vehicle.status] ?? ""}>
                       {vehicle.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(vehicle)}>
-                        <Edit className="h-4 w-4" />
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditVehicle(vehicle)}>
+                        <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(vehicle.id)}>
-                        <Trash2 className="h-4 w-4" />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(vehicle.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>
@@ -386,36 +449,76 @@ export default function Vehicles() {
         </Table>
       </div>
 
-      {data && data.total > data.limit && (
+      {/* Pagination */}
+      {totalPages > 1 && (
         <Pagination>
           <PaginationContent>
             <PaginationItem>
-              <PaginationPrevious
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-              />
-            </PaginationItem>
-            <PaginationItem className="text-sm text-muted-foreground px-4">
-              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / data.limit)}
+              <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} aria-disabled={page === 1} />
             </PaginationItem>
             <PaginationItem>
-              <PaginationNext
-                onClick={() => setPage(p => p + 1)}
-                className={page >= Math.ceil(data.total / data.limit) ? "pointer-events-none opacity-50" : "cursor-pointer"}
-              />
+              <span className="text-sm px-3 py-1 text-muted-foreground">Page {page} of {totalPages}</span>
+            </PaginationItem>
+            <PaginationItem>
+              <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-disabled={page === totalPages} />
             </PaginationItem>
           </PaginationContent>
         </Pagination>
       )}
 
-      <Dialog open={!!editId} onOpenChange={(open) => !open && setEditId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t("vehicles.editVehicle", "Edit Vehicle")}</DialogTitle>
-          </DialogHeader>
-          <VehicleForm onSubmit={onSubmitEdit} submitLabel={t("vehicles.updateVehicle", "Update Vehicle")} />
-        </DialogContent>
-      </Dialog>
+      {/* Create dialog */}
+      <VehicleFormDialog
+        open={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        title="Add Vehicle"
+        allowedTypes={allowedTypes}
+        isLoading={createMutation.isPending}
+        onSubmit={(values) => createMutation.mutate({ data: values })}
+      />
+
+      {/* Edit dialog */}
+      {editVehicle && (
+        <VehicleFormDialog
+          open={!!editVehicle}
+          onClose={() => setEditVehicle(null)}
+          title="Edit Vehicle"
+          allowedTypes={allowedTypes}
+          defaultValues={{
+            driverId:    editVehicle.driverId,
+            plateNumber: editVehicle.plateNumber,
+            make:        editVehicle.make,
+            model:       editVehicle.model,
+            year:        editVehicle.year,
+            color:       editVehicle.color,
+            vehicleType: editVehicle.vehicleType,
+            status:      editVehicle.status,
+            isActive:    editVehicle.isActive,
+          }}
+          isLoading={updateMutation.isPending}
+          onSubmit={(values) => updateMutation.mutate({ id: editVehicle.id, data: values })}
+        />
+      )}
+
+      {/* Delete confirm */}
+      <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Vehicle?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove the vehicle from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
+            >
+              {deleteMutation.isPending ? "Removing..." : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

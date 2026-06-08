@@ -114,7 +114,7 @@ function Router() {
         <Route path="/drivers" component={() => <ProtectedRoute component={Drivers} />} />
         <Route path="/drivers/:id" component={() => <ProtectedRoute component={DriverDetail} />} />
         <Route path="/driver-verification" component={() => <ProtectedRoute component={DriverVerification} />} />
-        <Route path="/vehicles" component={() => <ProtectedRoute component={Vehicles} />} />
+        <Route path="/vehicles/:serviceType" component={() => <ProtectedRoute component={Vehicles} />} />
         <Route path="/bookings" component={() => <ProtectedRoute component={Bookings} />} />
         <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />
         <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
