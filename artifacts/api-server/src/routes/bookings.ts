@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable, paymentsTable } from "@workspace/db";
+import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable, paymentsTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD } from "@workspace/db";
 import { eq, sql, and } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
@@ -80,9 +80,6 @@ router.get("/bookings", authenticate, requireRole("admin"), async (req, res): Pr
   res.json({ data: data.map(b => formatBooking(b as Record<string, unknown>)), total: countResult[0].count, page, limit });
 });
 
-const SHUTTLE_TOTAL_SEATS = 14;
-const SHUTTLE_MIN_REQUIRED = 7;
-
 router.post("/bookings", authenticate, async (req, res): Promise<void> => {
   const parsed = CreateBookingBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -97,10 +94,10 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
   const result = await db.transaction(async (tx) => {
     // SELECT FOR UPDATE: lock the trip row to prevent concurrent overbooking
     const tripResult = await tx.execute(
-      sql`SELECT id, status, available_seats, price FROM trips WHERE id = ${tripId} FOR UPDATE`
+      sql`SELECT id, status, available_seats, total_seats, vehicle_type, price FROM trips WHERE id = ${tripId} FOR UPDATE`
     );
 
-    type TripRow = { id: number; status: string; available_seats: number; price: string };
+    type TripRow = { id: number; status: string; available_seats: number; total_seats: number; vehicle_type: string; price: string };
     const tripRow = tripResult.rows[0] as TripRow | undefined;
 
     if (!tripRow) return { error: "Trip not found", status: 404 };
@@ -111,6 +108,11 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     if (tripRow.available_seats < seatCount) {
       return { error: "Not enough available seats — this trip is fully booked", status: 400 };
     }
+
+    // Derive capacity thresholds from vehicle type stored on the trip
+    const vType = (tripRow.vehicle_type ?? "hiace") as "hiace" | "minibus";
+    const shuttleTotalSeats  = VEHICLE_CAPACITY[vType]      ?? tripRow.total_seats;
+    const shuttleMinRequired = VEHICLE_MIN_THRESHOLD[vType] ?? Math.ceil(shuttleTotalSeats / 2);
 
     // Shuttle: prevent duplicate booking by the same user on the same trip
     const dupResult = await tx.execute(
@@ -201,13 +203,13 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     );
     type BookedRow = { total_booked: number };
     const totalBooked = (bookedResult.rows[0] as BookedRow).total_booked;
-    if (totalBooked >= SHUTTLE_MIN_REQUIRED) {
+    if (totalBooked >= shuttleMinRequired) {
       await tx.execute(
         sql`UPDATE trips SET status = 'active' WHERE id = ${tripId} AND status = 'scheduled'`
       );
     }
 
-    return { booking, totalBooked };
+    return { booking, totalBooked, shuttleTotalSeats, shuttleMinRequired };
   });
 
   if ("error" in result) {
@@ -215,19 +217,21 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     return;
   }
 
-  const booking = formatBooking(result.booking as Record<string, unknown>);
-  const totalBooked = result.totalBooked as number;
-  const availableSeats = SHUTTLE_TOTAL_SEATS - totalBooked;
-  const shuttleStatus = totalBooked >= SHUTTLE_MIN_REQUIRED ? "active" : "open";
-  const needed = Math.max(0, SHUTTLE_MIN_REQUIRED - totalBooked);
+  const booking        = formatBooking(result.booking as Record<string, unknown>);
+  const totalBooked    = result.totalBooked        as number;
+  const totalSeats     = result.shuttleTotalSeats  as number;
+  const minRequired    = result.shuttleMinRequired as number;
+  const availableSeats = totalSeats - totalBooked;
+  const shuttleStatus  = totalBooked >= minRequired ? "active" : "open";
+  const needed         = Math.max(0, minRequired - totalBooked);
 
   res.status(201).json({
     ...booking,
     shuttle: {
-      totalSeats: SHUTTLE_TOTAL_SEATS,
+      totalSeats,
       bookedSeats: totalBooked,
       availableSeats,
-      minRequired: SHUTTLE_MIN_REQUIRED,
+      minRequired,
       shuttleStatus,
       message: shuttleStatus === "active"
         ? "Trip is confirmed — boarding guaranteed"

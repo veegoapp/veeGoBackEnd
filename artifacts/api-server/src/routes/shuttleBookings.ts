@@ -1366,6 +1366,7 @@ router.patch(
         driverId: driverShuttleBookingsTable.driverId,
         routeId: driverShuttleBookingsTable.routeId,
         weekStart: driverShuttleBookingsTable.weekStart,
+        weekEnd: driverShuttleBookingsTable.weekEnd,
         routeName: routesTable.name,
         departureTime: routeTimeSlotsTable.departureTime,
       })
@@ -1392,6 +1393,7 @@ router.patch(
         id: driversTable.id,
         userId: driversTable.userId,
         name: driversTable.name,
+        assignedBusId: driversTable.assignedBusId,
       })
       .from(driversTable)
       .where(
@@ -1419,6 +1421,39 @@ router.patch(
       })
       .where(eq(driverShuttleBookingsTable.id, bookingId))
       .returning();
+
+    // ── Sync trips: reassign to new driver ────────────────────────────
+    const weekStartDate = new Date(existing.weekStart + "T00:00:00Z");
+    const weekEndDate   = new Date(existing.weekEnd   + "T23:59:59Z");
+    const reassignTrips = await db
+      .select({ id: tripsTable.id })
+      .from(tripsTable)
+      .where(
+        and(
+          eq(tripsTable.routeId, existing.routeId),
+          gte(tripsTable.departureTime, weekStartDate),
+          lte(tripsTable.departureTime, weekEndDate),
+          sql`to_char(${tripsTable.departureTime} AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${existing.departureTime}`,
+          inArray(tripsTable.status, [
+            "scheduled",
+            "waiting_driver",
+            "driver_assigned",
+          ]),
+        ),
+      );
+    if (reassignTrips.length > 0) {
+      const newBusId = newDriverRow.assignedBusId ?? null;
+      await db
+        .update(tripsTable)
+        .set({
+          driverId: newDriverRow.id,
+          busId: newBusId,
+          status: newBusId ? "driver_assigned" : "waiting_driver",
+        })
+        .where(
+          inArray(tripsTable.id, reassignTrips.map((t) => t.id)),
+        );
+    }
 
     const io = getIO();
     if (existing.driverId !== driverId) {
@@ -1527,6 +1562,7 @@ router.patch(
         driverId: driverShuttleBookingsTable.driverId,
         routeId: driverShuttleBookingsTable.routeId,
         weekStart: driverShuttleBookingsTable.weekStart,
+        weekEnd: driverShuttleBookingsTable.weekEnd,
       })
       .from(driverShuttleBookingsTable)
       .where(eq(driverShuttleBookingsTable.id, bookingId));
@@ -1553,6 +1589,29 @@ router.patch(
       })
       .where(eq(driverShuttleBookingsTable.id, bookingId))
       .returning();
+
+    // ── Sync trips: clear driver assignment ───────────────────────────
+    const cancelWeekStart = new Date(existing.weekStart + "T00:00:00Z");
+    const cancelWeekEnd   = new Date(existing.weekEnd   + "T23:59:59Z");
+    await db
+      .update(tripsTable)
+      .set({
+        driverId: null,
+        busId: null,
+        status: "waiting_driver",
+      })
+      .where(
+        and(
+          eq(tripsTable.routeId, existing.routeId),
+          eq(tripsTable.driverId, existing.driverId),
+          gte(tripsTable.departureTime, cancelWeekStart),
+          lte(tripsTable.departureTime, cancelWeekEnd),
+          inArray(tripsTable.status, [
+            "waiting_driver",
+            "driver_assigned",
+          ]),
+        ),
+      );
 
     const [driver] = await db
       .select({ userId: driversTable.userId })
