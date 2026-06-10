@@ -7,6 +7,8 @@ import {
   driversTable,
   notificationsTable,
   tripsTable,
+  VEHICLE_CAPACITY,
+  VEHICLE_MIN_THRESHOLD,
 } from "@workspace/db";
 import { eq, and, inArray, desc, asc, sql, isNotNull, gte, lte, between } from "drizzle-orm";
 import { z } from "zod";
@@ -2125,6 +2127,226 @@ router.delete(
       return;
     }
     res.json({ ok: true, deleted });
+  },
+);
+
+// ─── GET /shuttle/available-slots ─────────────────────────────────────────────
+// Driver-only endpoint. Returns time slots for a given route and week that:
+//   1. Have trips on ALL 5 working days (Sunday–Thursday)
+//   2. Are NOT already booked by another driver for that week
+//   3. Have only bookable trip statuses (scheduled, waiting_driver, driver_assigned)
+//
+// Query params:
+//   routeId   — integer, required
+//   weekStart — "YYYY-MM-DD" Sunday (Cairo), required
+//
+// Response:
+// {
+//   routeId:   number,
+//   weekStart: "YYYY-MM-DD",
+//   weekEnd:   "YYYY-MM-DD",
+//   slots: [
+//     {
+//       id:            number,
+//       departureTime: "HH:MM",
+//       totalSeats:    number,
+//       minRequired:   number,
+//       days: [
+//         { tripId: number, date: "YYYY-MM-DD", dayOfWeek: string, availableSeats: number }
+//       ]
+//     }
+//   ]
+// }
+
+const DOW_NAMES: Record<number, string> = {
+  0: "Sunday",
+  1: "Monday",
+  2: "Tuesday",
+  3: "Wednesday",
+  4: "Thursday",
+};
+
+router.get(
+  "/shuttle/available-slots",
+  authenticate,
+  requireRole("driver"),
+  async (req, res): Promise<void> => {
+    // ── Parse & validate query params ───────────────────────────────────────
+    const rawRouteId = req.query.routeId as string | undefined;
+    const rawWeekStart = req.query.weekStart as string | undefined;
+
+    if (!rawRouteId || !rawWeekStart) {
+      res.status(400).json({ error: "routeId and weekStart are required query parameters" });
+      return;
+    }
+
+    const routeId = parseInt(rawRouteId, 10);
+    if (isNaN(routeId)) {
+      res.status(400).json({ error: "routeId must be a valid integer" });
+      return;
+    }
+
+    // Validate weekStart is a parseable ISO date
+    const weekStartDate = new Date(rawWeekStart + "T00:00:00Z");
+    if (isNaN(weekStartDate.getTime())) {
+      res.status(400).json({ error: "weekStart is not a valid ISO date (expected YYYY-MM-DD)" });
+      return;
+    }
+
+    // Validate weekStart falls on a Sunday (reuse shared helper — same Cairo logic as POST booking)
+    if (!isSunday(rawWeekStart)) {
+      res.status(400).json({
+        error: "weekStart must be a Sunday in Cairo time. Use the date derived from the server's available-weeks response.",
+      });
+      return;
+    }
+
+    const weekStart = rawWeekStart;
+    const weekEnd = weekEndFromStart(weekStart);
+    const weekEndDate = new Date(weekEnd + "T23:59:59Z");
+
+    // ── Route existence check ───────────────────────────────────────────────
+    const [route] = await db
+      .select({ id: routesTable.id, name: routesTable.name })
+      .from(routesTable)
+      .where(eq(routesTable.id, routeId));
+    if (!route) {
+      res.status(404).json({ error: "Route not found" });
+      return;
+    }
+
+    // ── Fetch all active time slots for this route ──────────────────────────
+    const allSlots = await db
+      .select({
+        id: routeTimeSlotsTable.id,
+        departureTime: routeTimeSlotsTable.departureTime,
+      })
+      .from(routeTimeSlotsTable)
+      .where(
+        and(
+          eq(routeTimeSlotsTable.routeId, routeId),
+          eq(routeTimeSlotsTable.isActive, true),
+        ),
+      )
+      .orderBy(asc(routeTimeSlotsTable.departureTime));
+
+    if (allSlots.length === 0) {
+      res.json({ routeId, weekStart, weekEnd, slots: [] });
+      return;
+    }
+
+    // ── Fetch all bookable trips for this route and week ────────────────────
+    const BOOKABLE_STATUSES = ["scheduled", "waiting_driver", "driver_assigned"] as const;
+
+    const weekTrips = await db
+      .select({
+        id: tripsTable.id,
+        departureTime: tripsTable.departureTime,
+        availableSeats: tripsTable.availableSeats,
+        totalSeats: tripsTable.totalSeats,
+        vehicleType: tripsTable.vehicleType,
+      })
+      .from(tripsTable)
+      .where(
+        and(
+          eq(tripsTable.routeId, routeId),
+          gte(tripsTable.departureTime, weekStartDate),
+          lte(tripsTable.departureTime, weekEndDate),
+          inArray(tripsTable.status, BOOKABLE_STATUSES),
+        ),
+      )
+      .orderBy(asc(tripsTable.departureTime));
+
+    // ── Fetch existing bookings for this route+week (to exclude taken slots) ─
+    const existingBookings = await db
+      .select({
+        timeSlotId: driverShuttleBookingsTable.timeSlotId,
+      })
+      .from(driverShuttleBookingsTable)
+      .where(
+        and(
+          eq(driverShuttleBookingsTable.routeId, routeId),
+          eq(driverShuttleBookingsTable.weekStart, weekStart),
+          inArray(driverShuttleBookingsTable.status, ["active", "pending_renewal"]),
+        ),
+      );
+
+    const takenSlotIds = new Set(existingBookings.map((b) => b.timeSlotId));
+
+    // ── Build slot → trips map (keyed by Cairo HH:MM departure time) ─────────
+    // trips are stored in UTC; slot.departureTime is Cairo local HH:MM
+    type TripRow = {
+      id: number;
+      date: string;
+      dow: number;
+      availableSeats: number;
+      vehicleType: "hiace" | "minibus";
+    };
+
+    const slotTripsMap = new Map<string, TripRow[]>(); // "HH:MM" → trips
+    for (const trip of weekTrips) {
+      const hhmm = toCairoHHMM(trip.departureTime);
+      if (!slotTripsMap.has(hhmm)) {
+        slotTripsMap.set(hhmm, []);
+      }
+      slotTripsMap.get(hhmm)!.push({
+        id: trip.id,
+        date: toDateStr(trip.departureTime),
+        dow: trip.departureTime.getUTCDay(),
+        availableSeats: trip.availableSeats,
+        vehicleType: trip.vehicleType as "hiace" | "minibus",
+      });
+    }
+
+    // ── Filter slots: must have full-week coverage and not already taken ──────
+    const WORK_DAYS = [0, 1, 2, 3, 4]; // Sunday=0 … Thursday=4
+    const availableSlots = [];
+
+    for (const slot of allSlots) {
+      // Skip slots already booked by any driver this week
+      if (takenSlotIds.has(slot.id)) {
+        continue;
+      }
+
+      const tripsForSlot = slotTripsMap.get(slot.departureTime) ?? [];
+      const coveredDows = new Set(tripsForSlot.map((t) => t.dow));
+
+      // Must have trips on all 5 working days
+      if (!WORK_DAYS.every((d) => coveredDows.has(d))) {
+        continue;
+      }
+
+      // Derive capacity constants from the first trip's vehicle type
+      const vehicleType = tripsForSlot[0]?.vehicleType ?? "hiace";
+      const totalSeats = VEHICLE_CAPACITY[vehicleType];
+      const minRequired = VEHICLE_MIN_THRESHOLD[vehicleType];
+
+      // Sort days Sunday → Thursday and build the days array
+      const days = tripsForSlot
+        .filter((t) => WORK_DAYS.includes(t.dow))
+        .sort((a, b) => a.dow - b.dow)
+        .map((t) => ({
+          tripId: t.id,
+          date: t.date,
+          dayOfWeek: DOW_NAMES[t.dow] ?? String(t.dow),
+          availableSeats: t.availableSeats,
+        }));
+
+      availableSlots.push({
+        id: slot.id,
+        departureTime: slot.departureTime,
+        totalSeats,
+        minRequired,
+        days,
+      });
+    }
+
+    res.json({
+      routeId,
+      weekStart,
+      weekEnd,
+      slots: availableSlots,
+    });
   },
 );
 
