@@ -5,8 +5,9 @@ import {
   routesTable,
   driversTable,
   notificationsTable,
+  tripsTable,
 } from "@workspace/db";
-import { and, eq, isNull, lte, inArray, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, gte, inArray, sql } from "drizzle-orm";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
 import { logger } from "./logger";
@@ -48,6 +49,8 @@ export async function runShuttleRenewalJob(): Promise<void> {
       driverId: driverShuttleBookingsTable.driverId,
       routeId: driverShuttleBookingsTable.routeId,
       timeSlotId: driverShuttleBookingsTable.timeSlotId,
+      weekStart: driverShuttleBookingsTable.weekStart,
+      weekEnd: driverShuttleBookingsTable.weekEnd,
     });
 
   if (expired.length > 0) {
@@ -62,6 +65,31 @@ export async function runShuttleRenewalJob(): Promise<void> {
 
     const io = getIO();
     for (const booking of expired) {
+      // ── Open next-week trips back to other drivers ──────────────────
+      // Compute the next week window (booking.weekStart + 7 days).
+      // If the driver never confirmed renewal, no trips were pre-linked,
+      // so this is a safety-net that catches any edge-case pre-assignments.
+      const currentWeekStart = new Date(booking.weekStart + "T00:00:00Z");
+      const nextWeekStart    = new Date(currentWeekStart);
+      nextWeekStart.setUTCDate(currentWeekStart.getUTCDate() + 7);
+      const nextWeekEnd = new Date(nextWeekStart);
+      nextWeekEnd.setUTCDate(nextWeekStart.getUTCDate() + 4);
+      nextWeekEnd.setUTCHours(23, 59, 59, 999);
+
+      await db
+        .update(tripsTable)
+        .set({ driverId: null, busId: null, status: "waiting_driver" })
+        .where(
+          and(
+            eq(tripsTable.routeId, booking.routeId),
+            eq(tripsTable.driverId, booking.driverId as number),
+            gte(tripsTable.departureTime, nextWeekStart),
+            lte(tripsTable.departureTime, nextWeekEnd),
+            inArray(tripsTable.status, ["driver_assigned", "waiting_driver"]),
+          ),
+        );
+
+      // ── Notify the driver ───────────────────────────────────────────
       const userId = driverUserMap.get(booking.driverId);
       if (!userId) continue;
 
@@ -75,7 +103,7 @@ export async function runShuttleRenewalJob(): Promise<void> {
         .returning();
 
       if (io && notif) {
-        io.to(SOCKET_ROOMS.PASSENGER(userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+        io.to(SOCKET_ROOMS.PASSENGER(userId as number)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
           id: String(notif.id),
           category: "shuttle",
           title: notif.title,

@@ -271,8 +271,20 @@ router.patch("/bookings/:id/cancel", authenticate, async (req, res): Promise<voi
       sql`UPDATE trips SET available_seats = available_seats + ${booking.seatCount} WHERE id = ${booking.tripId}`
     );
 
-    // NOTE: ACTIVE trips NEVER revert to OPEN/scheduled on cancellation.
-    // Allowed transitions: OPEN → ACTIVE → CANCELLED only.
+    // Enforce rule: once a trip is active, passenger cancellations must never
+    // revert its status. Fetch the live trip status and guard any future
+    // recalculation logic behind this check.
+    const tripStatusResult = await tx.execute(
+      sql`SELECT status FROM trips WHERE id = ${booking.tripId}`,
+    );
+    const currentTripStatus =
+      (tripStatusResult.rows[0] as { status: string } | undefined)?.status ?? "";
+
+    const IMMUTABLE_STATUSES = ["active", "driver_assigned", "boarding", "completed", "cancelled"];
+    if (!IMMUTABLE_STATUSES.includes(currentTripStatus)) {
+      // Trip is still in scheduled/waiting_driver — available_seats restore above
+      // is the only action needed. No status recalculation occurs on cancellation.
+    }
 
     // Auto-refund on booking cancellation — credits wallet balance in the same transaction
     if (booking.paymentStatus === "paid") {

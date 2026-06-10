@@ -14,7 +14,7 @@ import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
 import { logger } from "./logger";
 
-const SHUTTLE_LOOKAHEAD_HOURS = 8;
+const SHUTTLE_LOOKAHEAD_HOURS = 10;
 const JOB_INTERVAL_MS = 15 * 60 * 1000;
 
 export async function runShuttleStatusJob(): Promise<void> {
@@ -82,7 +82,7 @@ export async function runShuttleStatusJob(): Promise<void> {
       .set({
         status: "cancelled",
         cancelledAt: now,
-        cancelReason: "Insufficient bookings — trip auto-cancelled (minimum passenger threshold not met 8 hours before departure)",
+        cancelReason: "Insufficient bookings — trip auto-cancelled (minimum passenger threshold not met 10 hours before departure)",
       })
       .where(inArray(tripsTable.id, cancelIds));
 

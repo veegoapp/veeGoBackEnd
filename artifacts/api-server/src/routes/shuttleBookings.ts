@@ -606,36 +606,9 @@ router.post(
       return;
     }
 
-    // ── Validate the week actually has trips for this route ────────────
     const weekEnd = weekEndFromStart(weekStart);
     const weekStartDate = new Date(weekStart + "T00:00:00Z");
     const weekEndDate = new Date(weekEnd + "T23:59:59Z");
-
-    const [tripExists] = await db
-      .select({ id: tripsTable.id })
-      .from(tripsTable)
-      .where(
-        and(
-          eq(tripsTable.routeId, routeId),
-          gte(tripsTable.departureTime, weekStartDate),
-          lte(tripsTable.departureTime, weekEndDate),
-          inArray(tripsTable.status, [
-            "scheduled",
-            "waiting_driver",
-            "driver_assigned",
-          ]),
-        ),
-      )
-      .limit(1);
-
-    if (!tripExists) {
-      res.status(400).json({
-        error:
-          "No active trips exist for this route during the selected week. " +
-          "Only weeks shown in the app (from the server) are bookable.",
-      });
-      return;
-    }
 
     // ── Resolve driver ─────────────────────────────────────────────────
     const [driverRow] = await db
@@ -669,6 +642,29 @@ router.post(
       res
         .status(400)
         .json({ error: "Time slot does not belong to that route" });
+      return;
+    }
+
+    // ── Validate ALL 5 working days (Sun–Thu) have trips for this slot ──
+    // A driver must commit to the full week; a partial week is not bookable.
+    type DowRow = { dow: number };
+    const coveredDowsResult = await db.execute<DowRow>(sql`
+      SELECT DISTINCT
+        EXTRACT(DOW FROM departure_time AT TIME ZONE 'Africa/Cairo')::int AS dow
+      FROM trips
+      WHERE route_id         = ${routeId}
+        AND departure_time  >= ${weekStartDate}
+        AND departure_time  <= ${weekEndDate}
+        AND status          IN ('scheduled', 'waiting_driver', 'driver_assigned')
+        AND to_char(departure_time AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${slot.departureTime}
+    `);
+    const coveredSet = new Set(coveredDowsResult.rows.map((r) => r.dow));
+    const WORK_DAYS = [0, 1, 2, 3, 4]; // Sunday=0 … Thursday=4
+    const allCovered = WORK_DAYS.every((d) => coveredSet.has(d));
+    if (!allCovered) {
+      res.status(400).json({
+        error: "This slot does not have trips for the full week.",
+      });
       return;
     }
 
@@ -1125,67 +1121,85 @@ router.post(
       return;
     }
 
-    // ── Confirm renewal + create next-week booking atomically ─────────
-    const [updated, newBooking] = await Promise.all([
-      db
-        .update(driverShuttleBookingsTable)
-        .set({
-          renewalConfirmedAt: now,
-          status: "active",
-          updatedAt: now,
-        })
-        .where(eq(driverShuttleBookingsTable.id, bookingId))
-        .returning(),
-      db
-        .insert(driverShuttleBookingsTable)
-        .values({
-          driverId: driverRow.id,
-          routeId: booking.routeId,
-          timeSlotId: booking.timeSlotId,
-          weekStart: nextWeekStartStr,
-          weekEnd: nextWeekEndStr,
-          status: "active",
-        })
-        .returning(),
-    ]);
+    // ── Confirm renewal + create next-week booking + link trips — single tx ──
+    let renewalResult: {
+      updated: typeof driverShuttleBookingsTable.$inferSelect;
+      newBooking: typeof driverShuttleBookingsTable.$inferSelect;
+    };
+    try {
+      renewalResult = await db.transaction(async (tx) => {
+        // Fetch slot departure time first; throw so the transaction rolls back
+        // if the slot row is missing (prevents orphaned booking with no trips).
+        const [renewalSlot] = await tx
+          .select({ departureTime: routeTimeSlotsTable.departureTime })
+          .from(routeTimeSlotsTable)
+          .where(eq(routeTimeSlotsTable.id, booking.timeSlotId));
 
-    // ── Link driver to next-week's matching trips ─────────────────────
-    const [renewalSlot] = await db
-      .select({ departureTime: routeTimeSlotsTable.departureTime })
-      .from(routeTimeSlotsTable)
-      .where(eq(routeTimeSlotsTable.id, booking.timeSlotId));
+        if (!renewalSlot) {
+          throw new Error("SLOT_MISSING");
+        }
 
-    if (renewalSlot) {
-      const nwStart = new Date(nextWeekStartStr + "T00:00:00Z");
-      const nwEnd   = new Date(nextWeekEndStr   + "T23:59:59Z");
-      const renewalTrips = await db
-        .select({ id: tripsTable.id })
-        .from(tripsTable)
-        .where(
-          and(
-            eq(tripsTable.routeId, booking.routeId),
-            gte(tripsTable.departureTime, nwStart),
-            lte(tripsTable.departureTime, nwEnd),
-            sql`to_char(${tripsTable.departureTime} AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${renewalSlot.departureTime}`,
-            inArray(tripsTable.status, ["scheduled", "waiting_driver"]),
-          ),
-        );
-      if (renewalTrips.length > 0) {
-        await db
-          .update(tripsTable)
-          .set({
+        const [updated] = await tx
+          .update(driverShuttleBookingsTable)
+          .set({ renewalConfirmedAt: now, status: "active", updatedAt: now })
+          .where(eq(driverShuttleBookingsTable.id, bookingId))
+          .returning();
+
+        const [nextBooking] = await tx
+          .insert(driverShuttleBookingsTable)
+          .values({
             driverId: driverRow.id,
-            busId: driverRow.assignedBusId ?? null,
-            status: "driver_assigned",
+            routeId: booking.routeId,
+            timeSlotId: booking.timeSlotId,
+            weekStart: nextWeekStartStr,
+            weekEnd: nextWeekEndStr,
+            status: "active",
           })
-          .where(inArray(tripsTable.id, renewalTrips.map((t) => t.id)));
+          .returning();
+
+        const nwStart = new Date(nextWeekStartStr + "T00:00:00Z");
+        const nwEnd   = new Date(nextWeekEndStr   + "T23:59:59Z");
+        const renewalTrips = await tx
+          .select({ id: tripsTable.id })
+          .from(tripsTable)
+          .where(
+            and(
+              eq(tripsTable.routeId, booking.routeId),
+              gte(tripsTable.departureTime, nwStart),
+              lte(tripsTable.departureTime, nwEnd),
+              sql`to_char(${tripsTable.departureTime} AT TIME ZONE 'Africa/Cairo', 'HH24:MI') = ${renewalSlot.departureTime}`,
+              inArray(tripsTable.status, ["scheduled", "waiting_driver"]),
+            ),
+          );
+
+        if (renewalTrips.length > 0) {
+          await tx
+            .update(tripsTable)
+            .set({
+              driverId: driverRow.id,
+              busId: driverRow.assignedBusId ?? null,
+              status: "driver_assigned",
+            })
+            .where(inArray(tripsTable.id, renewalTrips.map((t) => t.id)));
+        }
+
+        return { updated: updated!, newBooking: nextBooking! };
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === "SLOT_MISSING") {
+        res.status(400).json({
+          error:
+            "Time slot record not found — cannot link trips. Renewal aborted.",
+        });
+        return;
       }
+      throw err;
     }
 
     res.json({
       ok: true,
-      currentBooking: updated[0],
-      nextWeekBooking: newBooking[0],
+      currentBooking: renewalResult.updated,
+      nextWeekBooking: renewalResult.newBooking,
     });
   },
 );

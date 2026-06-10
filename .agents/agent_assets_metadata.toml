@@ -60,3 +60,9 @@ id = "PMPhLnH121oNkvSl0GKrF"
 uri = "file://phase1_mobile_report.md"
 type = "text"
 title = "Phase 1 — Mobile Apps Impact Report"
+
+[[outputs]]
+id = "bNUyeuawy7xsPGGHvl79d"
+uri = "file://phase2_mobile_report.md"
+type = "text"
+title = "Phase 2 — Mobile Apps Impact Report"

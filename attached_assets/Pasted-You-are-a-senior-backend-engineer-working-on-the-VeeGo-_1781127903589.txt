@@ -1,0 +1,57 @@
+You are a senior backend engineer working on the VeeGo shuttle system.
+Phase 1 fixes are already done. I need you to implement Phase 2 only.
+Do not touch anything outside the scope below.
+Fixes Required
+Fix 1 — Wrap Renewal Confirmation in a Single Transaction (shuttleBookings.ts)
+Problem: POST /shuttle/route-bookings/:id/confirm-renewal does the following in two separate steps:
+Step 1: updates current booking + inserts next-week booking (atomic)
+Step 2: links next-week trips to the new driver (separate query, NOT atomic)
+If Step 2 fails, the booking exists as active but the trips have no driver. No retry or rollback exists.
+Also if the time slot row is missing, Step 2 is silently skipped with no error.
+What to do:
+Wrap both steps inside a single db.transaction().
+If the time slot is not found, throw an error inside the transaction so it rolls back.
+The whole operation succeeds or fails together — no partial state.
+Fix 2 — Trip Auto-Cancel Notification at 10 Hours Before (shuttle-job.ts)
+Problem: The background job cancels trips with fewer than the minimum passengers, but the threshold window does not match the business rule.
+Business rule: if a trip has not reached the minimum passengers 10 hours before departure, cancel it and notify all booked passengers with a refund.
+What to do:
+Change the lookahead window to 10 hours (from whatever it currently is).
+Make sure the cancellation sends a notification to every passenger on that trip.
+Make sure every passenger gets a full wallet refund.
+Use VEHICLE_MIN_THRESHOLD[vehicleType] (not a hardcoded value) to check the minimum — same fix pattern as Phase 1 Fix 1.
+Fix 3 — Trip Must Not Go Back to Pending After Becoming Active (bookings.ts)
+Problem: No rule prevents a trip from going back to pending status after it has reached active state, even if a passenger cancels and the count drops below the minimum.
+What to do:
+When a passenger cancels a booking, check the current trip status.
+If the trip is already active, do NOT change the trip status back to pending regardless of the remaining passenger count.
+Only recalculate trip status if the trip is still in pending or scheduled state.
+Fix 4 — Driver Must Book the Full Week, Not a Single Day (shuttleBookings.ts)
+Problem: A driver can currently book a single day on a route. The business rule requires the driver to commit to the full week (Sunday to Thursday) for that route and time slot.
+What to do:
+When a driver submits POST /shuttle/route-bookings, validate that the requested week has trips available for ALL working days (Sunday to Thursday) for that route and slot.
+If any day in the week is missing a trip, return a clear error: "This slot does not have trips for the full week."
+The booking should only be created if the full week is covered.
+Fix 5 — Auto-Open Trip to Other Drivers After 10-Hour No-Response (shuttle-renewal-job.ts)
+Problem: On Wednesday, drivers get a notification asking if they want to renew their slot for next week. If the driver does not respond, the slot should automatically open to any other driver after 10 hours. This is not implemented.
+What to do:
+In shuttle-renewal-job.ts, after sending renewal notifications, schedule a follow-up check 10 hours later.
+For any booking still in pending_renewal status after 10 hours, mark it as expired and set the linked next-week trips back to waiting_driver with driverId = null and busId = null.
+This makes the slot available for any other driver to book.
+Output Required
+Show only the changed code sections (not the entire file).
+Clearly label which file and which lines each change applies to.
+After all fixes, generate a .md report file named phase2_mobile_report.md containing:
+Report Structure (phase2_mobile_report.md)
+Phase 2 — Mobile Apps Impact Report
+Passenger App
+List every API endpoint or socket event that changed behavior in Phase 2 and how it affects the passenger app:
+Endpoint or socket name
+What changed
+What the passenger app should now expect (new field, new value, new status, etc.)
+Driver App
+List every API endpoint or socket event that changed behavior in Phase 2 and how it affects the driver app:
+Endpoint or socket name
+What changed
+What the driver app should now expect (new field, new value, new status, etc.)
+Only include changes from Phase 2. Do not include Phase 1 or Phase 3.
