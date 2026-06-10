@@ -2,8 +2,11 @@ import { Router } from "express";
 import {
   db, tripsTable, routesTable, stationsTable, driversTable, usersTable,
   busesTable, bookingsTable, tripStationProgressTable,
+  shuttleOffencesTable, walletTransactionsTable, notificationsTable,
 } from "@workspace/db";
 import { eq, sql, and, inArray, asc, gte, lte, desc } from "drizzle-orm";
+import { getIO } from "../socket";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import { authenticate, requireRole } from "../middlewares/auth";
 
 const router = Router();
@@ -299,6 +302,174 @@ router.get(
         totalPassengers: bookings.length,
       },
     });
+  },
+);
+
+// ─── GET /admin/shuttle/cash-debts ────────────────────────────────────────────
+// Fix 6: Returns passengers with a negative wallet balance (no-show debt).
+router.get(
+  "/admin/shuttle/cash-debts",
+  authenticate,
+  requireRole("admin"),
+  async (_req, res): Promise<void> => {
+    type DebtRow = {
+      user_id: number;
+      name: string;
+      phone: string;
+      wallet_balance: string;
+      offence_count: number | null;
+      last_offence_at: string | null;
+    };
+
+    const rows = await db.execute<DebtRow>(sql`
+      SELECT
+        u.id           AS user_id,
+        u.name,
+        u.phone,
+        u.wallet_balance,
+        so.offence_count,
+        so.last_offence_at
+      FROM users u
+      LEFT JOIN shuttle_offences so
+        ON so.user_id = u.id AND so.actor_type = 'passenger'
+      WHERE u.wallet_balance < 0
+        AND u.role = 'user'
+      ORDER BY u.wallet_balance ASC
+    `);
+
+    const data = rows.rows.map((r) => ({
+      userId:           r.user_id,
+      name:             r.name,
+      phone:            r.phone,
+      debtAmount:       Math.abs(parseFloat(r.wallet_balance)),
+      numberOfOffences: r.offence_count ?? 0,
+      lastOffenceDate:  r.last_offence_at ?? null,
+    }));
+
+    res.json({ data, total: data.length });
+  },
+);
+
+// ─── PATCH /admin/shuttle/cash-debts/:userId/collect ─────────────────────────
+// Fix 6: Admin marks a debt as collected — resets wallet balance to 0.
+router.patch(
+  "/admin/shuttle/cash-debts/:userId/collect",
+  authenticate,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const userId = parseInt(req.params.userId as string);
+    if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+
+    const [user] = await db
+      .select({ id: usersTable.id, walletBalance: usersTable.walletBalance, name: usersTable.name })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    if (!user) { res.status(404).json({ error: "User not found" }); return; }
+
+    const balance = parseFloat(String(user.walletBalance));
+    if (balance >= 0) {
+      res.status(400).json({ error: "User has no outstanding debt" });
+      return;
+    }
+
+    const collected = Math.abs(balance);
+
+    await db.execute(
+      sql`UPDATE users SET wallet_balance = 0 WHERE id = ${userId}`,
+    );
+
+    await db.insert(walletTransactionsTable).values({
+      userId,
+      amount:      String(collected),
+      type:        "deposit",
+      description: "Cash debt collected by admin — balance reset to 0",
+    });
+
+    const [notif] = await db
+      .insert(notificationsTable)
+      .values({
+        userId,
+        title: "Debt Cleared",
+        body:  `Your outstanding shuttle debt of ${collected.toFixed(2)} EGP has been marked as collected by the operations team.`,
+      })
+      .returning();
+
+    const io = getIO();
+    if (io && notif) {
+      io.to(SOCKET_ROOMS.PASSENGER(userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+        id:       String(notif.id),
+        category: "wallet",
+        title:    notif.title,
+        body:     notif.body,
+        time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+      });
+    }
+
+    res.json({ ok: true, collected, userId });
+  },
+);
+
+// ─── GET /admin/shuttle/offences ──────────────────────────────────────────────
+// Fix 7: Returns all shuttle offences with optional filters.
+// Filters: actorType (passenger|driver), lastAction (warning|fined|suspended),
+//          dateFrom (YYYY-MM-DD), dateTo (YYYY-MM-DD)
+router.get(
+  "/admin/shuttle/offences",
+  authenticate,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const { actorType, lastAction, dateFrom, dateTo } = req.query as Record<string, string>;
+
+    const conditions = [];
+    if (actorType && actorType !== "all")  conditions.push(eq(shuttleOffencesTable.actorType, actorType as any));
+    if (lastAction && lastAction !== "all") conditions.push(eq(shuttleOffencesTable.lastAction, lastAction as any));
+    if (dateFrom) conditions.push(gte(shuttleOffencesTable.lastOffenceAt, new Date(dateFrom + "T00:00:00Z")));
+    if (dateTo)   conditions.push(lte(shuttleOffencesTable.lastOffenceAt, new Date(dateTo   + "T23:59:59Z")));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const rows = await db
+      .select({
+        id:            shuttleOffencesTable.id,
+        userId:        shuttleOffencesTable.userId,
+        name:          usersTable.name,
+        phone:         usersTable.phone,
+        actorType:     shuttleOffencesTable.actorType,
+        offenceCount:  shuttleOffencesTable.offenceCount,
+        lastAction:    shuttleOffencesTable.lastAction,
+        lastOffenceAt: shuttleOffencesTable.lastOffenceAt,
+      })
+      .from(shuttleOffencesTable)
+      .innerJoin(usersTable, eq(usersTable.id, shuttleOffencesTable.userId))
+      .where(where)
+      .orderBy(desc(shuttleOffencesTable.lastOffenceAt));
+
+    res.json({ data: rows, total: rows.length });
+  },
+);
+
+// ─── PATCH /admin/shuttle/offences/:userId/reset ──────────────────────────────
+// Fix 7: Admin resets the offence count for a user to 0 (removes the row).
+router.patch(
+  "/admin/shuttle/offences/:userId/reset",
+  authenticate,
+  requireRole("admin"),
+  async (req, res): Promise<void> => {
+    const userId = parseInt(req.params.userId as string);
+    if (isNaN(userId)) { res.status(400).json({ error: "Invalid user ID" }); return; }
+
+    const deleted = await db
+      .delete(shuttleOffencesTable)
+      .where(eq(shuttleOffencesTable.userId, userId))
+      .returning();
+
+    if (deleted.length === 0) {
+      res.status(404).json({ error: "No offence record found for this user" });
+      return;
+    }
+
+    res.json({ ok: true, resetCount: deleted.length, userId });
   },
 );
 

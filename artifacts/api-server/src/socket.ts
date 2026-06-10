@@ -1,7 +1,7 @@
 import { Server as SocketIOServer } from "socket.io";
 import type { Server as HttpServer } from "http";
-import { db, driversTable, tripsTable, busesTable, ridesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, driversTable, tripsTable, busesTable, ridesTable, bookingsTable, driverCheckInsTable } from "@workspace/db";
+import { eq, and, inArray, gte, lt } from "drizzle-orm";
 import { verifyAccessToken } from "./lib/jwt";
 import { logger } from "./lib/logger";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./lib/socket-events";
@@ -248,6 +248,21 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
           io!.to(SOCKET_ROOMS.TRIP(tripId)).emit(SOCKET_EVENTS.PASSENGER_TRIP_TRACKING, locationBroadcast);
         }
 
+        // ── Phase 3 Fix 3: shuttle:driver:location — broadcast to passengers
+        // 20 minutes before departure (or while boarding/active).
+        // activeShuttleTripId is set when driver goes online if a trip is within 20 min.
+        // We also check the explicit tripId from the location payload.
+        const shuttleTripId = (tripId ?? (socket.data.activeShuttleTripId as number | undefined)) ?? null;
+        if (shuttleTripId) {
+          io!.to(SOCKET_ROOMS.TRIP(shuttleTripId)).emit(SOCKET_EVENTS.SHUTTLE_DRIVER_LOCATION, {
+            tripId:   shuttleTripId,
+            driverId: driver.id,
+            lat:      latitude,
+            lng:      longitude,
+            heading:  heading ?? null,
+          });
+        }
+
         socket.emit(SOCKET_EVENTS.DRIVER_LOCATION_ACK, { ok: true });
       } catch (err) {
         logger.error({ err }, "Error handling location update");
@@ -394,7 +409,79 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
           const room = SOCKET_ROOMS.DRIVERS_AVAILABLE(driver.vehicleType);
           socket.join(room);
           socket.data.vehicleType = driver.vehicleType;
+          socket.data.driverId    = driver.id;
           logger.info({ socketId: socket.id, userId, room }, "Driver joined availability room (online)");
+        }
+
+        // ── Phase 3 Fix 4: Shuttle selfie check-in at trip start ──────────────
+        // If the driver has a shuttle trip within the next 3 hours, require a
+        // selfie before they can be shown to passengers for that trip.
+        if (driver) {
+          const now        = new Date();
+          const window3h   = new Date(now.getTime() + 3 * 60 * 60 * 1000);
+          const deadline10 = new Date(now.getTime() + 10 * 60 * 1000);
+
+          const [upcomingShuttleTrip] = await db
+            .select({ id: tripsTable.id, routeId: tripsTable.routeId })
+            .from(tripsTable)
+            .where(
+              and(
+                eq(tripsTable.driverId, driver.id),
+                inArray(tripsTable.status, ["driver_assigned", "waiting_driver", "scheduled"]),
+                gte(tripsTable.departureTime, now),
+                lt(tripsTable.departureTime, window3h),
+              ),
+            )
+            .limit(1);
+
+          if (upcomingShuttleTrip) {
+            socket.data.shuttleTripId = upcomingShuttleTrip.id;
+
+            // Set check-in flag on the driver record
+            await db
+              .update(driversTable)
+              .set({ checkInRequired: true, checkInDeadline: deadline10 })
+              .where(eq(driversTable.id, driver.id));
+
+            socket.emit(SOCKET_EVENTS.SHUTTLE_CHECKIN_REQUIRED, {
+              tripId:          upcomingShuttleTrip.id,
+              deadlineMinutes: 10,
+              message:         "You have a shuttle trip starting soon. Please submit a selfie check-in within 10 minutes.",
+            });
+
+            logger.info(
+              { driverId: driver.id, tripId: upcomingShuttleTrip.id },
+              "shuttle:checkin:required emitted on driver online",
+            );
+          }
+        }
+
+        // ── Phase 3 Fix 3: Check for shuttle trips within 20 min on connect ──
+        // Store the tripId so location updates can broadcast to passengers.
+        if (driver) {
+          const now      = new Date();
+          const window20 = new Date(now.getTime() + 20 * 60 * 1000);
+
+          const [nearTrip] = await db
+            .select({ id: tripsTable.id })
+            .from(tripsTable)
+            .where(
+              and(
+                eq(tripsTable.driverId, driver.id),
+                inArray(tripsTable.status, ["driver_assigned", "waiting_driver", "boarding", "active"]),
+                gte(tripsTable.departureTime, now),
+                lt(tripsTable.departureTime, window20),
+              ),
+            )
+            .limit(1);
+
+          if (nearTrip) {
+            socket.data.activeShuttleTripId = nearTrip.id;
+            logger.info(
+              { driverId: driver.id, tripId: nearTrip.id },
+              "shuttle: 20-min window trip detected on driver online",
+            );
+          }
         }
       } catch (err) {
         logger.error({ err }, "Error joining availability room on online");

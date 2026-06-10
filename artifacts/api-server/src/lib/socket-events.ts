@@ -72,6 +72,16 @@ export const SOCKET_EVENTS = {
   DRIVER_LOCATION_ACK:   "driver:location:ack",
   ERROR:                 "error",
 
+  // ── Server → Passenger (shuttle) ─────────────────────────────────────────────
+  // Real-time driver location broadcast during the 20-min pre-departure window.
+  SHUTTLE_DRIVER_LOCATION: "shuttle:driver:location",
+
+  // ── Server → Driver (shuttle phase 3) ────────────────────────────────────────
+  // Sent when driver goes online before a shuttle trip — requires selfie within 10 min.
+  SHUTTLE_CHECKIN_REQUIRED: "shuttle:checkin:required",
+  // Sent after 1 min if not all passengers at a station have been marked.
+  SHUTTLE_STATION_TIMEOUT: "shuttle:station:timeout",
+
   // ── Client → Server ─────────────────────────────────────────────────────────
   DRIVER_LOCATION_UPDATE: "driver:location:update",
   DRIVER_RIDE_LOCATION:   "driver:ride:location",

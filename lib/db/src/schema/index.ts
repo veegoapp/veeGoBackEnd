@@ -34,3 +34,4 @@ export * from "./sosEvents";
 export * from "./rideShareTokens";
 export * from "./routeSchedules";
 export * from "./driverShuttleBookings";
+export * from "./shuttleOffences";

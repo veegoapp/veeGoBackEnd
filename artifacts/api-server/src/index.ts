@@ -6,6 +6,7 @@ import { pool } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
 import { startShuttleJob } from "./lib/shuttle-job";
+import { startDriverNoShowMonitor } from "./lib/driver-noshow-monitor";
 import { initSurgePricing, startSurgePricingJob } from "./lib/surge-pricing";
 import { initWaitingTimers } from "./lib/waiting-timer";
 import { initNoShowTimers } from "./lib/no-show-monitor";
@@ -112,6 +113,7 @@ async function main() {
   );
 
   startShuttleJob();
+  startDriverNoShowMonitor();
 
   httpServer.listen(port, () => {
     recoverActiveDispatches().catch((err) =>

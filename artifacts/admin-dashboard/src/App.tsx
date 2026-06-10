@@ -42,6 +42,8 @@ import Schedules from "@/pages/schedules";
 import Buses from "@/pages/buses";
 import ShuttleTrips from "@/pages/shuttle-trips";
 import ShuttleTripDetail from "@/pages/shuttle-trip-detail";
+import ShuttleCashDebts from "@/pages/shuttle-cash-debts";
+import ShuttleOffences from "@/pages/shuttle-offences";
 
 const logoutRef = { current: () => {} };
 
@@ -138,6 +140,8 @@ function Router() {
         <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
         <Route path="/shuttle-trips" component={() => <ProtectedRoute component={ShuttleTrips} />} />
         <Route path="/shuttle-trips/:id" component={() => <ProtectedRoute component={ShuttleTripDetail} />} />
+        <Route path="/shuttle/cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
+        <Route path="/shuttle/offences" component={() => <ProtectedRoute component={ShuttleOffences} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

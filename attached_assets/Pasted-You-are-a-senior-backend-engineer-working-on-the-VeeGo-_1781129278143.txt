@@ -1,0 +1,87 @@
+You are a senior backend engineer working on the VeeGo shuttle system.
+Phase 1 and Phase 2 are already done. I need you to implement Phase 3 only.
+Do not touch anything outside the scope below.
+Context
+The system currently runs cash only. No wallet or card payment is active yet.
+The business rules for cash are:
+Passenger pays the driver directly in cash at the end of the trip.
+If a passenger was marked absent (no-show), a fine equal to the ticket price is recorded against them.
+First offence = warning only, no fine charged yet.
+Second offence onwards = fine is charged (recorded as a negative balance on the passenger's account).
+If a driver fails to show up:
+First offence = warning only.
+Second offence = driver pays the cost of all booked passengers on that trip.
+Third offence = account suspended.
+Fixes Required
+Fix 1 — Passenger No-Show Warning + Fine Logic (bookings.ts or no-show-monitor.ts)
+What to do:
+When a driver marks a passenger as absent (POST /shuttle/bookings/:id/board with status absent), check how many previous no-show offences that passenger has on shuttle trips.
+If this is their first offence: record a warning, send a notification "You were marked absent. This is your first warning."
+If this is their second offence or more: deduct the ticket price from their wallet as a negative balance (allow wallet to go below zero). Send a notification "You were marked absent. The ticket price has been deducted from your wallet."
+Store the offence count on the user record or in a separate offences table — whichever fits the existing schema best.
+Fix 2 — Driver No-Show Warning + Fine + Suspend Logic (shuttle-job.ts or a new monitor)
+What to do:
+When a trip reaches its departure time and the driver never came online (driver is still offline and trip status is still waiting_driver or driver_assigned but no boarding started), treat this as a driver no-show.
+Check the driver's previous no-show offences:
+First offence: record a warning, send notification "You missed your trip. This is your first warning."
+Second offence: charge the driver the sum of all booked passengers' ticket prices as a negative deduction from their wallet. Send notification "You missed your trip. The total passenger fares have been deducted from your wallet."
+Third offence: suspend the driver account (set status to blocked or suspended). Send notification "Your account has been suspended due to repeated no-shows."
+Refund all booked passengers their ticket price regardless of which offence level it is.
+Fix 3 — Driver Appears on Passenger Map 20 Minutes Before Trip (socket.ts or shuttle.ts)
+What to do:
+When a driver goes online and has a shuttle trip departing within the next 20 minutes, automatically start broadcasting their location to all passengers booked on that trip via a socket event.
+Socket event name: shuttle:driver:location
+Payload: { tripId, driverId, lat, lng, heading }
+Passengers should only receive location updates for their own booked trip.
+Stop broadcasting to passengers once the trip status becomes completed or cancelled.
+If the driver was already online and a trip enters the 20-minute window, start broadcasting at that moment.
+Fix 4 — Driver Selfie Check-In at Start of Each Trip (checkin.ts or shuttle.ts)
+Problem: The current selfie check-in fires after 10 hours of continuous online time. For shuttle, the rule is different: the driver must take a selfie at the START of each trip (when they go online before a shuttle trip).
+What to do:
+When a driver goes online and has a shuttle trip starting within 3 hours, trigger a selfie check-in request immediately.
+Socket event to driver app: shuttle:checkin:required with payload { tripId, deadlineMinutes: 10 }
+The driver has 10 minutes to submit the selfie via the existing POST /driver/checkin endpoint.
+If the selfie is not submitted within 10 minutes, send a warning notification and prevent the driver from being shown as online to passengers for that trip.
+Store the check-in result linked to the specific trip (add tripId to the existing driver_checkins table if not already present).
+Fix 5 — Station Timer: 1 Minute Wait Per Station (shuttleBookings.ts or socket.ts)
+What to do:
+When the driver marks arrival at a station (POST /shuttle/bookings/:id/board flow), start a 1-minute server-side countdown.
+After 1 minute, if the driver has not marked all passengers at that station as boarded or absent, send a socket event to the driver app: shuttle:station:timeout with payload { tripId, stationId } as a reminder to make a decision.
+This is a reminder only — do not auto-mark passengers. The driver still decides.
+Fix 6 — Cash Debt Display (New Admin Dashboard Page)
+What to do:
+Add a new admin API endpoint: GET /admin/shuttle/cash-debts
+Returns a list of passengers who have a negative wallet balance (cash debt from no-shows).
+Each row includes: userId, name, phone, debtAmount, numberOfOffences, lastOffenceDate.
+Add a new page in the admin dashboard at /shuttle/cash-debts:
+Table showing all passengers with debt.
+Admin can manually mark a debt as "collected" (resets wallet balance to 0 for that user).
+Add a button "Mark as Collected" per row that calls PATCH /admin/shuttle/cash-debts/:userId/collect.
+Fix 7 — Offences Dashboard (New Admin Dashboard Page)
+What to do:
+Add a new admin API endpoint: GET /admin/shuttle/offences
+Returns a list of all passenger and driver offences (no-shows, warnings, fines, suspensions).
+Filters: by type (passenger/driver), by status (warning/fined/suspended), by date range.
+Add a new page in the admin dashboard at /shuttle/offences:
+Table showing all offences with user name, type, offence count, last action taken, date.
+Admin can manually reset an offence count for a user (button "Reset Offences").
+Output Required
+Show only the changed or new code sections.
+Clearly label which file and which lines each change applies to.
+For new admin dashboard pages, show the full page component code.
+After all fixes, generate a .md report file named phase3_mobile_report.md containing:
+Report Structure (phase3_mobile_report.md)
+Phase 3 — Mobile Apps Impact Report
+Passenger App
+List every API endpoint or socket event that is new or changed in Phase 3:
+Endpoint or socket name
+When the passenger app should listen or call it
+Full payload shape
+What the passenger app should do with it (show notification, update map, etc.)
+Driver App
+List every API endpoint or socket event that is new or changed in Phase 3:
+Endpoint or socket name
+When the driver app should listen or call it
+Full payload shape
+What the driver app should do with it (show selfie screen, show timer, etc.)
+Only include changes from Phase 3. Do not include Phase 1 or Phase 2.

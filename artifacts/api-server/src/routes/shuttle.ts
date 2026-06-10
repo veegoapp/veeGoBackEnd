@@ -6,9 +6,14 @@ import {
 import { eq, sql, and, inArray, asc, gte } from "drizzle-orm";
 import { authenticate } from "../middlewares/auth";
 import { getIO } from "../socket";
-import { SOCKET_EVENTS } from "../lib/socket-events";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 
 const router = Router();
+
+// ── Phase 3 Fix 5: Per-station 1-minute countdown timers ──────────────────────
+// Key: "tripId:stationId" (or "tripId" if stationId not provided)
+// Prevents double-starting the same station's timer within a single boarding session.
+const stationTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const SHUTTLE_TOTAL_SEATS = 14;
 const SHUTTLE_MIN_REQUIRED = 7;
@@ -565,10 +570,47 @@ router.post("/shuttle/bookings/:id/board", authenticate, async (req, res): Promi
   const io = getIO();
   if (io) {
     io.to(`passenger:${booking.userId}`).emit(SOCKET_EVENTS.BOOKING_BOARDED, {
-      bookingId: String(booking.id),
+      bookingId:   String(booking.id),
       passengerId: String(booking.userId),
       timestamp,
     });
+  }
+
+  // ── Phase 3 Fix 5: 1-minute station timer ─────────────────────────────────
+  // stationId is an optional integer in the request body. The driver app should
+  // send it when boarding passengers at a specific stop so the timeout payload
+  // can reference the station. If omitted, the timer key falls back to tripId only
+  // (meaning only one timer fires per trip regardless of station).
+  const rawStationId = req.body?.stationId;
+  const stationId    = typeof rawStationId === "number" ? rawStationId : null;
+  const timerKey     = stationId != null
+    ? `${booking.tripId}:${stationId}`
+    : `${booking.tripId}`;
+
+  if (!stationTimers.has(timerKey) && io) {
+    // Resolve the driver's userId to emit to their personal room
+    const [tripRow] = await db
+      .select({ driverId: tripsTable.driverId })
+      .from(tripsTable)
+      .where(eq(tripsTable.id, booking.tripId));
+
+    if (tripRow?.driverId) {
+      const [driverRow] = await db
+        .select({ userId: driversTable.userId })
+        .from(driversTable)
+        .where(eq(driversTable.id, tripRow.driverId));
+
+      if (driverRow) {
+        const timer = setTimeout(() => {
+          stationTimers.delete(timerKey);
+          io.to(SOCKET_ROOMS.DRIVER(driverRow.userId)).emit(SOCKET_EVENTS.SHUTTLE_STATION_TIMEOUT, {
+            tripId:    booking.tripId,
+            stationId: stationId ?? null,
+          });
+        }, 60_000);
+        stationTimers.set(timerKey, timer);
+      }
+    }
   }
 
   res.json({ ok: true, booking: updated, timestamp });

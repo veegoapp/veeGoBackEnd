@@ -1,12 +1,12 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable, ratingsTable } from "@workspace/db";
+import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable, ratingsTable, shuttleOffencesTable, walletTransactionsTable } from "@workspace/db";
 import { jobQueue } from "../lib/jobQueue";
 import { eq, and, or, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { signAccessToken, signRefreshToken } from "../lib/jwt";
 import { getIO } from "../socket";
-import { SOCKET_EVENTS } from "../lib/socket-events";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import { z } from "zod";
 
 const router = Router();
@@ -855,6 +855,104 @@ router.patch("/driver/bookings/:id/absent", authenticate, requireRole("driver"),
 
   const [updated] = await db.update(bookingsTable).set({ status: "absent" })
     .where(eq(bookingsTable.id, bookingId)).returning();
+
+  // ── Phase 3 Fix 1: Passenger no-show warning + fine logic ─────────────────
+  try {
+    const passengerUserId = booking.userId;
+    const ticketPrice     = booking.totalPrice; // numeric string from DB
+
+    // Look up current offence count BEFORE incrementing
+    const [existing] = await db
+      .select({ offenceCount: shuttleOffencesTable.offenceCount })
+      .from(shuttleOffencesTable)
+      .where(
+        and(
+          eq(shuttleOffencesTable.userId, passengerUserId),
+          eq(shuttleOffencesTable.actorType, "passenger"),
+        ),
+      );
+
+    const prevCount = existing?.offenceCount ?? 0;
+    const newCount  = prevCount + 1;
+    const action    = newCount === 1 ? "warning" : "fined";
+
+    await db
+      .insert(shuttleOffencesTable)
+      .values({
+        userId:        passengerUserId,
+        actorType:     "passenger",
+        offenceCount:  1,
+        lastAction:    action,
+        lastOffenceAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [shuttleOffencesTable.userId, shuttleOffencesTable.actorType],
+        set: {
+          offenceCount:  sql`${shuttleOffencesTable.offenceCount} + 1`,
+          lastAction:    action,
+          lastOffenceAt: new Date(),
+        },
+      });
+
+    const io = getIO();
+
+    if (newCount === 1) {
+      // First offence — warning only, no financial penalty
+      const [notif] = await db
+        .insert(notificationsTable)
+        .values({
+          userId: passengerUserId,
+          title:  "Absent Mark — First Warning",
+          body:   "You were marked absent on your shuttle trip. This is your first warning. A repeat no-show will result in the ticket price being deducted from your wallet.",
+        })
+        .returning();
+
+      if (io && notif) {
+        io.to(SOCKET_ROOMS.PASSENGER(passengerUserId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+          id:       String(notif.id),
+          category: "trip",
+          title:    notif.title,
+          body:     notif.body,
+          time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+        });
+      }
+    } else {
+      // Second offence or more — deduct ticket price (allow negative balance)
+      await db.execute(
+        sql`UPDATE users SET wallet_balance = wallet_balance - ${ticketPrice} WHERE id = ${passengerUserId}`,
+      );
+
+      await db.insert(walletTransactionsTable).values({
+        userId:      passengerUserId,
+        amount:      `-${ticketPrice}`,
+        type:        "payment",
+        description: `No-show fine for booking #${booking.id} (trip #${booking.tripId}) — ticket price deducted`,
+      });
+
+      const [notif] = await db
+        .insert(notificationsTable)
+        .values({
+          userId: passengerUserId,
+          title:  "Absent Mark — Fine Applied",
+          body:   `You were marked absent on your shuttle trip. The ticket price (${parseFloat(String(ticketPrice)).toFixed(2)} EGP) has been deducted from your wallet.`,
+        })
+        .returning();
+
+      if (io && notif) {
+        io.to(SOCKET_ROOMS.PASSENGER(passengerUserId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+          id:       String(notif.id),
+          category: "trip",
+          title:    notif.title,
+          body:     notif.body,
+          time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+        });
+      }
+    }
+  } catch (err) {
+    // Non-fatal — still return the updated booking even if offence tracking fails
+    console.error("No-show offence tracking failed:", err);
+  }
+
   res.json(fmtBooking(updated as Record<string, unknown>));
 });
 
