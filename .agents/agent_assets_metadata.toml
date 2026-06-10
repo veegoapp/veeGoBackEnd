@@ -48,3 +48,9 @@ id = "8dqtN9wNiC_s2iq6c4RYf"
 uri = "file://VeeGo_Shuttle_System_Audit_Report.md"
 type = "text"
 title = "VeeGo Shuttle System — Backend Audit Report"
+
+[[outputs]]
+id = "2wUOqcvtItcCgqgnfIdmP"
+uri = "file://VeeGo_Shuttle_Deep_Audit.md"
+type = "text"
+title = "VeeGo Shuttle Service — Deep Audit Report"
