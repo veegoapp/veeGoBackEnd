@@ -227,6 +227,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.buses"), href: "/buses", icon: Bus },
             { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
             { title: t("nav.shuttleTrips"), href: "/shuttle-trips", icon: Navigation },
+            { title: "Cash Debts", href: "/shuttle/cash-debts", icon: Wallet },
+            { title: "Offences", href: "/shuttle/offences", icon: Shield },
           ],
         },
         {
