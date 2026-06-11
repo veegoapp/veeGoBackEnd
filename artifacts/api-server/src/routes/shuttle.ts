@@ -3,6 +3,7 @@ import {
   db, routesTable, stationsTable, tripsTable, driversTable,
   busesTable, usersTable, bookingsTable, driverShuttleBookingsTable,
   walletTransactionsTable, notificationsTable, driverEarningsTable, shuttleRatingsTable,
+  shuttleOffencesTable,
 } from "@workspace/db";
 import { eq, sql, and, inArray, asc, gte, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
@@ -997,6 +998,47 @@ router.delete("/shuttle/bookings/:id", authenticate, requireRole("user"), async 
   }
 
   res.json({ ok: true, bookingId, refunded: isFullRefund });
+});
+
+// ─── GET /shuttle/my-debt ──────────────────────────────────────────────────────
+// Returns the authenticated passenger's current cash debt (negative wallet
+// balance) and how many shuttle no-show offences they have on record.
+router.get("/shuttle/my-debt", authenticate, requireRole("user"), async (req, res): Promise<void> => {
+  const userId = (req as unknown as { user: { id: number } }).user.id;
+
+  const [userRow, offenceRow] = await Promise.all([
+    db
+      .select({ walletBalance: usersTable.walletBalance })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId))
+      .then((rows) => rows[0]),
+
+    db
+      .select({ offenceCount: shuttleOffencesTable.offenceCount })
+      .from(shuttleOffencesTable)
+      .where(
+        and(
+          eq(shuttleOffencesTable.userId, userId),
+          eq(shuttleOffencesTable.actorType, "passenger"),
+        ),
+      )
+      .then((rows) => rows[0]),
+  ]);
+
+  if (!userRow) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const balance = parseFloat(userRow.walletBalance as string);
+  const offenceCount = offenceRow?.offenceCount ?? 0;
+
+  if (balance >= 0) {
+    res.json({ hasDebt: false, debtAmount: 0, offenceCount });
+    return;
+  }
+
+  res.json({ hasDebt: true, debtAmount: Math.abs(balance), offenceCount });
 });
 
 export default router;
