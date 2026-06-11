@@ -1,0 +1,78 @@
+You are a senior backend engineer working on the VeeGo shuttle system.
+Phases 1, 2, and 3 are already done. I need you to implement Phase 4 only.
+Do not touch anything outside the scope below.
+Fixes Required
+Fix 1 — Rating System (After Trip Completes)
+What to do:
+When a trip status changes to completed, send a push notification to every passenger on that trip asking them to rate their driver (1–5 stars).
+Send a push notification to the driver asking them to rate each passenger (1–5 stars).
+Add a new endpoint: POST /shuttle/ratings with body: { tripId, rateeId, stars } (stars must be 1–5).
+Rules:
+A passenger can only rate the driver of their trip.
+A driver can only rate passengers who were on their trip and were marked as boarded (not absent).
+Each person can only submit one rating per trip — if they try again return HTTP 400 "Already rated."
+Store ratings in a new shuttle_ratings table: id, tripId, raterId, rateeId, stars, createdAt.
+After each new rating, recalculate the ratee's average rating and update it on their user record.
+Notification text:
+To passenger: "How was your trip? Rate your driver." (opens rating screen for that trip)
+To driver: "Rate your passengers for today's trip." (opens rating screen for that trip)
+Fix 2 — Passenger Trip History (bookings.ts)
+What to do:
+Add a new endpoint: GET /shuttle/my-trips (authenticated passenger only).
+Returns a paginated list of all shuttle trips the passenger has booked, sorted by date descending.
+Each item includes: tripId, routeName, date, departureTime, driverName, driverRating, status, ticketPrice, paymentStatus, passengerRating (the rating the passenger gave, if any).
+Pagination: query params page (default 1) and limit (default 10).
+Fix 3 — Driver Trip History (shuttleBookings.ts)
+What to do:
+Add a new endpoint: GET /shuttle/driver/my-trips (authenticated driver only).
+Returns a paginated list of all shuttle trips the driver operated, sorted by date descending.
+Each item includes: tripId, routeName, date, departureTime, totalPassengers, boardedPassengers, absentPassengers, earnings, status.
+Pagination: query params page (default 1) and limit (default 10).
+Fix 4 — Passenger Cancel with Refund Logic (bookings.ts)
+What to do:
+Add a new endpoint: DELETE /shuttle/bookings/:id (authenticated passenger only).
+Rules:
+Passenger can only cancel their own booking.
+If the trip departure is more than 12 hours away → full wallet refund.
+If the trip departure is 12 hours or less away → no refund, send notification "Cancellation too late — no refund issued."
+After cancel: restore 1 available seat on the trip, recalculate trip status only if trip is not already active (same guard as Phase 2 Fix 3).
+Send notification to passenger confirming cancellation and whether a refund was issued.
+Fix 5 — Trip Full Notification (bookings.ts)
+What to do:
+When a passenger tries to book a trip that has 0 available seats, return HTTP 400 with message: "This trip is fully booked."
+This is likely already partially handled — make sure the response message is exactly this string so the passenger app can detect it and show a friendly screen.
+Fix 6 — Booking Confirmation Ticket Notification (bookings.ts)
+What to do:
+After a passenger successfully books a shuttle trip, send a push notification (not email, not SMS — push notification only, the kind that appears in the notification tray on the phone).
+Notification title: "Booking Confirmed ✓"
+Notification body must include: route name, date, departure time, pickup station name, ticket price.
+This notification should be stored in the passenger's in-app notification list so they can view it later from the notifications screen.
+Fix 7 — Invite Friends Notification When Trip is Under-Booked (shuttle-job.ts)
+What to do:
+In the existing background job that monitors trip passenger counts:
+If a trip has less than the minimum required passengers AND the trip departure is more than 10 hours away (not yet in the cancel window):
+Send a push notification to every passenger already booked on that trip.
+Notification title: "Help fill your trip!"
+Notification body: "Your trip on [date] at [time] still needs more passengers. Share it with friends to make sure it runs!"
+Include a deep_link in the notification payload pointing to the trip booking screen: veego://shuttle/trip/{tripId}.
+This notification should only fire once per trip per day — do not spam passengers every 15 minutes.
+Output Required
+Show only the changed or new code sections.
+Clearly label which file and which lines each change applies to.
+For the new shuttle_ratings table, show the migration file.
+After all fixes, generate a .md report file named phase4_mobile_report.md containing:
+Report Structure (phase4_mobile_report.md)
+Phase 4 — Mobile Apps Impact Report
+Passenger App
+List every new or changed endpoint and notification in Phase 4:
+Endpoint or notification name
+When to call it or when it fires
+Full request/response shape
+What the passenger app should do with it
+Driver App
+List every new or changed endpoint and notification in Phase 4:
+Endpoint or notification name
+When to call it or when it fires
+Full request/response shape
+What the driver app should do with it
+Only include changes from Phase 4. Do not include previous phases.

@@ -674,6 +674,69 @@ router.patch("/driver/trips/:id/complete", authenticate, requireRole("driver"), 
     status: "confirmed",
   });
 
+  // Fix 1: Send post-trip rating request notifications (non-fatal).
+  // Passengers who boarded/completed → prompt to rate the driver.
+  // Driver (req.user!) → prompt to rate each passenger.
+  try {
+    const io = getIO();
+
+    const passengersToRate = await db
+      .select({ userId: bookingsTable.userId })
+      .from(bookingsTable)
+      .where(and(
+        eq(bookingsTable.tripId, tripId),
+        inArray(bookingsTable.status, ["boarded", "completed"]),
+      ));
+
+    // Notify passengers to rate driver
+    for (const { userId } of passengersToRate) {
+      const [notif] = await db
+        .insert(notificationsTable)
+        .values({
+          userId,
+          title: "How was your trip?",
+          body:  `Your shuttle trip has ended. Please rate your driver (1–5 stars). Trip #${tripId}.`,
+        })
+        .returning();
+
+      if (io && notif) {
+        io.to(SOCKET_ROOMS.PASSENGER(userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+          id:       String(notif.id),
+          category: "rating",
+          title:    notif.title,
+          body:     notif.body,
+          tripId,
+          time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+        });
+      }
+    }
+
+    // Notify driver to rate passengers
+    if (passengersToRate.length > 0) {
+      const [driverNotif] = await db
+        .insert(notificationsTable)
+        .values({
+          userId: req.user!.id,
+          title:  "Rate your passengers",
+          body:   `Trip #${tripId} is complete. You can now rate your ${passengersToRate.length} passenger${passengersToRate.length !== 1 ? "s" : ""}.`,
+        })
+        .returning();
+
+      if (io && driverNotif) {
+        io.to(SOCKET_ROOMS.DRIVER(req.user!.id)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+          id:       String(driverNotif.id),
+          category: "rating",
+          title:    driverNotif.title,
+          body:     driverNotif.body,
+          tripId,
+          time:     driverNotif.createdAt instanceof Date ? driverNotif.createdAt.toISOString() : String(driverNotif.createdAt),
+        });
+      }
+    }
+  } catch (err) {
+    // Rating notifications are non-fatal — trip completion is already saved above
+  }
+
   res.json(fmtTrip(updated as Record<string, unknown>));
 });
 

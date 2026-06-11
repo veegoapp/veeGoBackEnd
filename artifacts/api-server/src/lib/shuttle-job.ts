@@ -17,6 +17,10 @@ import { logger } from "./logger";
 const SHUTTLE_LOOKAHEAD_HOURS = 10;
 const JOB_INTERVAL_MS = 15 * 60 * 1000;
 
+// Fix 7: tracks the last date (YYYY-MM-DD) we sent "invite friends" notifications per trip.
+// Resets on process restart — acceptable; prevents multiple firings within a single day.
+const inviteNotifiedDates = new Map<number, string>();
+
 export async function runShuttleStatusJob(): Promise<void> {
   const now = new Date();
   const cutoff = new Date(now.getTime() + SHUTTLE_LOOKAHEAD_HOURS * 60 * 60 * 1000);
@@ -103,6 +107,114 @@ export async function runShuttleStatusJob(): Promise<void> {
   }
 
   logger.info({ cancelled: toCancel.length, activated: toActivate.length }, "Shuttle status job completed");
+
+  // Fix 7: Notify under-booked passengers on trips that are still > 10 h away
+  await runUnderBookedNotificationJob(now).catch((err) =>
+    logger.error({ err }, "Under-booked notification job failed"),
+  );
+}
+
+// ─── Fix 7: Invite-friends notifications ──────────────────────────────────────
+// Runs after each status-job pass. Looks at scheduled/waiting_driver trips
+// departing between now+10 h and now+48 h that are still under the minimum.
+// Emits once per trip per calendar day (guarded by inviteNotifiedDates Map).
+async function runUnderBookedNotificationJob(now: Date): Promise<void> {
+  const from10h = new Date(now.getTime() + SHUTTLE_LOOKAHEAD_HOURS * 60 * 60 * 1000);
+  const to48h   = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+  const todayStr = now.toISOString().split("T")[0]!;
+
+  const trips = await db
+    .select({
+      id:            tripsTable.id,
+      departureTime: tripsTable.departureTime,
+      vehicleType:   tripsTable.vehicleType,
+    })
+    .from(tripsTable)
+    .where(
+      and(
+        inArray(tripsTable.status, ["scheduled", "waiting_driver"]),
+        gte(tripsTable.departureTime, from10h),
+        lt(tripsTable.departureTime, to48h),
+      ),
+    );
+
+  if (trips.length === 0) return;
+
+  const tripIds = trips.map((t) => t.id);
+
+  const bookedCounts = await db
+    .select({
+      tripId:      bookingsTable.tripId,
+      bookedSeats: sql<number>`coalesce(sum(${bookingsTable.seatCount}), 0)::int`,
+    })
+    .from(bookingsTable)
+    .where(
+      and(
+        inArray(bookingsTable.tripId, tripIds),
+        inArray(bookingsTable.status, ["pending", "confirmed"]),
+      ),
+    )
+    .groupBy(bookingsTable.tripId);
+
+  const bookedMap = new Map(bookedCounts.map((b) => [b.tripId, b.bookedSeats]));
+  const io        = getIO();
+
+  for (const trip of trips) {
+    const booked    = bookedMap.get(trip.id) ?? 0;
+    const vt        = (trip.vehicleType ?? "hiace") as "hiace" | "minibus";
+    const threshold = VEHICLE_MIN_THRESHOLD[vt];
+
+    if (booked >= threshold) continue;
+
+    const lastNotified = inviteNotifiedDates.get(trip.id);
+    if (lastNotified === todayStr) continue;
+
+    const passengers = await db
+      .select({ userId: bookingsTable.userId })
+      .from(bookingsTable)
+      .where(and(
+        eq(bookingsTable.tripId, trip.id),
+        inArray(bookingsTable.status, ["pending", "confirmed"]),
+      ));
+
+    if (passengers.length === 0) continue;
+
+    const deepLink = `veego://shuttle/trip/${trip.id}`;
+    const dateStr  = trip.departureTime.toLocaleDateString("en-GB", {
+      day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Africa/Cairo",
+    });
+    const timeStr = trip.departureTime.toLocaleTimeString("en-GB", {
+      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Africa/Cairo",
+    });
+
+    for (const { userId } of passengers) {
+      const [notif] = await db
+        .insert(notificationsTable)
+        .values({
+          userId,
+          title: "Help fill your trip!",
+          body:  `Your trip on ${dateStr} at ${timeStr} still needs more passengers. Share it with friends to make sure it runs!`,
+        })
+        .returning();
+
+      if (io && notif) {
+        io.to(SOCKET_ROOMS.PASSENGER(userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+          id:        String(notif.id),
+          category:  "trip",
+          title:     notif.title,
+          body:      notif.body,
+          deep_link: deepLink,
+          time:      notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+        });
+      }
+    }
+
+    inviteNotifiedDates.set(trip.id, todayStr);
+    logger.info(
+      { tripId: trip.id, booked, threshold, passengersNotified: passengers.length },
+      "Under-booked invite notifications sent",
+    );
+  }
 }
 
 async function notifyDriver(driverId: number, tripId: number): Promise<void> {

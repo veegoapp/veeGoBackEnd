@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable, paymentsTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD } from "@workspace/db";
-import { eq, sql, and } from "drizzle-orm";
+import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable, paymentsTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD, notificationsTable, routesTable, stationsTable } from "@workspace/db";
+import { eq, sql, and, asc } from "drizzle-orm";
+import { getIO } from "../socket";
+import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
   ListBookingsQueryParams,
@@ -106,7 +108,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       return { error: "Trip is not available for booking", status: 400 };
     }
     if (tripRow.available_seats < seatCount) {
-      return { error: "Not enough available seats — this trip is fully booked", status: 400 };
+      return { error: "This trip is fully booked.", status: 400 };
     }
 
     // Derive capacity thresholds from vehicle type stored on the trip
@@ -224,6 +226,68 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
   const availableSeats = totalSeats - totalBooked;
   const shuttleStatus  = totalBooked >= minRequired ? "active" : "open";
   const needed         = Math.max(0, minRequired - totalBooked);
+
+  // Fix 6: Send booking confirmation notification to the passenger (non-fatal)
+  try {
+    const rawBooking = result.booking as { id: number; userId: number; tripId: number; totalPrice: string };
+
+    const [tripMeta] = await db
+      .select({ departureTime: tripsTable.departureTime, routeId: tripsTable.routeId })
+      .from(tripsTable)
+      .where(eq(tripsTable.id, rawBooking.tripId));
+
+    let routeName     = "shuttle";
+    let pickupStation = "";
+    let departureFmt  = "";
+
+    if (tripMeta) {
+      const [routeRow, firstStation] = await Promise.all([
+        db.select({ name: routesTable.name }).from(routesTable).where(eq(routesTable.id, tripMeta.routeId)),
+        db.select({ name: stationsTable.name }).from(stationsTable)
+          .where(eq(stationsTable.routeId, tripMeta.routeId))
+          .orderBy(asc(stationsTable.order))
+          .limit(1),
+      ]);
+
+      routeName     = routeRow[0]?.name ?? routeName;
+      pickupStation = firstStation[0]?.name ?? "";
+      departureFmt  = tripMeta.departureTime.toLocaleString("en-US", {
+        timeZone: "Africa/Cairo",
+        year:     "numeric", month: "short", day: "numeric",
+        hour:     "2-digit", minute: "2-digit", hour12: false,
+      });
+    }
+
+    const priceStr = parseFloat(String(rawBooking.totalPrice)).toFixed(2);
+    const bodyParts = [
+      `Route: ${routeName}`,
+      departureFmt  ? `Date/Time: ${departureFmt}` : "",
+      pickupStation ? `Pickup: ${pickupStation}`   : "",
+      `Price: ${priceStr} EGP`,
+    ].filter(Boolean);
+
+    const [notif] = await db
+      .insert(notificationsTable)
+      .values({
+        userId: rawBooking.userId,
+        title:  "Booking Confirmed ✓",
+        body:   bodyParts.join(" | "),
+      })
+      .returning();
+
+    const io = getIO();
+    if (io && notif) {
+      io.to(SOCKET_ROOMS.PASSENGER(rawBooking.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+        id:       String(notif.id),
+        category: "booking",
+        title:    notif.title,
+        body:     notif.body,
+        time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+      });
+    }
+  } catch (notifErr) {
+    console.error("Booking confirmation notification failed:", notifErr);
+  }
 
   res.status(201).json({
     ...booking,

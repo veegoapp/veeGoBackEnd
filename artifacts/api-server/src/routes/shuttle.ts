@@ -2,9 +2,10 @@ import { Router } from "express";
 import {
   db, routesTable, stationsTable, tripsTable, driversTable,
   busesTable, usersTable, bookingsTable, driverShuttleBookingsTable,
+  walletTransactionsTable, notificationsTable, driverEarningsTable, shuttleRatingsTable,
 } from "@workspace/db";
-import { eq, sql, and, inArray, asc, gte } from "drizzle-orm";
-import { authenticate } from "../middlewares/auth";
+import { eq, sql, and, inArray, asc, gte, desc } from "drizzle-orm";
+import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 
@@ -614,6 +615,388 @@ router.post("/shuttle/bookings/:id/board", authenticate, async (req, res): Promi
   }
 
   res.json({ ok: true, booking: updated, timestamp });
+});
+
+// ─── POST /shuttle/ratings ─────────────────────────────────────────────────────
+// Fix 1: Rate after trip — passenger rates driver; driver rates boarded passengers.
+// One rating per (tripId, raterId) enforced by uniqueIndex + pre-check.
+router.post("/shuttle/ratings", authenticate, async (req, res): Promise<void> => {
+  const { tripId, rateeId, stars } = req.body ?? {};
+
+  if (!Number.isInteger(tripId) || tripId <= 0) {
+    res.status(400).json({ error: "tripId must be a positive integer" }); return;
+  }
+  if (!Number.isInteger(rateeId) || rateeId <= 0) {
+    res.status(400).json({ error: "rateeId must be a positive integer" }); return;
+  }
+  if (!Number.isInteger(stars) || stars < 1 || stars > 5) {
+    res.status(400).json({ error: "stars must be an integer between 1 and 5" }); return;
+  }
+
+  const raterId  = req.user!.id;
+  const userRole = req.user!.role;
+
+  const [existing] = await db
+    .select({ id: shuttleRatingsTable.id })
+    .from(shuttleRatingsTable)
+    .where(and(eq(shuttleRatingsTable.tripId, tripId), eq(shuttleRatingsTable.raterId, raterId)));
+
+  if (existing) { res.status(400).json({ error: "Already rated." }); return; }
+
+  const [trip] = await db
+    .select({ id: tripsTable.id, driverId: tripsTable.driverId })
+    .from(tripsTable)
+    .where(eq(tripsTable.id, tripId));
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  if (userRole === "user") {
+    if (!trip.driverId) { res.status(400).json({ error: "No driver assigned to this trip" }); return; }
+
+    const [driverRow] = await db
+      .select({ userId: driversTable.userId })
+      .from(driversTable)
+      .where(eq(driversTable.id, trip.driverId));
+
+    if (!driverRow || driverRow.userId !== rateeId) {
+      res.status(403).json({ error: "You can only rate the driver of your trip" }); return;
+    }
+
+    const [booking] = await db
+      .select({ id: bookingsTable.id })
+      .from(bookingsTable)
+      .where(and(eq(bookingsTable.tripId, tripId), eq(bookingsTable.userId, raterId)));
+
+    if (!booking) { res.status(403).json({ error: "You were not a passenger on this trip" }); return; }
+
+  } else if (userRole === "driver") {
+    const [driverRow] = await db
+      .select({ id: driversTable.id })
+      .from(driversTable)
+      .where(eq(driversTable.userId, raterId));
+
+    if (!driverRow || trip.driverId !== driverRow.id) {
+      res.status(403).json({ error: "You are not the driver of this trip" }); return;
+    }
+
+    const [booking] = await db
+      .select({ id: bookingsTable.id })
+      .from(bookingsTable)
+      .where(and(
+        eq(bookingsTable.tripId, tripId),
+        eq(bookingsTable.userId, rateeId),
+        inArray(bookingsTable.status, ["boarded", "completed"]),
+      ));
+
+    if (!booking) {
+      res.status(403).json({ error: "You can only rate passengers who boarded your trip" }); return;
+    }
+  } else {
+    res.status(403).json({ error: "Only passengers and drivers can submit shuttle ratings" }); return;
+  }
+
+  const [rating] = await db
+    .insert(shuttleRatingsTable)
+    .values({ tripId, raterId, rateeId, stars })
+    .returning();
+
+  // When a passenger rates the driver, recalculate the driver's average rating.
+  // Passenger records have no aggregate rating column on usersTable.
+  if (userRole === "user" && trip.driverId) {
+    await db.execute(
+      sql`
+        UPDATE drivers
+        SET    rating = (
+          SELECT AVG(sr.stars)::numeric(3, 2)
+          FROM   shuttle_ratings sr
+          WHERE  sr.ratee_id = ${rateeId}
+        )
+        WHERE  id = ${trip.driverId}
+      `,
+    );
+  }
+
+  res.status(201).json({ ok: true, rating });
+});
+
+// ─── GET /shuttle/my-trips ─────────────────────────────────────────────────────
+// Fix 2: Paginated shuttle trip history for the authenticated passenger.
+router.get("/shuttle/my-trips", authenticate, requireRole("user"), async (req, res): Promise<void> => {
+  const userId = req.user!.id;
+  const page   = Math.max(1, parseInt(String(req.query.page  ?? "1")));
+  const limit  = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "10"))));
+  const offset = (page - 1) * limit;
+
+  const [bookings, countRow] = await Promise.all([
+    db
+      .select({
+        bookingId:     bookingsTable.id,
+        tripId:        bookingsTable.tripId,
+        bookingStatus: bookingsTable.status,
+        paymentStatus: bookingsTable.paymentStatus,
+        totalPrice:    bookingsTable.totalPrice,
+        tripStatus:    tripsTable.status,
+        departureTime: tripsTable.departureTime,
+        routeId:       tripsTable.routeId,
+        driverId:      tripsTable.driverId,
+      })
+      .from(bookingsTable)
+      .innerJoin(tripsTable, eq(bookingsTable.tripId, tripsTable.id))
+      .where(eq(bookingsTable.userId, userId))
+      .orderBy(desc(tripsTable.departureTime))
+      .limit(limit)
+      .offset(offset),
+
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(bookingsTable)
+      .where(eq(bookingsTable.userId, userId)),
+  ]);
+
+  const total = countRow[0]?.count ?? 0;
+
+  if (bookings.length === 0) {
+    res.json({ data: [], total, page, limit }); return;
+  }
+
+  const tripIds   = [...new Set(bookings.map((b) => b.tripId))];
+  const routeIds  = [...new Set(bookings.map((b) => b.routeId))];
+  const driverIds = [...new Set(bookings.map((b) => b.driverId).filter(Boolean) as number[])];
+
+  const [routes, drivers, myRatings] = await Promise.all([
+    routeIds.length > 0
+      ? db.select({ id: routesTable.id, name: routesTable.name })
+          .from(routesTable).where(inArray(routesTable.id, routeIds))
+      : Promise.resolve([] as { id: number; name: string }[]),
+
+    driverIds.length > 0
+      ? db.select({ id: driversTable.id, name: driversTable.name, rating: driversTable.rating })
+          .from(driversTable).where(inArray(driversTable.id, driverIds))
+      : Promise.resolve([] as { id: number; name: string; rating: string }[]),
+
+    tripIds.length > 0
+      ? db
+          .select({ tripId: shuttleRatingsTable.tripId, stars: shuttleRatingsTable.stars })
+          .from(shuttleRatingsTable)
+          .where(and(inArray(shuttleRatingsTable.tripId, tripIds), eq(shuttleRatingsTable.raterId, userId)))
+      : Promise.resolve([] as { tripId: number; stars: number }[]),
+  ]);
+
+  const routeMap  = new Map(routes.map((r) => [r.id, r.name]));
+  const driverMap = new Map(drivers.map((d) => [d.id, d]));
+  const ratingMap = new Map(myRatings.map((r) => [r.tripId, r.stars]));
+
+  const data = bookings.map((b) => ({
+    tripId:          b.tripId,
+    bookingId:       b.bookingId,
+    routeName:       routeMap.get(b.routeId) ?? null,
+    date:            b.departureTime.toISOString().split("T")[0],
+    departureTime:   b.departureTime.toISOString(),
+    driverName:      b.driverId ? (driverMap.get(b.driverId)?.name ?? null) : null,
+    driverRating:    b.driverId ? parseFloat(String(driverMap.get(b.driverId)?.rating ?? "0")) : null,
+    status:          b.bookingStatus,
+    ticketPrice:     parseFloat(String(b.totalPrice)),
+    paymentStatus:   b.paymentStatus,
+    passengerRating: ratingMap.get(b.tripId) ?? null,
+  }));
+
+  res.json({ data, total, page, limit });
+});
+
+// ─── GET /shuttle/driver/my-trips ──────────────────────────────────────────────
+// Fix 3: Paginated shuttle trip history for the authenticated driver.
+router.get("/shuttle/driver/my-trips", authenticate, requireRole("driver"), async (req, res): Promise<void> => {
+  const [driver] = await db
+    .select({ id: driversTable.id })
+    .from(driversTable)
+    .where(eq(driversTable.userId, req.user!.id));
+  if (!driver) { res.status(404).json({ error: "Driver profile not found" }); return; }
+
+  const page   = Math.max(1, parseInt(String(req.query.page  ?? "1")));
+  const limit  = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "10"))));
+  const offset = (page - 1) * limit;
+
+  const [trips, countRow] = await Promise.all([
+    db
+      .select({
+        id:            tripsTable.id,
+        status:        tripsTable.status,
+        departureTime: tripsTable.departureTime,
+        routeId:       tripsTable.routeId,
+      })
+      .from(tripsTable)
+      .where(eq(tripsTable.driverId, driver.id))
+      .orderBy(desc(tripsTable.departureTime))
+      .limit(limit)
+      .offset(offset),
+
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tripsTable)
+      .where(eq(tripsTable.driverId, driver.id)),
+  ]);
+
+  const total = countRow[0]?.count ?? 0;
+
+  if (trips.length === 0) {
+    res.json({ data: [], total, page, limit }); return;
+  }
+
+  const tripIds  = trips.map((t) => t.id);
+  const routeIds = [...new Set(trips.map((t) => t.routeId))];
+
+  const [routes, bookingStats, earningsRows] = await Promise.all([
+    routeIds.length > 0
+      ? db.select({ id: routesTable.id, name: routesTable.name })
+          .from(routesTable).where(inArray(routesTable.id, routeIds))
+      : Promise.resolve([] as { id: number; name: string }[]),
+
+    db
+      .select({
+        tripId:  bookingsTable.tripId,
+        total:   sql<number>`count(*)::int`,
+        boarded: sql<number>`count(*) filter (where ${bookingsTable.status} = 'boarded')::int`,
+        absent:  sql<number>`count(*) filter (where ${bookingsTable.status} = 'absent')::int`,
+      })
+      .from(bookingsTable)
+      .where(inArray(bookingsTable.tripId, tripIds))
+      .groupBy(bookingsTable.tripId),
+
+    db
+      .select({ tripId: driverEarningsTable.tripId, amount: driverEarningsTable.amount })
+      .from(driverEarningsTable)
+      .where(and(
+        eq(driverEarningsTable.driverId, driver.id),
+        inArray(driverEarningsTable.tripId, tripIds),
+      )),
+  ]);
+
+  const routeMap    = new Map(routes.map((r) => [r.id, r.name]));
+  const statsMap    = new Map(bookingStats.map((s) => [s.tripId, s]));
+  const earningsMap = new Map(earningsRows.map((e) => [e.tripId, parseFloat(String(e.amount))]));
+
+  const data = trips.map((t) => {
+    const stats = statsMap.get(t.id);
+    return {
+      tripId:            t.id,
+      routeName:         routeMap.get(t.routeId) ?? null,
+      date:              t.departureTime.toISOString().split("T")[0],
+      departureTime:     t.departureTime.toISOString(),
+      totalPassengers:   stats?.total   ?? 0,
+      boardedPassengers: stats?.boarded ?? 0,
+      absentPassengers:  stats?.absent  ?? 0,
+      earnings:          earningsMap.get(t.id) ?? 0,
+      status:            t.status,
+    };
+  });
+
+  res.json({ data, total, page, limit });
+});
+
+// ─── DELETE /shuttle/bookings/:id ──────────────────────────────────────────────
+// Fix 4: Passenger cancels their own shuttle booking.
+// > 12 h before departure → full wallet refund; ≤ 12 h → no refund.
+router.delete("/shuttle/bookings/:id", authenticate, requireRole("user"), async (req, res): Promise<void> => {
+  const bookingId = parseInt(req.params.id as string);
+  if (isNaN(bookingId)) { res.status(400).json({ error: "Invalid booking ID" }); return; }
+
+  const [booking] = await db
+    .select({
+      id:            bookingsTable.id,
+      userId:        bookingsTable.userId,
+      tripId:        bookingsTable.tripId,
+      status:        bookingsTable.status,
+      paymentStatus: bookingsTable.paymentStatus,
+      totalPrice:    bookingsTable.totalPrice,
+      seatCount:     bookingsTable.seatCount,
+    })
+    .from(bookingsTable)
+    .where(eq(bookingsTable.id, bookingId));
+
+  if (!booking) { res.status(404).json({ error: "Booking not found" }); return; }
+  if (booking.userId !== req.user!.id) {
+    res.status(403).json({ error: "You can only cancel your own bookings" }); return;
+  }
+  if (booking.status === "cancelled") {
+    res.status(400).json({ error: "Booking is already cancelled" }); return;
+  }
+  if (["boarded", "completed", "absent"].includes(booking.status)) {
+    res.status(400).json({ error: `Cannot cancel a booking with status '${booking.status}'` }); return;
+  }
+
+  const [trip] = await db
+    .select({ id: tripsTable.id, departureTime: tripsTable.departureTime, status: tripsTable.status })
+    .from(tripsTable)
+    .where(eq(tripsTable.id, booking.tripId));
+
+  if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
+
+  const now                 = new Date();
+  const hoursUntilDeparture = (trip.departureTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const isFullRefund        = hoursUntilDeparture > 12;
+
+  await db
+    .update(bookingsTable)
+    .set({ status: "cancelled", ...(isFullRefund ? { paymentStatus: "refunded" } : {}) })
+    .where(eq(bookingsTable.id, bookingId));
+
+  await db.execute(
+    sql`UPDATE trips SET available_seats = available_seats + ${booking.seatCount} WHERE id = ${booking.tripId}`,
+  );
+
+  const io = getIO();
+
+  if (isFullRefund && booking.paymentStatus === "paid") {
+    await db.execute(
+      sql`UPDATE users SET wallet_balance = wallet_balance + ${booking.totalPrice} WHERE id = ${booking.userId}`,
+    );
+
+    await db.insert(walletTransactionsTable).values({
+      userId:      booking.userId,
+      amount:      String(booking.totalPrice),
+      type:        "refund",
+      description: `Refund for shuttle booking #${booking.id} (trip #${booking.tripId}) — cancelled >12h before departure`,
+    });
+
+    const [notif] = await db
+      .insert(notificationsTable)
+      .values({
+        userId: booking.userId,
+        title:  "Booking Cancelled — Refund Issued",
+        body:   `Your shuttle booking (trip #${booking.tripId}) has been cancelled and ${parseFloat(String(booking.totalPrice)).toFixed(2)} EGP has been refunded to your wallet.`,
+      })
+      .returning();
+
+    if (io && notif) {
+      io.to(SOCKET_ROOMS.PASSENGER(booking.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+        id:       String(notif.id),
+        category: "booking",
+        title:    notif.title,
+        body:     notif.body,
+        time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+      });
+    }
+  } else {
+    const [notif] = await db
+      .insert(notificationsTable)
+      .values({
+        userId: booking.userId,
+        title:  "Booking Cancelled — No Refund",
+        body:   `Your shuttle booking (trip #${booking.tripId}) has been cancelled. No refund applies because the trip departs in less than 12 hours.`,
+      })
+      .returning();
+
+    if (io && notif) {
+      io.to(SOCKET_ROOMS.PASSENGER(booking.userId)).emit(SOCKET_EVENTS.NOTIFICATION_NEW, {
+        id:       String(notif.id),
+        category: "booking",
+        title:    notif.title,
+        body:     notif.body,
+        time:     notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+      });
+    }
+  }
+
+  res.json({ ok: true, bookingId, refunded: isFullRefund });
 });
 
 export default router;
