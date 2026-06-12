@@ -1,12 +1,13 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable, ratingsTable, shuttleOffencesTable, walletTransactionsTable } from "@workspace/db";
+import { db, usersTable, driversTable, tripsTable, bookingsTable, driverEarningsTable, tripStationProgressTable, stationsTable, notificationsTable, tripEventsTable, busesTable, driverDocumentsTable, settingsTable, rideEventsTable, driverLocationsTable, ratingsTable, shuttleOffencesTable, walletTransactionsTable, ridesTable, driverDuplicateAlertsTable } from "@workspace/db";
 import { jobQueue } from "../lib/jobQueue";
 import { eq, and, or, desc, sql, gte, lte, inArray } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { signAccessToken, signRefreshToken } from "../lib/jwt";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
+import { checkCriminalRecordThreshold } from "../lib/criminal-record";
 import { z } from "zod";
 
 const router = Router();
@@ -105,6 +106,40 @@ router.post("/driver/auth/register", async (req, res): Promise<void> => {
       licenseNumber: licenseNumber ?? null,
       nationalId: nationalId ?? null,
     }).returning();
+
+    // Fix 3: Multi-account fraud detection — check for nationalId duplicates (non-fatal, non-blocking)
+    if (nationalId) {
+      try {
+        const existingDrivers = await db
+          .select({ id: driversTable.id })
+          .from(driversTable)
+          .where(and(
+            eq(driversTable.nationalId, nationalId),
+            sql`${driversTable.id} != ${driver.id}`,
+          ));
+
+        for (const existing of existingDrivers) {
+          await db.insert(driverDuplicateAlertsTable).values({
+            newDriverId: driver.id,
+            existingDriverId: existing.id,
+            matchType: "national_id",
+          });
+        }
+
+        if (existingDrivers.length > 0) {
+          const io = getIO();
+          if (io) {
+            io.to("admin:room").emit("admin:duplicate_driver_alert", {
+              newDriverId: driver.id,
+              matchCount: existingDrivers.length,
+              matchType: "national_id",
+            });
+          }
+        }
+      } catch (_dupErr) {
+        // Duplicate detection is non-fatal; registration already succeeded
+      }
+    }
 
     const payload = { userId: user.id, role: user.role };
     const accessToken = signAccessToken(payload);
@@ -673,6 +708,13 @@ router.patch("/driver/trips/:id/complete", authenticate, requireRole("driver"), 
     amount: driverCut.toFixed(2),
     status: "confirmed",
   });
+
+  // Fix 2: Criminal record enforcement after threshold trips/rides (non-fatal)
+  try {
+    await checkCriminalRecordThreshold(driver.id, req.user!.id);
+  } catch (_crimErr) {
+    // Non-fatal; trip completion already saved
+  }
 
   // Fix 1: Send post-trip rating request notifications (non-fatal).
   // Passengers who boarded/completed → prompt to rate the driver.

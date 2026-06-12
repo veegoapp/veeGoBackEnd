@@ -36,3 +36,5 @@ export * from "./routeSchedules";
 export * from "./driverShuttleBookings";
 export * from "./shuttleOffences";
 export * from "./shuttleRatings";
+export * from "./shuttleVehicleTypes";
+export * from "./driverDuplicateAlerts";

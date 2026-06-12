@@ -34,6 +34,7 @@ import checkinRouter from "./checkin";
 import trackRouter from "./track";
 import schedulesRouter from "./schedules";
 import shuttleTripsAdminRouter from "./shuttleTripsAdmin";
+import shuttleVehicleTypesRouter from "./shuttleVehicleTypes";
 
 const router: IRouter = Router();
 
@@ -72,5 +73,6 @@ router.use(checkinRouter);
 router.use(trackRouter);
 router.use(schedulesRouter);
 router.use(shuttleTripsAdminRouter);
+router.use(shuttleVehicleTypesRouter);
 
 export default router;

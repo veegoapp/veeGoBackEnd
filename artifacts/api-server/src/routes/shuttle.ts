@@ -3,7 +3,7 @@ import {
   db, routesTable, stationsTable, tripsTable, driversTable,
   busesTable, usersTable, bookingsTable, driverShuttleBookingsTable,
   walletTransactionsTable, notificationsTable, driverEarningsTable, shuttleRatingsTable,
-  shuttleOffencesTable,
+  shuttleOffencesTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD,
 } from "@workspace/db";
 import { eq, sql, and, inArray, asc, gte, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
@@ -17,8 +17,6 @@ const router = Router();
 // Prevents double-starting the same station's timer within a single boarding session.
 const stationTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-const SHUTTLE_TOTAL_SEATS = 14;
-const SHUTTLE_MIN_REQUIRED = 7;
 const CAIRO_TZ = "Africa/Cairo";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -30,16 +28,19 @@ function shuttleStatus(dbStatus: string): "open" | "active" | "cancelled" {
 }
 
 function formatShuttleTrip(trip: Record<string, unknown>, bookedSeats: number) {
+  const vType = (String(trip.vehicleType ?? trip.vehicle_type ?? "hiace")) as "hiace" | "minibus";
+  const totalSeats = (VEHICLE_CAPACITY[vType] ?? VEHICLE_CAPACITY["hiace"]) as number;
+  const minRequired = (VEHICLE_MIN_THRESHOLD[vType] ?? VEHICLE_MIN_THRESHOLD["hiace"]) as number;
   const status = shuttleStatus(String(trip.status ?? "scheduled"));
-  const available = SHUTTLE_TOTAL_SEATS - bookedSeats;
-  const needed = Math.max(0, SHUTTLE_MIN_REQUIRED - bookedSeats);
+  const available = totalSeats - bookedSeats;
+  const needed = Math.max(0, minRequired - bookedSeats);
   return {
     ...trip,
     price: typeof trip.price === "string" ? parseFloat(trip.price) : trip.price,
-    totalSeats: SHUTTLE_TOTAL_SEATS,
+    totalSeats,
     availableSeats: available,
     bookedSeats,
-    minRequired: SHUTTLE_MIN_REQUIRED,
+    minRequired,
     shuttleStatus: status,
     message:
       status === "active"
@@ -134,6 +135,7 @@ router.get("/shuttle/lines", authenticate, async (req, res): Promise<void> => {
       availableSeats: tripsTable.availableSeats,
       totalSeats: tripsTable.totalSeats,
       status: tripsTable.status,
+      vehicleType: tripsTable.vehicleType,
     })
     .from(tripsTable)
     .where(
@@ -260,8 +262,8 @@ router.get("/shuttle/lines", authenticate, async (req, res): Promise<void> => {
       totalTrips,
       openTrips,
       activeTrips,
-      totalSeats: SHUTTLE_TOTAL_SEATS,
-      minRequired: SHUTTLE_MIN_REQUIRED,
+      totalSeats: (VEHICLE_CAPACITY[(routeTrips[0]?.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? VEHICLE_CAPACITY["hiace"]) as number,
+      minRequired: (VEHICLE_MIN_THRESHOLD[(routeTrips[0]?.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? VEHICLE_MIN_THRESHOLD["hiace"]) as number,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       upcomingWeekStart: nearestWeekStart,
@@ -400,6 +402,7 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
       totalSeats: tripsTable.totalSeats,
       price: tripsTable.price,
       scheduleId: tripsTable.scheduleId,
+      vehicleType: tripsTable.vehicleType,
     }).from(tripsTable)
       .where(and(
         eq(tripsTable.routeId, routeId),
@@ -441,8 +444,8 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
       stations,
       activeTrips: formattedTrips,
       stationCount: stations.length,
-      totalSeats: SHUTTLE_TOTAL_SEATS,
-      minRequired: SHUTTLE_MIN_REQUIRED,
+      totalSeats: (VEHICLE_CAPACITY[(upcomingTrips[0]?.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? VEHICLE_CAPACITY["hiace"]) as number,
+      minRequired: (VEHICLE_MIN_THRESHOLD[(upcomingTrips[0]?.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? VEHICLE_MIN_THRESHOLD["hiace"]) as number,
     },
   });
 });
@@ -453,7 +456,7 @@ router.get("/shuttle/trips/:id/passengers", authenticate, async (req, res): Prom
   if (isNaN(tripId)) { res.status(400).json({ error: "Invalid trip ID" }); return; }
 
   const [trip] = await db
-    .select({ id: tripsTable.id, status: tripsTable.status, routeId: tripsTable.routeId })
+    .select({ id: tripsTable.id, status: tripsTable.status, routeId: tripsTable.routeId, vehicleType: tripsTable.vehicleType, totalSeats: tripsTable.totalSeats })
     .from(tripsTable)
     .where(eq(tripsTable.id, tripId));
   if (!trip) { res.status(404).json({ error: "Trip not found" }); return; }
@@ -487,10 +490,10 @@ router.get("/shuttle/trips/:id/passengers", authenticate, async (req, res): Prom
     tripId,
     tripStatus: trip.status,
     shuttleStatus: shuttleStatus(trip.status),
-    totalSeats: SHUTTLE_TOTAL_SEATS,
+    totalSeats: (VEHICLE_CAPACITY[(trip.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? trip.totalSeats) as number,
     bookedSeats,
-    availableSeats: SHUTTLE_TOTAL_SEATS - bookedSeats,
-    minRequired: SHUTTLE_MIN_REQUIRED,
+    availableSeats: ((VEHICLE_CAPACITY[(trip.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? trip.totalSeats) as number) - bookedSeats,
+    minRequired: (VEHICLE_MIN_THRESHOLD[(trip.vehicleType as "hiace" | "minibus") ?? "hiace"] ?? VEHICLE_MIN_THRESHOLD["hiace"]) as number,
     data: bookings.map((b) => ({ ...b, totalPrice: parseFloat(b.totalPrice as string) })),
     total: bookings.length,
   });

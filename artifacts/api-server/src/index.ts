@@ -2,7 +2,7 @@ import http from "http";
 import app from "./app";
 import { initSocket } from "./socket";
 import { logger } from "./lib/logger";
-import { pool } from "@workspace/db";
+import { pool, db, ridePricingTable } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
 import { startShuttleJob } from "./lib/shuttle-job";
@@ -91,6 +91,19 @@ async function main() {
   await verifyDatabaseConnection();
   await verifyCoreTables();
   await seedSuperAdmin();
+  // Fix 4: Seed default delivery pricing if not already present
+  try {
+    await db.insert(ridePricingTable).values({
+      vehicleType: "delivery",
+      baseFare: "5.00",
+      perKmRate: "3.00",
+      perMinuteRate: "0.50",
+      minimumFare: "15.00",
+      isActive: true,
+    }).onConflictDoNothing();
+  } catch (_seedErr) {
+    // Non-fatal if delivery pricing already exists
+  }
   await registerDefaultHandlers();
   // Seed in-memory surge map from DB before the socket server starts accepting
   // connections — passengers receive an accurate snapshot immediately on connect.

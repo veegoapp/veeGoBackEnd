@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable, sosEventsTable, ridesTable } from "@workspace/db";
+import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable, sosEventsTable, ridesTable, driverDuplicateAlertsTable, driverDocumentsTable } from "@workspace/db";
+import { checkCriminalRecordThreshold } from "../lib/criminal-record";
 import { loadSetting, saveSetting } from "../lib/settings";
 import { cancelBookingsForTrip } from "../lib/shuttle-job";
 import { getAllSurgeStates } from "../lib/surge-pricing";
@@ -1527,6 +1528,121 @@ router.post("/admin/sos-events/:id/resolve", authenticate, requireRole("admin"),
     res.json({ data: updated });
   } catch {
     res.status(500).json({ error: "Failed to resolve SOS event" });
+  }
+});
+
+// ─── Fix 3: Duplicate Driver Alerts ─────────────────────────────────────────
+
+router.get("/admin/duplicate-alerts", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const { resolved, matchType, page = "1", limit = "20" } = req.query as Record<string, string>;
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 20));
+    const offset = (pageNum - 1) * limitNum;
+
+    const conditions: ReturnType<typeof eq>[] = [];
+    if (resolved === "true") conditions.push(sql`${driverDuplicateAlertsTable.resolvedAt} IS NOT NULL` as any);
+    if (resolved === "false") conditions.push(sql`${driverDuplicateAlertsTable.resolvedAt} IS NULL` as any);
+    if (matchType) conditions.push(eq(driverDuplicateAlertsTable.matchType, matchType as any));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [countResult, alerts] = await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` }).from(driverDuplicateAlertsTable).where(where),
+      db.select({
+        id: driverDuplicateAlertsTable.id,
+        matchType: driverDuplicateAlertsTable.matchType,
+        resolvedAt: driverDuplicateAlertsTable.resolvedAt,
+        resolvedBy: driverDuplicateAlertsTable.resolvedBy,
+        notes: driverDuplicateAlertsTable.notes,
+        createdAt: driverDuplicateAlertsTable.createdAt,
+        newDriverId: driverDuplicateAlertsTable.newDriverId,
+        existingDriverId: driverDuplicateAlertsTable.existingDriverId,
+      })
+        .from(driverDuplicateAlertsTable)
+        .where(where)
+        .orderBy(desc(driverDuplicateAlertsTable.createdAt))
+        .limit(limitNum)
+        .offset(offset),
+    ]);
+
+    res.json({ data: alerts, total: countResult[0]?.count ?? 0, page: pageNum, limit: limitNum });
+  } catch {
+    res.status(500).json({ error: "Failed to fetch duplicate alerts" });
+  }
+});
+
+router.patch("/admin/duplicate-alerts/:id/resolve", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const id = parseInt(req.params.id as string);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid alert ID" }); return; }
+
+    const { notes } = req.body as { notes?: string };
+    const adminId = req.user!.id;
+
+    const [existing] = await db.select().from(driverDuplicateAlertsTable).where(eq(driverDuplicateAlertsTable.id, id));
+    if (!existing) { res.status(404).json({ error: "Duplicate alert not found" }); return; }
+    if (existing.resolvedAt) { res.status(409).json({ error: "Alert already resolved" }); return; }
+
+    const [updated] = await db
+      .update(driverDuplicateAlertsTable)
+      .set({ resolvedAt: new Date(), resolvedBy: adminId, ...(notes !== undefined ? { notes } : {}) })
+      .where(eq(driverDuplicateAlertsTable.id, id))
+      .returning();
+
+    res.json({ data: updated });
+  } catch {
+    res.status(500).json({ error: "Failed to resolve duplicate alert" });
+  }
+});
+
+// ─── Fix 2: Admin — Manual Criminal Record Check ─────────────────────────────
+
+router.post("/admin/drivers/:id/check-criminal-record", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  try {
+    const driverId = parseInt(req.params.id as string);
+    if (isNaN(driverId)) { res.status(400).json({ error: "Invalid driver ID" }); return; }
+
+    const [driver] = await db.select({ id: driversTable.id, userId: driversTable.userId, status: driversTable.status })
+      .from(driversTable)
+      .where(eq(driversTable.id, driverId));
+    if (!driver) { res.status(404).json({ error: "Driver not found" }); return; }
+
+    const thresholdValue = await loadSetting("criminal_record_trip_threshold", "30");
+    const threshold = parseInt(thresholdValue) || 30;
+
+    const [tripCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(tripsTable)
+      .where(and(eq(tripsTable.driverId, driverId), eq(tripsTable.status, "completed")));
+    const [rideCount] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(ridesTable)
+      .where(and(eq(ridesTable.driverId, driverId), eq(ridesTable.status, "completed")));
+    const totalCompleted = (tripCount?.count ?? 0) + (rideCount?.count ?? 0);
+
+    const [approvedCriminalRecord] = await db
+      .select({ id: driverDocumentsTable.id })
+      .from(driverDocumentsTable)
+      .where(and(
+        eq(driverDocumentsTable.driverId, driverId),
+        eq(driverDocumentsTable.type, "criminal_record"),
+        eq(driverDocumentsTable.verificationStatus, "approved"),
+      ));
+
+    const needsRecord = totalCompleted >= threshold && !approvedCriminalRecord;
+    if (needsRecord && driver.status !== "suspended") {
+      await checkCriminalRecordThreshold(driver.id, driver.userId);
+    }
+
+    res.json({
+      driverId,
+      totalCompletedTripsAndRides: totalCompleted,
+      threshold,
+      hasCriminalRecordApproved: !!approvedCriminalRecord,
+      suspended: needsRecord,
+      alreadySuspended: driver.status === "suspended",
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to run criminal record check" });
   }
 });
 

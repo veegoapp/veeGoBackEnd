@@ -221,6 +221,48 @@ router.patch("/driver-documents/:id", authenticate, requireRole("admin"), async 
     }
   }
 
+  // Fix 2: Criminal record reactivation — if criminal_record just approved and driver is suspended
+  if (parsed.data.verificationStatus === "approved" && updated.type === "criminal_record") {
+    try {
+      const driverId = updated.driverId;
+      const [driver] = await db
+        .select({ id: driversTable.id, userId: driversTable.userId, status: driversTable.status })
+        .from(driversTable)
+        .where(eq(driversTable.id, driverId));
+
+      if (driver && driver.status === "suspended") {
+        await db.update(driversTable).set({ status: "offline" }).where(eq(driversTable.id, driver.id));
+
+        const [notif] = await db.insert(notificationsTable).values({
+          userId: driver.userId,
+          title: "Account Reactivated – Criminal Record Approved",
+          body: "Your criminal record certificate has been approved. Your account has been reactivated. You can now go online.",
+        }).returning();
+
+        const io = getIO();
+        if (io) {
+          io.to(`driver:${driver.userId}`).emit("driver:account:reactivated", {
+            driverId: driver.id,
+            userId: driver.userId,
+            message: "Criminal record approved. Account reactivated.",
+            reactivatedAt: new Date().toISOString(),
+          });
+          if (notif) {
+            io.to(`driver:${driver.userId}`).emit("notification:new", {
+              id: String(notif.id),
+              category: "activation",
+              title: notif.title,
+              body: notif.body,
+              time: notif.createdAt instanceof Date ? notif.createdAt.toISOString() : String(notif.createdAt),
+            });
+          }
+        }
+      }
+    } catch (_reactivErr) {
+      // Non-fatal; document update already saved
+    }
+  }
+
   res.json(updated);
 });
 

@@ -1,0 +1,204 @@
+You are working on the VeeGo backend (Node.js + Express + Drizzle ORM + PostgreSQL).
+
+This is a ride-hailing app. The Shuttle service is the first to launch.
+You have ONE job: complete 4 fixes in order. Do not move to the next fix until the current one is fully done and tested.
+
+After ALL 4 fixes, generate a file called `phase2_report.md`.
+
+---
+
+## FIX 1 — Vehicle Brand/Model System for Shuttle
+
+**Problem:**
+The shuttle accepts two vehicle types only: Toyota HiAce (microbus) and Mini Bus.
+Currently there is no structured brand/model/year system — just free text fields.
+
+**What to do:**
+
+1. Add a new table `shuttleVehicleTypes` to the database schema:
+   - `id` (serial, PK)
+   - `name` (text) — example: "Toyota HiAce", "Mini Bus"
+   - `type` (enum: `hiace` | `minibus`)
+   - `minYear` (integer) — minimum accepted manufacture year
+   - `capacity` (integer) — total seats (HiAce = 14, Mini Bus = 28)
+   - `minPassengers` (integer) — minimum passengers to activate trip (HiAce = 7, Mini Bus = 14)
+   - `isActive` (boolean, default true)
+   - `createdAt` (timestamp)
+
+2. Seed the table with the two default vehicle types:
+   - `{ name: "Toyota HiAce", type: "hiace", minYear: 2008, capacity: 14, minPassengers: 7 }`
+   - `{ name: "Mini Bus", type: "minibus", minYear: 2000, capacity: 28, minPassengers: 14 }`
+
+3. Add admin endpoints:
+   - `GET /api/admin/shuttle/vehicle-types` — list all shuttle vehicle types
+   - `POST /api/admin/shuttle/vehicle-types` — add a new vehicle type
+   - `PATCH /api/admin/shuttle/vehicle-types/:id` — edit a vehicle type (name, minYear, capacity, minPassengers, isActive)
+   - `DELETE /api/admin/shuttle/vehicle-types/:id` — soft delete (set isActive = false)
+
+4. Add a public endpoint (authenticated):
+   - `GET /api/shuttle/vehicle-types` — returns only active vehicle types (used during driver signup)
+
+5. In the `buses` table: add a foreign key column `vehicleTypeId` referencing `shuttleVehicleTypes.id`
+   - This replaces the current free-text approach
+
+6. Fix the hardcoded values:
+   - In `artifacts/api-server/src/routes/shuttle.ts`: remove hardcoded `SHUTTLE_TOTAL_SEATS=14` and `SHUTTLE_MIN_REQUIRED=7`
+   - Replace them with a DB lookup using the bus's `vehicleTypeId` to get `capacity` and `minPassengers`
+   - Apply the same fix in `artifacts/api-server/src/routes/bookings.ts`
+
+**Test:**
+- Seed data exists → `GET /api/shuttle/vehicle-types` returns 2 vehicle types
+- `PATCH /api/admin/shuttle/vehicle-types/1` with `{ minYear: 2010 }` → updates correctly
+- Booking a trip on a HiAce bus → system uses `capacity=14` and `minPassengers=7` from DB, not hardcoded
+
+---
+
+## FIX 2 — Criminal Record Enforcement After 30 Trips
+
+**Problem:**
+The criminal record document is optional during signup but must become mandatory after the driver completes 30 trips. Currently there is no enforcement of this rule anywhere in the backend.
+
+**What to do:**
+
+1. Create a background job (or hook inside trip/ride completion logic) that runs after every completed trip or ride:
+   - Count total completed trips + rides for this driver
+   - If count reaches 30 AND the driver has no approved `criminal_record` document:
+     - Set `drivers.status = 'suspended'` (soft suspension — different from admin ban)
+     - Create a notification for the driver:
+       Title: `"Action Required / إجراء مطلوب"`
+       Body: `"You have completed 30 trips. Please upload your criminal record to continue working. / لقد أكملت ٣٠ رحلة. يرجى رفع الفيش الجنائي للاستمرار في العمل."`
+     - Emit socket event `driver:criminal_record:required` to room `driver:{userId}`
+
+2. Add logic in `PATCH /api/driver-documents/:id`:
+   - When a `criminal_record` document is approved by admin AND the driver's status is `suspended` due to this rule:
+     - Automatically reactivate: set `drivers.status = 'active'`
+     - Notify driver: `"Criminal record approved. Your account is now active again."` / `"تمت الموافقة على الفيش الجنائي. حسابك نشط مجدداً."`
+     - Emit socket event `driver:account:reactivated` to `driver:{userId}`
+
+3. Add an admin endpoint to check and manually trigger this check:
+   - `POST /api/admin/drivers/:id/check-criminal-record` — manually checks if a driver needs to submit criminal record and applies the suspension if needed
+
+4. Store the threshold in the `settings` table with key `criminal_record_trip_threshold` (default: 30) so it can be changed from admin dashboard
+
+**Test:**
+- Driver with 29 completed trips + no criminal record → no suspension
+- Driver completes 30th trip + no criminal record → suspended + notified
+- Admin approves criminal record for suspended driver → reactivated automatically
+
+---
+
+## FIX 3 — Multi-Account / Multi-Vehicle Fraud Detection
+
+**Problem:**
+If a driver registers two accounts using the same national ID, phone number, or vehicle license — the system accepts both with no alert. Admin has no way to know.
+
+**What to do:**
+
+1. In `POST /api/driver/auth/register`:
+   - After receiving registration data, before creating the account, check for existing records with the same:
+     - Phone number (in `users` table)
+     - National ID (in `drivers` table — `nationalId` field)
+   - If a match is found: still allow registration (don't block) BUT flag it immediately
+
+2. Create a new table `driverDuplicateAlerts`:
+   - `id` (serial, PK)
+   - `newDriverId` (integer, FK → drivers)
+   - `existingDriverId` (integer, FK → drivers)
+   - `matchType` (enum: `phone` | `national_id` | `vehicle_license`)
+   - `resolvedAt` (timestamp, nullable)
+   - `resolvedBy` (integer, FK → users, nullable)
+   - `notes` (text, nullable)
+   - `createdAt` (timestamp)
+
+3. After registration, if any match found:
+   - Insert a record into `driverDuplicateAlerts` for each match found
+   - Create an admin notification: `"Duplicate driver detected"` / `"تم اكتشاف سائق مكرر"` with details
+   - Emit socket event `admin:duplicate:driver` to `admin:room`
+
+4. In `POST /api/driver/me/documents` and `POST /api/driver-documents/upload/:driverId`:
+   - When a `vehicle_license_front` or `vehicle_license_back` document is uploaded, check if the same vehicle plate/license appears in other driver documents
+   - If match found: insert `driverDuplicateAlerts` with `matchType: 'vehicle_license'`
+
+5. Add admin endpoints:
+   - `GET /api/admin/duplicate-alerts` — list all unresolved duplicate alerts with full driver details
+   - `PATCH /api/admin/duplicate-alerts/:id/resolve` — mark as resolved with optional notes
+
+6. In the driver detail view endpoint `GET /api/admin/drivers/:id`:
+   - Add a field `duplicateAlerts` in the response showing any alerts linked to this driver
+
+**Test:**
+- Register driver A with phone 01012345678
+- Register driver B with same phone 01012345678 → both registered, but alert created + admin notified
+- `GET /api/admin/duplicate-alerts` → shows the alert with both driver details
+- `PATCH /api/admin/duplicate-alerts/1/resolve` with notes → marks as resolved
+
+---
+
+## FIX 4 — Delivery Service Fix
+
+**Problem:**
+The Delivery service is toggled on in `serviceControls` but cannot actually be requested because `POST /api/rides/request` only accepts `vehicleType: "car"` or `vehicleType: "bike"` — delivery is excluded.
+
+**What to do:**
+
+1. In `artifacts/api-server/src/routes/rides.ts`:
+   - Find the validation that restricts `vehicleType` to `car` or `bike`
+   - Add `"delivery"` as a valid vehicle type
+   - Ensure `ridePricing` table has a row for `vehicleType = "delivery"` (add to seed if missing)
+   - Ensure `POST /api/admin/rides/pricing/:vehicleType` accepts `"delivery"` as a valid type
+
+2. Add delivery-specific fields to the ride request (optional at this stage, just structure it):
+   - In `rides` table: add nullable columns `recipientName` (text) and `recipientPhone` (text) — only used when `vehicleType = "delivery"`
+   - In `POST /api/rides/request`: if `vehicleType = "delivery"`, accept optional `recipientName` and `recipientPhone` in the request body and save them
+
+3. Add a default pricing entry for delivery in the seed/migration:
+   - `{ vehicleType: "delivery", baseFare: 15, perKmRate: 5, perMinuteRate: 0.5, minimumFare: 20 }`
+   - Admin can change this from the existing pricing endpoint
+
+4. In `POST /api/rides/estimate`:
+   - Also accept `"delivery"` as a valid vehicle type for price estimation
+
+**Test:**
+- `POST /api/rides/estimate` with `vehicleType: "delivery"` → returns price estimate
+- `POST /api/rides/request` with `vehicleType: "delivery"` → creates ride successfully
+- `PATCH /api/admin/rides/pricing/delivery` → updates delivery pricing
+
+---
+
+## REPORT — After all 4 fixes are done
+
+Generate a file called `phase2_report.md` with this structure:
+
+# VeeGo Backend — Phase 2 Report
+
+## Fix 1 — Shuttle Vehicle Type System
+- New table created + fields
+- Endpoints added (method + path + auth + description)
+- Hardcoded values removed from which files/lines
+- Default seed data
+- Test results
+
+## Fix 2 — Criminal Record Enforcement (30 Trips)
+- Trigger logic (where in the code)
+- Suspension + reactivation flow
+- New settings key
+- Socket events
+- Test results
+
+## Fix 3 — Multi-Account Fraud Detection
+- New table created + fields
+- Detection logic (registration + document upload)
+- Endpoints added (method + path + auth + description)
+- Test results
+
+## Fix 4 — Delivery Service Fix
+- Files changed + line numbers
+- New DB columns added
+- Default pricing added
+- Test results
+
+## All New / Modified Endpoints Summary
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+
+Be specific. Include file names and line numbers for every change.

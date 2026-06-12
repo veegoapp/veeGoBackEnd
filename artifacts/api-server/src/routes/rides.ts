@@ -27,6 +27,7 @@ import { getCurrentSurge } from "../lib/surge-pricing";
 import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
 import { startNoShowTimer, stopNoShowTimer } from "../lib/no-show-monitor";
 import { isCurrentlyPeakHour } from "../lib/peak-hours";
+import { checkCriminalRecordThreshold } from "../lib/criminal-record";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO, clearDeviationState } from "../socket";
@@ -116,8 +117,8 @@ const UpdatePricingBody = z.object({
 router.patch("/admin/rides/pricing/:vehicleType", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   try {
     const vehicleType = req.params.vehicleType as string;
-    if (!["car", "bike"].includes(vehicleType)) {
-      res.status(400).json({ error: "vehicleType must be 'car' or 'bike'" });
+    if (!["car", "bike", "delivery"].includes(vehicleType)) {
+      res.status(400).json({ error: "vehicleType must be 'car', 'bike', or 'delivery'" });
       return;
     }
     const parsed = UpdatePricingBody.safeParse(req.body);
@@ -261,7 +262,7 @@ router.get("/admin/rides/:id", authenticate, requireRole("admin"), async (req, r
 // ─── PASSENGER: ESTIMATE ─────────────────────────────────────────────────────
 
 const EstimateBody = z.object({
-  vehicleType: z.enum(["car", "bike"]),
+  vehicleType: z.enum(["car", "bike", "delivery"]),
   pickupLatitude: z.number().min(-90).max(90),
   pickupLongitude: z.number().min(-180).max(180),
   dropoffLatitude: z.number().min(-90).max(90),
@@ -355,7 +356,7 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
 // ─── PASSENGER: REQUEST ───────────────────────────────────────────────────────
 
 const RequestRideBody = z.object({
-  vehicleType: z.enum(["car", "bike"]),
+  vehicleType: z.enum(["car", "bike", "delivery"]),
   pickupLatitude: z.number().min(-90).max(90),
   pickupLongitude: z.number().min(-180).max(180),
   pickupAddress: z.string().min(1),
@@ -363,6 +364,13 @@ const RequestRideBody = z.object({
   dropoffLongitude: z.number().min(-180).max(180),
   dropoffAddress: z.string().min(1),
   promoCode: z.string().optional(),
+  recipientName: z.string().min(1).optional(),
+  recipientPhone: z.string().min(1).optional(),
+}).superRefine((data, ctx) => {
+  if (data.vehicleType === "delivery") {
+    if (!data.recipientName) ctx.addIssue({ code: "custom", message: "recipientName is required for delivery", path: ["recipientName"] });
+    if (!data.recipientPhone) ctx.addIssue({ code: "custom", message: "recipientPhone is required for delivery", path: ["recipientPhone"] });
+  }
 });
 
 router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimiter, async (req, res): Promise<void> => {
@@ -381,6 +389,8 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       dropoffLongitude,
       dropoffAddress,
       promoCode,
+      recipientName,
+      recipientPhone,
     } = parsed.data;
     const userId = req.user!.id;
 
@@ -569,6 +579,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
           dropoffLatitude,
           dropoffLongitude,
           dropoffAddress,
+          ...(vehicleType === "delivery" ? { recipientName: recipientName ?? null, recipientPhone: recipientPhone ?? null } : {}),
           distanceKm: distanceKm.toFixed(3),
           estimatedDurationMinutes,
           estimatedPrice: discountedPrice.toFixed(2),
@@ -1370,6 +1381,13 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
     }
     clearDeviationState(rideId);
 
+    // Fix 2: Criminal record enforcement after threshold trips/rides
+    try {
+      await checkCriminalRecordThreshold(driver.id, userId);
+    } catch (_crimErr) {
+      // Non-fatal; ride completion already saved
+    }
+
     res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {
     res.status(500).json({ error: "Failed to complete ride" });
@@ -1487,6 +1505,13 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
     const io = getIO();
     if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
     clearDeviationState(rideId);
+
+    // Fix 2: Criminal record enforcement after threshold trips/rides
+    try {
+      await checkCriminalRecordThreshold(driver.id, userId);
+    } catch (_crimErr) {
+      // Non-fatal; ride completion already saved
+    }
 
     res.json({ data: { rideId, finalPrice, driverCut, waitingCharge } });
   } catch {

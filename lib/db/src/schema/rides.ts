@@ -15,6 +15,8 @@ export const ridesTable = pgTable("rides", {
   dropoffLatitude: real("dropoff_latitude").notNull(),
   dropoffLongitude: real("dropoff_longitude").notNull(),
   dropoffAddress: text("dropoff_address").notNull(),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
   distanceKm: numeric("distance_km", { precision: 8, scale: 3 }),
   estimatedDurationMinutes: integer("estimated_duration_minutes"),
   estimatedPrice: numeric("estimated_price", { precision: 10, scale: 2 }),
