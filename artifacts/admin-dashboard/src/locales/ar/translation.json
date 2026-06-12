@@ -58,7 +58,13 @@
     "shuttleTrips": "الرحلات",
     "shuttleBookings": "حجوزات المسارات",
     "shuttleAvailability": "توفر الفترات",
-    "shuttleRenewalHistory": "سجل التجديد"
+    "shuttleRenewalHistory": "سجل التجديد",
+    "offences": "المخالفات",
+    "commissionExemptions": "الإعفاءات",
+    "bonusTargets": "أهداف المكافآت",
+    "noShowDebits": "خصومات الغياب",
+    "groupSecurity": "الأمن",
+    "fraudAlerts": "تنبيهات الاحتيال"
   },
   "common": {
     "save": "حفظ",
@@ -165,7 +171,8 @@
     "role": "الدور",
     "admin": "مدير",
     "customer": "عميل",
-    "driver": "سائق"
+    "driver": "سائق",
+    "processing": "جارٍ المعالجة..."
   },
   "auth": {
     "title": "VeeGo",
@@ -179,7 +186,9 @@
     "loginFailed": "فشل تسجيل الدخول",
     "checkCredentials": "يرجى التحقق من بياناتك والمحاولة مجدداً.",
     "welcomeBack": "مرحباً بعودتك",
-    "loggedIn": "تم تسجيل الدخول بنجاح."
+    "loggedIn": "تم تسجيل الدخول بنجاح.",
+    "signIn": "تسجيل الدخول",
+    "signingIn": "جارٍ تسجيل الدخول..."
   },
   "dashboard": {
     "title": "مركز التحكم التشغيلي",
@@ -404,7 +413,13 @@
     "scheduleType": "نوع الجدول",
     "scheduleIsActive": "الجدول نشط",
     "ticketPriceEGP": "سعر التذكرة (جنيه)",
-    "arrivalAutoCalc": "الوصول (محسوب تلقائياً)"
+    "arrivalAutoCalc": "الوصول (محسوب تلقائياً)",
+    "tripDeleted": "تم حذف الرحلة بنجاح",
+    "tripDeletedDesc": "تم حذف الرحلة نهائيًا.",
+    "deleteTrip": "حذف الرحلة",
+    "deleting": "جارٍ الحذف…",
+    "deleteConfirmDesc": "سيؤدي هذا إلى حذف الرحلة وجميع حجوزاتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "failedToDelete": "فشل حذف الرحلة"
   },
   "drivers": {
     "title": "السائقون",
@@ -449,7 +464,16 @@
     "userNotFound": "المستخدم غير موجود",
     "passengerRideHistory": "سجل رحلات الراكب",
     "rideHistoryDesc": "عرض ومراقبة حجوزات ورحلات هذا المستخدم.",
-    "noBookings": "لا توجد حجوزات لهذا الراكب."
+    "noBookings": "لا توجد حجوزات لهذا الراكب.",
+    "adjustWallet": "تعديل المحفظة",
+    "walletAdjusted": "تم تعديل المحفظة بنجاح",
+    "walletFailed": "فشل تعديل المحفظة",
+    "validAmount": "أدخل مبلغاً موجباً صحيحاً",
+    "walletCredit": "إضافة رصيد",
+    "walletDebit": "خصم رصيد",
+    "walletReason": "السبب (اختياري)",
+    "walletCreditBtn": "إضافة رصيد للمحفظة",
+    "walletDebitBtn": "خصم رصيد من المحفظة"
   },
   "bookings": {
     "title": "الحجوزات",
@@ -496,7 +520,12 @@
     "totalCount": "{{count}} حجز إجمالي",
     "page": "صفحة",
     "of": "من",
-    "total": "إجمالي"
+    "total": "إجمالي",
+    "tripRoute": "الرحلة / المسار",
+    "viewDetails": "عرض التفاصيل",
+    "refundToWallet": "استرداد إلى المحفظة",
+    "cancelBooking": "إلغاء الحجز",
+    "allServices": "جميع الخدمات"
   },
   "support": {
     "title": "الشكاوى",

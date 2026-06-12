@@ -114,7 +114,7 @@ export default function Login() {
                 name="credential"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Email / Phone</FormLabel>
+                    <FormLabel>{t('auth.emailOrPhone')}</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
@@ -132,7 +132,7 @@ export default function Login() {
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>{t('auth.password')}</FormLabel>
                     <FormControl>
                       <Input
                         type="password"
@@ -154,10 +154,10 @@ export default function Login() {
                 {loginMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Signing in...
+                    {t('auth.signingIn')}
                   </>
                 ) : (
-                  "Sign In"
+                  t('auth.signIn')
                 )}
               </Button>
 

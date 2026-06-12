@@ -58,7 +58,13 @@
     "shuttleTrips": "Trips",
     "shuttleBookings": "Route Bookings",
     "shuttleAvailability": "Slot Availability",
-    "shuttleRenewalHistory": "Renewal History"
+    "shuttleRenewalHistory": "Renewal History",
+    "offences": "Offences",
+    "commissionExemptions": "Exemptions",
+    "bonusTargets": "Bonus Targets",
+    "noShowDebits": "No-Show Debits",
+    "groupSecurity": "Security",
+    "fraudAlerts": "Fraud Alerts"
   },
   "common": {
     "save": "Save",
@@ -165,7 +171,8 @@
     "role": "Role",
     "admin": "Admin",
     "customer": "Customer",
-    "driver": "Driver"
+    "driver": "Driver",
+    "processing": "Processing..."
   },
   "auth": {
     "title": "VeeGo",
@@ -179,7 +186,9 @@
     "loginFailed": "Login failed",
     "checkCredentials": "Please check your credentials and try again.",
     "welcomeBack": "Welcome back",
-    "loggedIn": "You have successfully logged in."
+    "loggedIn": "You have successfully logged in.",
+    "signIn": "Sign In",
+    "signingIn": "Signing in..."
   },
   "dashboard": {
     "title": "Operations Control Center",
@@ -404,7 +413,13 @@
     "scheduleType": "Schedule Type",
     "scheduleIsActive": "Schedule is active",
     "ticketPriceEGP": "Ticket Price (EGP)",
-    "arrivalAutoCalc": "Arrival (auto-calculated)"
+    "arrivalAutoCalc": "Arrival (auto-calculated)",
+    "tripDeleted": "Trip Deleted Successfully",
+    "tripDeletedDesc": "Trip has been permanently deleted.",
+    "deleteTrip": "Delete Trip",
+    "deleting": "Deleting…",
+    "deleteConfirmDesc": "This will permanently delete the trip and all its bookings. This cannot be undone.",
+    "failedToDelete": "Failed to delete trip"
   },
   "drivers": {
     "title": "Drivers",
@@ -449,7 +464,16 @@
     "userNotFound": "User not found",
     "passengerRideHistory": "Passenger Ride History",
     "rideHistoryDesc": "View and monitor this user's shuttle bookings and trip history.",
-    "noBookings": "No ride bookings found for this passenger."
+    "noBookings": "No ride bookings found for this passenger.",
+    "adjustWallet": "Wallet Adjustment",
+    "walletAdjusted": "Wallet adjusted successfully",
+    "walletFailed": "Failed to adjust wallet",
+    "validAmount": "Enter a valid positive amount",
+    "walletCredit": "Credit (add funds)",
+    "walletDebit": "Debit (remove funds)",
+    "walletReason": "Reason (optional)",
+    "walletCreditBtn": "Credit Wallet",
+    "walletDebitBtn": "Debit Wallet"
   },
   "bookings": {
     "title": "Bookings",
@@ -496,7 +520,12 @@
     "totalCount": "{{count}} total bookings",
     "page": "Page",
     "of": "of",
-    "total": "total"
+    "total": "total",
+    "tripRoute": "Trip / Route",
+    "viewDetails": "View Details",
+    "refundToWallet": "Refund to Wallet",
+    "cancelBooking": "Cancel Booking",
+    "allServices": "All Services"
   },
   "support": {
     "title": "Complaints",

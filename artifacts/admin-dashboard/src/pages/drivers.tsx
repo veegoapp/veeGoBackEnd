@@ -121,7 +121,7 @@ export default function Drivers() {
           <Link href="/drivers/pending">
             <Button variant="outline" className="gap-1.5 shadow-sm">
               <Clock className="h-4 w-4" />
-              Pending Verification
+              {t("nav.pendingVerification")}
             </Button>
           </Link>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

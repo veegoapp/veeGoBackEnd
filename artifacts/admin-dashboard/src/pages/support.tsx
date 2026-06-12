@@ -129,7 +129,7 @@ export default function Support() {
     <div className="p-8 space-y-6">
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Complaints</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{t("support.title")}</h1>
           <p className="text-muted-foreground text-sm">{t("support.subtitle")}</p>
         </div>
       </div>

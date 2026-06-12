@@ -1,0 +1,50 @@
+You are working on the VeeGo admin dashboard. The i18n infrastructure is already fully set up.
+
+Your job in this phase is to convert hardcoded English strings to use the t() translation function.
+
+CRITICAL RULES:
+- Do NOT install any new packages
+- Do NOT modify any i18n or config files
+- Do NOT touch any backend files
+- Only edit page and component files
+- Do NOT rewrite entire files — only change the hardcoded strings
+
+## How to convert strings:
+At the top of each file add:
+import { useTranslation } from 'react-i18next';
+
+Inside the component add:
+const { t } = useTranslation();
+
+Then replace hardcoded strings like this:
+- "Sign In" → {t('auth.signIn')}
+- "Dashboard" → {t('nav.dashboard')}
+- "Save" → {t('common.save')}
+
+## Files to convert — do them in this exact order:
+
+### Batch 1 — Core UI
+1. src/components/layout/app-layout.tsx (or sidebar file) — all nav labels
+2. src/pages/login.tsx — form labels, button, toasts
+3. src/pages/not-found.tsx — page text and button
+
+### Batch 2 — Main Pages
+4. src/pages/dashboard.tsx — all card titles, labels, empty states
+5. src/pages/drivers.tsx — page title, buttons, table headers, empty state
+6. src/pages/users.tsx — page title, buttons, table headers, empty state
+
+### Batch 3 — Trip & Booking Pages
+7. src/pages/trips.tsx — page title, buttons, status badges, empty state
+8. src/pages/bookings.tsx — page title, columns, status badges, empty state
+9. src/pages/routes.tsx — page title, buttons, columns, empty state
+
+### Batch 4 — Support & Settings
+10. src/pages/support.tsx — page title, status labels, priority labels, empty state
+11. src/pages/settings.tsx — all tab labels, section titles, button labels
+12. src/pages/not-found.tsx — already in batch 1, skip
+
+## After completing all batches, give me:
+1. List of every file you modified
+2. For each file, show me 3 examples of strings you converted
+3. Confirm the app still compiles with no errors (run the dev server and check)
+4. List any hardcoded strings you found but could NOT convert and why

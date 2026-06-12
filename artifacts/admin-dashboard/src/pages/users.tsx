@@ -53,13 +53,13 @@ export default function Customers() {
       });
     },
     onSuccess: () => {
-      toast({ title: "Wallet adjusted successfully" });
+      toast({ title: t("users.walletAdjusted", "Wallet adjusted successfully") });
       setWalletDialog({ open: false });
       setWalletAmount("");
       setWalletReason("");
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to adjust wallet", description: err.message, variant: "destructive" });
+      toast({ title: t("users.walletFailed", "Failed to adjust wallet"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -83,7 +83,7 @@ export default function Customers() {
     if (!walletDialog.open) return;
     const amt = parseFloat(walletAmount);
     if (isNaN(amt) || amt <= 0) {
-      toast({ title: "Enter a valid positive amount", variant: "destructive" });
+      toast({ title: t("users.validAmount", "Enter a valid positive amount"), variant: "destructive" });
       return;
     }
     const signedAmount = walletType === "debit" ? -amt : amt;
@@ -199,7 +199,7 @@ export default function Customers() {
                             setWalletDialog({ open: true, userId: user.id, userName: user.name });
                           }}
                         >
-                          <Wallet className="mr-2 h-4 w-4" /> Wallet Adjustment
+                          <Wallet className="mr-2 h-4 w-4" /> {t("users.adjustWallet")}
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handleToggleBlock(user.id)}
@@ -250,24 +250,24 @@ export default function Customers() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              Wallet Adjustment — {walletDialog.open ? walletDialog.userName : ""}
+              {t("users.adjustWallet")} — {walletDialog.open ? walletDialog.userName : ""}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleWalletSubmit} className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Type</Label>
+              <Label>{t("common.type", "Type")}</Label>
               <Select value={walletType} onValueChange={(v) => setWalletType(v as "credit" | "debit")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="credit">Credit (add funds)</SelectItem>
-                  <SelectItem value="debit">Debit (remove funds)</SelectItem>
+                  <SelectItem value="credit">{t("users.walletCredit", "Credit (add funds)")}</SelectItem>
+                  <SelectItem value="debit">{t("users.walletDebit", "Debit (remove funds)")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wallet-amount">Amount</Label>
+              <Label htmlFor="wallet-amount">{t("common.amount", "Amount")}</Label>
               <Input
                 id="wallet-amount"
                 type="number"
@@ -280,7 +280,7 @@ export default function Customers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wallet-reason">Reason (optional)</Label>
+              <Label htmlFor="wallet-reason">{t("users.walletReason", "Reason (optional)")}</Label>
               <Input
                 id="wallet-reason"
                 placeholder="e.g. Compensation for cancelled trip"
@@ -290,14 +290,14 @@ export default function Customers() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setWalletDialog({ open: false })}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="submit"
                 disabled={walletMutation.isPending}
                 variant={walletType === "debit" ? "destructive" : "default"}
               >
-                {walletMutation.isPending ? "Processing..." : walletType === "credit" ? "Credit Wallet" : "Debit Wallet"}
+                {walletMutation.isPending ? t("common.processing", "Processing...") : walletType === "credit" ? t("users.walletCreditBtn", "Credit Wallet") : t("users.walletDebitBtn", "Debit Wallet")}
               </Button>
             </DialogFooter>
           </form>

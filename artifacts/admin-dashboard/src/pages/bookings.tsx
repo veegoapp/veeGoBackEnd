@@ -79,12 +79,12 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-const SERVICE_OPTIONS = [
-  { value: "all", label: "All Services" },
-  { value: "shuttle", label: "Shuttle" },
-  { value: "car", label: "Car" },
-  { value: "motorcycle", label: "Motorcycle" },
-  { value: "delivery", label: "Delivery" },
+const SERVICE_OPTIONS_KEYS = [
+  { value: "all",        labelKey: "bookings.allServices",  fallback: "All Services"  },
+  { value: "shuttle",    labelKey: "nav.shuttle",           fallback: "Shuttle"        },
+  { value: "car",        labelKey: "nav.cars",              fallback: "Car"            },
+  { value: "motorcycle", labelKey: "nav.motorcycles",       fallback: "Motorcycle"     },
+  { value: "delivery",   labelKey: "nav.delivery",          fallback: "Delivery"       },
 ];
 
 export default function Bookings() {
@@ -222,14 +222,14 @@ export default function Bookings() {
           </p>
         </div>
         <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={bookings.length === 0}>
-          <Download className="h-4 w-4" /> Export CSV
+          <Download className="h-4 w-4" /> {t("bookings.exportCSV", "Export CSV")}
         </Button>
       </div>
 
       {/* Service filter bar */}
       <div className="flex flex-wrap gap-2 items-center bg-card border border-border rounded-xl px-4 py-3">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">Service</span>
-        {SERVICE_OPTIONS.map((opt) => (
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">{t("nav.services")}</span>
+        {SERVICE_OPTIONS_KEYS.map((opt) => (
           <button
             key={opt.value}
             onClick={() => { setServiceFilter(opt.value); setPage(1); }}
@@ -239,7 +239,7 @@ export default function Bookings() {
                 : "bg-background text-muted-foreground border-border hover:border-primary/50 hover:text-foreground"
             }`}
           >
-            {opt.label}
+            {t(opt.labelKey, opt.fallback)}
           </button>
         ))}
       </div>
@@ -249,7 +249,7 @@ export default function Bookings() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by customer name, email, or phone…"
+            placeholder={t("bookings.searchPlaceholder", "Search by customer name, email, or phone…")}
             className="pl-9"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -257,27 +257,27 @@ export default function Bookings() {
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t("common.status")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="confirmed">Confirmed</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="all">{t("bookings.allStatuses", "All Statuses")}</SelectItem>
+            <SelectItem value="confirmed">{t("common.confirmed")}</SelectItem>
+            <SelectItem value="pending">{t("common.pending")}</SelectItem>
+            <SelectItem value="completed">{t("common.completed")}</SelectItem>
+            <SelectItem value="cancelled">{t("common.cancelled")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Label className="text-xs">From</Label>
+          <Label className="text-xs">{t("bookings.from", "From")}</Label>
           <Input type="date" className="w-36 h-9 text-xs" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1); }} />
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Label className="text-xs">To</Label>
+          <Label className="text-xs">{t("bookings.to", "To")}</Label>
           <Input type="date" className="w-36 h-9 text-xs" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(1); }} />
         </div>
         {hasFilters && (
           <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
-            <X className="h-3.5 w-3.5" /> Clear
+            <X className="h-3.5 w-3.5" /> {t("common.clear")}
           </Button>
         )}
       </div>
@@ -287,15 +287,15 @@ export default function Bookings() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-16">ID</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Passenger</TableHead>
-              <TableHead>Trip / Route</TableHead>
-              <TableHead className="w-16 text-center">Seats</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Payment</TableHead>
-              <TableHead className="text-right w-16">Actions</TableHead>
+              <TableHead className="w-16">{t("common.id")}</TableHead>
+              <TableHead>{t("bookings.colDate")}</TableHead>
+              <TableHead>{t("bookings.passenger")}</TableHead>
+              <TableHead>{t("bookings.tripRoute", "Trip / Route")}</TableHead>
+              <TableHead className="w-16 text-center">{t("bookings.seats")}</TableHead>
+              <TableHead>{t("common.amount")}</TableHead>
+              <TableHead>{t("common.status")}</TableHead>
+              <TableHead>{t("common.payment")}</TableHead>
+              <TableHead className="text-right w-16">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
 
@@ -311,7 +311,7 @@ export default function Bookings() {
             ) : bookings.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
-                  No bookings found
+                  {t("bookings.noBookings", "No bookings found")}
                 </TableCell>
               </TableRow>
             ) : (
@@ -386,7 +386,7 @@ export default function Bookings() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => setDetailBooking(b)}>
-                            <Eye className="mr-2 h-4 w-4" /> View Details
+                            <Eye className="mr-2 h-4 w-4" /> {t("bookings.viewDetails", "View Details")}
                           </DropdownMenuItem>
                           {canRefund && (
                             <DropdownMenuItem
@@ -397,7 +397,7 @@ export default function Bookings() {
                               }}
                             >
                               <DollarSign className="mr-2 h-4 w-4 text-green-600" />
-                              <span className="text-green-700 dark:text-green-400">Refund to Wallet</span>
+                              <span className="text-green-700 dark:text-green-400">{t("bookings.refundToWallet", "Refund to Wallet")}</span>
                             </DropdownMenuItem>
                           )}
                           {canCancel && (
@@ -408,7 +408,7 @@ export default function Bookings() {
                                 onClick={() => handleCancel(b.id)}
                                 disabled={cancelMutation.isPending}
                               >
-                                <Ban className="mr-2 h-4 w-4" /> Cancel Booking
+                                <Ban className="mr-2 h-4 w-4" /> {t("bookings.cancelBooking", "Cancel Booking")}
                               </DropdownMenuItem>
                             </>
                           )}
@@ -434,7 +434,7 @@ export default function Bookings() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              Page {page} of {totalPages}
+              {t("common.page", "Page")} {page} {t("common.of", "of")} {totalPages}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext
@@ -511,7 +511,7 @@ export default function Bookings() {
                   setDetailBooking(null);
                 }}
               >
-                <DollarSign className="mr-1.5 h-3.5 w-3.5 text-green-600" /> Refund to Wallet
+                <DollarSign className="mr-1.5 h-3.5 w-3.5 text-green-600" /> {t("bookings.refundToWallet", "Refund to Wallet")}
               </Button>
             )}
             {detailBooking && (detailBooking.status === "confirmed" || detailBooking.status === "pending") && (
@@ -520,10 +520,10 @@ export default function Bookings() {
                 size="sm"
                 onClick={() => { setDetailBooking(null); handleCancel(detailBooking.id); }}
               >
-                <Ban className="mr-1.5 h-3.5 w-3.5" /> Cancel Booking
+                <Ban className="mr-1.5 h-3.5 w-3.5" /> {t("bookings.cancelBooking", "Cancel Booking")}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>Close</Button>
+            <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>{t("common.close", "Close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

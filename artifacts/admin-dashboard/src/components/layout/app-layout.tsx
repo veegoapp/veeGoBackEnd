@@ -228,7 +228,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.vehicles"), href: "/vehicles/shuttle", icon: Bus },
             { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
             { title: t("nav.shuttleTrips"), href: "/shuttle-trips", icon: Navigation },
-            { title: "Offences", href: "/shuttle/offences", icon: Shield },
+            { title: t("nav.offences", "Offences"), href: "/shuttle/offences", icon: Shield },
           ],
         },
         {
@@ -262,15 +262,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         { title: t("nav.wallets"),      href: "/finance/wallet",            icon: Wallet },
         { title: t("nav.payouts"),      href: "/finance/payouts",           icon: ArrowUpRight },
         { title: t("nav.commission"),   href: "/finance/commission",        icon: Percent },
-        { title: "Exemptions",          href: "/finance/commission-exemptions", icon: CalendarRange },
-        { title: "Bonus Targets",       href: "/finance/bonus-targets",     icon: Trophy },
-        { title: "No-Show Debits",      href: "/finance/shuttle-cash-debts", icon: DollarSign },
+        { title: t("nav.commissionExemptions", "Exemptions"), href: "/finance/commission-exemptions", icon: CalendarRange },
+        { title: t("nav.bonusTargets", "Bonus Targets"),   href: "/finance/bonus-targets",     icon: Trophy },
+        { title: t("nav.noShowDebits", "No-Show Debits"),  href: "/finance/shuttle-cash-debts", icon: DollarSign },
       ],
     },
     {
-      label: "Security",
+      label: t("nav.groupSecurity", "Security"),
       items: [
-        { title: "Fraud Alerts",        href: "/security/fraud-alerts",     icon: ShieldAlert },
+        { title: t("nav.fraudAlerts", "Fraud Alerts"), href: "/security/fraud-alerts", icon: ShieldAlert },
       ],
     },
     {

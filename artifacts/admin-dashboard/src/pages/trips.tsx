@@ -419,15 +419,15 @@ export default function Trips() {
     try {
       await adminFetch(`/trips/${deleteTrip.id}`, { method: "DELETE" });
       toast({
-        title: "Trip Deleted Successfully",
+        title: t("trips.tripDeleted", "Trip Deleted Successfully"),
         description: confirmedBookings > 0
           ? `${confirmedBookings} linked booking${confirmedBookings === 1 ? "" : "s"} have been fully refunded to customer wallets.`
-          : "Trip has been permanently deleted.",
+          : t("trips.tripDeletedDesc", "Trip has been permanently deleted."),
       });
       setDeleteTrip(null);
       queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
     } catch (err: any) {
-      toast({ title: err.message || "Failed to delete trip", variant: "destructive" });
+      toast({ title: err.message || t("trips.failedToDelete", "Failed to delete trip"), variant: "destructive" });
     } finally {
       setIsDeleting(false);
     }
@@ -526,17 +526,17 @@ export default function Trips() {
       <Dialog open={!!deleteTrip} onOpenChange={(open) => !open && setDeleteTrip(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>Delete Trip #{deleteTrip?.id}?</DialogTitle>
+            <DialogTitle>{t("trips.deleteTrip", "Delete Trip")} #{deleteTrip?.id}?</DialogTitle>
             <DialogDescription>
-              This will permanently delete the trip and all its bookings. This cannot be undone.
+              {t("trips.deleteConfirmDesc", "This will permanently delete the trip and all its bookings. This cannot be undone.")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setDeleteTrip(null)} disabled={isDeleting}>
-              Cancel
+              {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={handleDeleteTrip} disabled={isDeleting}>
-              {isDeleting ? "Deleting…" : "Delete Trip"}
+              {isDeleting ? t("trips.deleting", "Deleting…") : t("trips.deleteTrip", "Delete Trip")}
             </Button>
           </DialogFooter>
         </DialogContent>
