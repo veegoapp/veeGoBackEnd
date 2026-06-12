@@ -120,3 +120,9 @@ id = "NUiBmIrBFJt0BS8l1_p5Q"
 uri = "file://admin-dashboard-audit-report.md"
 type = "text"
 title = "Admin Dashboard Audit Report"
+
+[[outputs]]
+id = "9yx4OWeOdVj-TrsHFrSlp"
+uri = "file://database-schema-report.md"
+type = "text"
+title = "VeeGo Database Schema Report"
