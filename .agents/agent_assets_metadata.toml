@@ -84,3 +84,9 @@ id = "hQ-OZ9YlWPbe01tnXOYGf"
 uri = "file://phase4_promotions_report.md"
 type = "text"
 title = "Phase 4: Promotions & Driver Incentives Report"
+
+[[outputs]]
+id = "qwux8ebq-0cwRvn0WQxG6"
+uri = "file://phase4b_shuttle_bonus_report.md"
+type = "text"
+title = "Phase 4b: Shuttle Bonus Connection Report"

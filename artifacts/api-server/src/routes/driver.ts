@@ -8,6 +8,7 @@ import { signAccessToken, signRefreshToken } from "../lib/jwt";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import { checkCriminalRecordThreshold } from "../lib/criminal-record";
+import { updateBonusProgressAfterRide } from "../lib/bonus-targets";
 import { z } from "zod";
 
 const router = Router();
@@ -709,7 +710,12 @@ router.patch("/driver/trips/:id/complete", authenticate, requireRole("driver"), 
     status: "confirmed",
   });
 
-  // Fix 2: Criminal record enforcement after threshold trips/rides (non-fatal)
+  // Bonus progress update for shuttle trip (non-fatal)
+  updateBonusProgressAfterRide(driver.id, "shuttle", driverCut).catch(
+    (err) => console.error("Bonus progress update error (shuttle complete):", err),
+  );
+
+  // Criminal record enforcement after threshold trips/rides (non-fatal)
   try {
     await checkCriminalRecordThreshold(driver.id, req.user!.id);
   } catch (_crimErr) {
