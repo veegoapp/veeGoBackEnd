@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { useLanguage } from "./hooks/useLanguage";
 import { ThemeProvider } from "next-themes";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from "@tanstack/react-query";
@@ -164,6 +165,11 @@ function Router() {
 }
 
 export default function App() {
+  const { initDirection } = useLanguage();
+  useEffect(() => {
+    initDirection();
+  }, []);
+
   return (
     <ThemeProvider defaultTheme="light" enableSystem={false} attribute="class">
       <QueryClientProvider client={queryClient}>

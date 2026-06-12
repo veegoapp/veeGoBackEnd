@@ -1,10 +1,9 @@
 #!/bin/bash
-set -e
 echo "Checking environment..."
-if [ -z "$NEON_DATABASE_URL" ] && [ -z "$DATABASE_URL" ]; then
+if [ -z "$DATABASE_URL" ] && [ -z "$NEON_DATABASE_URL" ]; then
   echo "Please paste your database URL:"
   read DB_INPUT
-  export NEON_DATABASE_URL="$DB_INPUT"
+  export DATABASE_URL="$DB_INPUT"
 fi
 echo "Installing dependencies once..."
 pnpm install
@@ -23,4 +22,8 @@ echo "========================================="
 echo "API URL: https://$REPLIT_DEV_DOMAIN/api"
 echo "========================================="
 echo "All services running..."
-wait $API_PID $ADMIN_PID
+
+# Monitor both processes — if API crashes, keep dashboard alive; only exit when dashboard exits
+while kill -0 $ADMIN_PID 2>/dev/null; do
+  sleep 5
+done
