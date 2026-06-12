@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,7 +21,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Edit, Trash2, Tag, BookOpen, Palette } from "lucide-react";
+import {
+  Plus, Edit, Trash2, Tag, Palette, ChevronRight, Car, Calendar,
+  Layers, ArrowLeft, Home, Check, Zap,
+} from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -41,6 +45,7 @@ type VehicleModel = {
   minYear: number;
   maxYear: number | null;
   isActive: boolean;
+  seatCapacity?: number | null;
   createdAt: string;
 };
 
@@ -53,17 +58,82 @@ type VehicleColor = {
   createdAt: string;
 };
 
+type VehicleYear = {
+  id: number;
+  modelId: number;
+  year: number;
+  pricingCategory: "Economy" | "EconomyPlus" | "Comfort" | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type ViewState =
+  | { level: "brands" }
+  | { level: "models"; brand: VehicleBrand }
+  | { level: "years"; brand: VehicleBrand; model: VehicleModel };
+
+const PRICING_CATEGORIES = [
+  { value: "Economy",     label: "Economy",      labelAr: "اقتصادي",        color: "text-blue-600  bg-blue-50  border-blue-200  dark:bg-blue-950" },
+  { value: "EconomyPlus", label: "Economy Plus", labelAr: "اقتصادي بلس",    color: "text-violet-600 bg-violet-50 border-violet-200 dark:bg-violet-950" },
+  { value: "Comfort",     label: "Comfort",      labelAr: "كومفورت",         color: "text-amber-600 bg-amber-50 border-amber-200 dark:bg-amber-950" },
+] as const;
+
+function pricingMeta(cat: string | null | undefined) {
+  return PRICING_CATEGORIES.find((c) => c.value === cat) ?? null;
+}
+
+// ─── Breadcrumb ───────────────────────────────────────────────────────────────
+
+function Breadcrumb({
+  viewState,
+  onNavigate,
+}: {
+  viewState: ViewState;
+  onNavigate: (v: ViewState) => void;
+}) {
+  const segments: { label: string; action: ViewState | null }[] = [
+    { label: "Vehicle Catalog", action: { level: "brands" } },
+  ];
+  if (viewState.level === "models" || viewState.level === "years") {
+    segments.push({ label: viewState.brand.name, action: { level: "models", brand: viewState.brand } });
+  }
+  if (viewState.level === "years") {
+    segments.push({ label: viewState.model.name, action: null });
+  }
+
+  return (
+    <nav className="flex items-center gap-1.5 text-sm flex-wrap">
+      <Home className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+      {segments.map((seg, i) => {
+        const isLast = i === segments.length - 1;
+        return (
+          <React.Fragment key={i}>
+            {i > 0 && <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+            {isLast || !seg.action ? (
+              <span className={`font-medium ${isLast ? "text-foreground" : "text-muted-foreground"}`}>
+                {seg.label}
+              </span>
+            ) : (
+              <button
+                onClick={() => seg.action && onNavigate(seg.action)}
+                className="font-medium text-primary hover:underline underline-offset-2 transition-colors"
+              >
+                {seg.label}
+              </button>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </nav>
+  );
+}
+
 // ─── Brand Dialog ─────────────────────────────────────────────────────────────
 
 function BrandDialog({
-  open,
-  onClose,
-  initial,
-  onSave,
-  saving,
+  open, onClose, initial, onSave, saving,
 }: {
-  open: boolean;
-  onClose: () => void;
+  open: boolean; onClose: () => void;
   initial?: Partial<VehicleBrand>;
   onSave: (data: { name: string; isChinese: boolean; isActive: boolean }) => void;
   saving: boolean;
@@ -71,32 +141,21 @@ function BrandDialog({
   const [name, setName] = useState(initial?.name ?? "");
   const [isChinese, setIsChinese] = useState(initial?.isChinese ?? false);
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
-
   React.useEffect(() => {
-    if (open) {
-      setName(initial?.name ?? "");
-      setIsChinese(initial?.isChinese ?? false);
-      setIsActive(initial?.isActive ?? true);
-    }
+    if (open) { setName(initial?.name ?? ""); setIsChinese(initial?.isChinese ?? false); setIsActive(initial?.isActive ?? true); }
   }, [open]);
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{initial?.id ? "Edit Brand" : "Add Brand"}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{initial?.id ? "Edit Brand" : "Add Brand"}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Brand Name</Label>
+          <div className="space-y-1.5"><Label>Brand Name</Label>
             <Input placeholder="e.g. Toyota" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="flex items-center justify-between">
-            <Label>Chinese Brand</Label>
+          <div className="flex items-center justify-between"><Label>Chinese Brand</Label>
             <Switch checked={isChinese} onCheckedChange={setIsChinese} />
           </div>
-          <div className="flex items-center justify-between">
-            <Label>Active</Label>
+          <div className="flex items-center justify-between"><Label>Active</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
@@ -114,128 +173,119 @@ function BrandDialog({
 // ─── Model Dialog ─────────────────────────────────────────────────────────────
 
 function ModelDialog({
-  open,
-  onClose,
-  initial,
-  brands,
-  isShuttle,
-  onSave,
-  saving,
+  open, onClose, initial, brandId, isShuttle, onSave, saving,
 }: {
-  open: boolean;
-  onClose: () => void;
+  open: boolean; onClose: () => void;
   initial?: Partial<VehicleModel>;
-  brands: VehicleBrand[];
+  brandId: number;
   isShuttle: boolean;
-  onSave: (data: {
-    brandId: number;
-    name: string;
-    minYear: number;
-    maxYear: number | null;
-    isActive: boolean;
-    seatCapacity?: number | null;
-  }) => void;
+  onSave: (data: { brandId: number; name: string; minYear: number; maxYear: number | null; isActive: boolean; seatCapacity?: number | null }) => void;
   saving: boolean;
 }) {
   const currentYear = new Date().getFullYear();
-  const [brandId, setBrandId] = useState<number>(initial?.brandId ?? (brands[0]?.id ?? 0));
   const [name, setName] = useState(initial?.name ?? "");
-  const [minYear, setMinYear] = useState<number>(initial?.minYear ?? 2015);
+  const [minYear, setMinYear] = useState(initial?.minYear ?? 2015);
   const [maxYear, setMaxYear] = useState<number | "">(initial?.maxYear ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
-  const [seatCapacity, setSeatCapacity] = useState<number | "">(14);
-
+  const [seatCapacity, setSeatCapacity] = useState<number | "">(initial?.seatCapacity ?? 14);
   React.useEffect(() => {
     if (open) {
-      setBrandId(initial?.brandId ?? (brands[0]?.id ?? 0));
-      setName(initial?.name ?? "");
-      setMinYear(initial?.minYear ?? 2015);
-      setMaxYear(initial?.maxYear ?? "");
-      setIsActive(initial?.isActive ?? true);
-      setSeatCapacity(14);
+      setName(initial?.name ?? ""); setMinYear(initial?.minYear ?? 2015);
+      setMaxYear(initial?.maxYear ?? ""); setIsActive(initial?.isActive ?? true);
+      setSeatCapacity(initial?.seatCapacity ?? 14);
     }
   }, [open]);
-
-  const handleSave = () => {
-    if (!brandId || !name.trim()) return;
-    onSave({
-      brandId,
-      name: name.trim(),
-      minYear,
-      maxYear: maxYear === "" ? null : Number(maxYear),
-      isActive,
-      ...(isShuttle ? { seatCapacity: seatCapacity === "" ? null : Number(seatCapacity) } : {}),
-    });
-  };
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{initial?.id ? "Edit Model" : "Add Model"}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{initial?.id ? "Edit Model" : "Add Model"}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Brand</Label>
-            <Select value={String(brandId)} onValueChange={(v) => setBrandId(Number(v))}>
-              <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
-              <SelectContent>
-                {brands.map((b) => (
-                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Model Name</Label>
+          <div className="space-y-1.5"><Label>Model Name</Label>
             <Input placeholder="e.g. Corolla" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Min Year</Label>
-              <Input
-                type="number"
-                min={1900}
-                max={currentYear + 2}
-                value={minYear}
-                onChange={(e) => setMinYear(Number(e.target.value))}
-              />
+            <div className="space-y-1.5"><Label>Min Year</Label>
+              <Input type="number" min={1900} max={currentYear + 2} value={minYear}
+                onChange={(e) => setMinYear(Number(e.target.value))} />
             </div>
             <div className="space-y-1.5">
               <Label>Max Year <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Input
-                type="number"
-                min={1900}
-                max={currentYear + 2}
-                placeholder="No limit"
-                value={maxYear}
-                onChange={(e) => setMaxYear(e.target.value === "" ? "" : Number(e.target.value))}
-              />
+              <Input type="number" min={1900} max={currentYear + 2} placeholder="No limit" value={maxYear}
+                onChange={(e) => setMaxYear(e.target.value === "" ? "" : Number(e.target.value))} />
             </div>
           </div>
           {isShuttle && (
-            <div className="space-y-1.5">
-              <Label>Seat Capacity</Label>
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                placeholder="e.g. 14"
-                value={seatCapacity}
-                onChange={(e) => setSeatCapacity(e.target.value === "" ? "" : Number(e.target.value))}
-              />
-              <p className="text-xs text-muted-foreground">Default seats for this shuttle model (e.g. 14 for microbus, 28 for minibus)</p>
+            <div className="space-y-1.5"><Label>Seat Capacity</Label>
+              <Input type="number" min={1} max={100} placeholder="e.g. 14" value={seatCapacity}
+                onChange={(e) => setSeatCapacity(e.target.value === "" ? "" : Number(e.target.value))} />
             </div>
           )}
-          <div className="flex items-center justify-between">
-            <Label>Active</Label>
+          <div className="flex items-center justify-between"><Label>Active</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={!name.trim() || !brandId || saving} onClick={handleSave}>
+          <Button disabled={!name.trim() || saving} onClick={() => onSave({
+            brandId, name: name.trim(), minYear,
+            maxYear: maxYear === "" ? null : Number(maxYear), isActive,
+            ...(isShuttle ? { seatCapacity: seatCapacity === "" ? null : Number(seatCapacity) } : {}),
+          })}>
             {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Year Dialog ──────────────────────────────────────────────────────────────
+
+function YearDialog({
+  open, onClose, modelId, onSave, saving,
+}: {
+  open: boolean; onClose: () => void;
+  modelId: number;
+  onSave: (data: { year: number; pricingCategory: string | null; isActive: boolean }) => void;
+  saving: boolean;
+}) {
+  const currentYear = new Date().getFullYear();
+  const [year, setYear] = useState<number>(currentYear);
+  const [pricingCategory, setPricingCategory] = useState<string>("Economy");
+  const [isActive, setIsActive] = useState(true);
+  React.useEffect(() => {
+    if (open) { setYear(currentYear); setPricingCategory("Economy"); setIsActive(true); }
+  }, [open]);
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Register Manufacturing Year</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5"><Label>Year of Manufacture</Label>
+            <Input type="number" min={1990} max={currentYear + 2} value={year}
+              onChange={(e) => setYear(Number(e.target.value))} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Pricing Category</Label>
+            <Select value={pricingCategory} onValueChange={setPricingCategory}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {PRICING_CATEGORIES.map((c) => (
+                  <SelectItem key={c.value} value={c.value}>
+                    {c.label} <span className="text-muted-foreground">({c.labelAr})</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between"><Label>Active</Label>
+            <Switch checked={isActive} onCheckedChange={setIsActive} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button disabled={!year || saving} onClick={() => onSave({ year, pricingCategory, isActive })}>
+            {saving ? "Saving…" : "Register Year"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -246,14 +296,9 @@ function ModelDialog({
 // ─── Color Dialog ─────────────────────────────────────────────────────────────
 
 function ColorDialog({
-  open,
-  onClose,
-  initial,
-  onSave,
-  saving,
+  open, onClose, initial, onSave, saving,
 }: {
-  open: boolean;
-  onClose: () => void;
+  open: boolean; onClose: () => void;
   initial?: Partial<VehicleColor>;
   onSave: (data: { hexCode: string; nameEn: string; nameAr: string; isActive: boolean }) => void;
   saving: boolean;
@@ -262,65 +307,37 @@ function ColorDialog({
   const [nameEn, setNameEn] = React.useState(initial?.nameEn ?? "");
   const [nameAr, setNameAr] = React.useState(initial?.nameAr ?? "");
   const [isActive, setIsActive] = React.useState(initial?.isActive ?? true);
-
   React.useEffect(() => {
-    if (open) {
-      setHexCode(initial?.hexCode ?? "#000000");
-      setNameEn(initial?.nameEn ?? "");
-      setNameAr(initial?.nameAr ?? "");
-      setIsActive(initial?.isActive ?? true);
-    }
+    if (open) { setHexCode(initial?.hexCode ?? "#000000"); setNameEn(initial?.nameEn ?? ""); setNameAr(initial?.nameAr ?? ""); setIsActive(initial?.isActive ?? true); }
   }, [open]);
-
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{initial?.id ? "Edit Color" : "Add Color"}</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>{initial?.id ? "Edit Color" : "Add Color"}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5">
-            <Label>Color Swatch</Label>
+          <div className="space-y-1.5"><Label>Color Swatch</Label>
             <div className="flex items-center gap-3">
-              <input
-                type="color"
-                value={hexCode}
-                onChange={(e) => setHexCode(e.target.value)}
-                className="h-10 w-12 rounded-md cursor-pointer border border-border bg-transparent p-0.5"
-              />
-              <Input
-                placeholder="#000000"
-                value={hexCode}
-                onChange={(e) => setHexCode(e.target.value)}
-                className="font-mono text-sm flex-1"
-              />
+              <input type="color" value={hexCode} onChange={(e) => setHexCode(e.target.value)}
+                className="h-10 w-12 rounded-md cursor-pointer border border-border bg-transparent p-0.5" />
+              <Input placeholder="#000000" value={hexCode} onChange={(e) => setHexCode(e.target.value)}
+                className="font-mono text-sm flex-1" />
             </div>
           </div>
-          <div className="space-y-1.5">
-            <Label>English Name</Label>
+          <div className="space-y-1.5"><Label>English Name</Label>
             <Input placeholder="e.g. Pearl White" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
           </div>
-          <div className="space-y-1.5">
-            <Label>Arabic Name</Label>
-            <Input
-              placeholder="e.g. أبيض لؤلؤي"
-              value={nameAr}
-              onChange={(e) => setNameAr(e.target.value)}
-              dir="rtl"
-              className="text-right"
-            />
+          <div className="space-y-1.5"><Label>Arabic Name</Label>
+            <Input placeholder="e.g. أبيض لؤلؤي" value={nameAr} onChange={(e) => setNameAr(e.target.value)}
+              dir="rtl" className="text-right" />
           </div>
-          <div className="flex items-center justify-between">
-            <Label>Active</Label>
+          <div className="flex items-center justify-between"><Label>Active</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button
-            disabled={!nameEn.trim() || !hexCode || saving}
-            onClick={() => onSave({ hexCode, nameEn: nameEn.trim(), nameAr: nameAr.trim(), isActive })}
-          >
+          <Button disabled={!nameEn.trim() || !hexCode || saving}
+            onClick={() => onSave({ hexCode, nameEn: nameEn.trim(), nameAr: nameAr.trim(), isActive })}>
             {saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
@@ -329,144 +346,62 @@ function ColorDialog({
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// ─── Level 1: Brands View ─────────────────────────────────────────────────────
 
-export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }) {
+function BrandsView({
+  onSelectBrand,
+  isShuttle,
+}: {
+  onSelectBrand: (brand: VehicleBrand) => void;
+  isShuttle: boolean;
+}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
   const [brandDialog, setBrandDialog] = useState<{ open: boolean; brand?: VehicleBrand }>({ open: false });
-  const [modelDialog, setModelDialog] = useState<{ open: boolean; model?: VehicleModel }>({ open: false });
-  const [colorDialog, setColorDialog] = useState<{ open: boolean; color?: VehicleColor }>({ open: false });
   const [deleteBrand, setDeleteBrand] = useState<number | null>(null);
-  const [deleteModel, setDeleteModel] = useState<number | null>(null);
+  const [colorDialog, setColorDialog] = useState<{ open: boolean; color?: VehicleColor }>({ open: false });
   const [deleteColor, setDeleteColor] = useState<number | null>(null);
-  const [selectedBrandFilter, setSelectedBrandFilter] = useState<string>("all");
 
-  // ── Brands query
   const brandsQuery = useQuery({
     queryKey: ["vehicle-catalog-brands"],
     queryFn: () => adminFetch<{ data: VehicleBrand[] }>("/admin/vehicle-catalog/brands"),
   });
   const brands = brandsQuery.data?.data ?? [];
 
-  // ── Models query
-  const modelsQuery = useQuery({
-    queryKey: ["vehicle-catalog-models"],
-    queryFn: () => adminFetch<{ data: VehicleModel[] }>("/admin/vehicle-catalog/models"),
-  });
-  const allModels = modelsQuery.data?.data ?? [];
-  const filteredModels = selectedBrandFilter === "all"
-    ? allModels
-    : allModels.filter((m) => String(m.brandId) === selectedBrandFilter);
-
-  // ── Brand mutations
-  const createBrand = useMutation({
-    mutationFn: (data: { name: string; isChinese: boolean; isActive: boolean }) =>
-      adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] });
-      setBrandDialog({ open: false });
-      toast({ title: "Brand added" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
-  const updateBrand = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<VehicleBrand> }) =>
-      adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] });
-      setBrandDialog({ open: false });
-      toast({ title: "Brand updated" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
-  const deleteBrandMutation = useMutation({
-    mutationFn: (id: number) =>
-      adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] });
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
-      setDeleteBrand(null);
-      toast({ title: "Brand deleted" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
-  // ── Colors query
   const colorsQuery = useQuery({
     queryKey: ["vehicle-catalog-colors"],
     queryFn: () => adminFetch<{ data: VehicleColor[] }>("/admin/vehicle-catalog/colors"),
   });
   const colors = colorsQuery.data?.data ?? [];
 
-  // ── Color mutations
+  const createBrand = useMutation({
+    mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] }); setBrandDialog({ open: false }); toast({ title: "Brand added" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+  const updateBrand = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] }); setBrandDialog({ open: false }); toast({ title: "Brand updated" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+  const deleteBrandMutation = useMutation({
+    mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "DELETE" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] }); setDeleteBrand(null); toast({ title: "Brand deleted" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
   const createColor = useMutation({
-    mutationFn: (data: object) =>
-      adminFetch("/admin/vehicle-catalog/colors", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] });
-      setColorDialog({ open: false });
-      toast({ title: "Color added" });
-    },
+    mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/colors", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: "Color added" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
-
   const updateColor = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: object }) =>
-      adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] });
-      setColorDialog({ open: false });
-      toast({ title: "Color updated" });
-    },
+    mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: "Color updated" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
-
   const deleteColorMutation = useMutation({
-    mutationFn: (id: number) =>
-      adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] });
-      setDeleteColor(null);
-      toast({ title: "Color deleted" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
-  // ── Model mutations
-  const createModel = useMutation({
-    mutationFn: (data: object) =>
-      adminFetch("/admin/vehicle-catalog/models", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
-      setModelDialog({ open: false });
-      toast({ title: "Model added" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
-  const updateModel = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: object }) =>
-      adminFetch(`/admin/vehicle-catalog/models/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
-      setModelDialog({ open: false });
-      toast({ title: "Model updated" });
-    },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
-  });
-
-  const deleteModelMutation = useMutation({
-    mutationFn: (id: number) =>
-      adminFetch(`/admin/vehicle-catalog/models/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
-      setDeleteModel(null);
-      toast({ title: "Model deleted" });
-    },
+    mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "DELETE" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setDeleteColor(null); toast({ title: "Color deleted" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
@@ -479,171 +414,65 @@ export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }
           <div className="flex items-center gap-2">
             <Tag className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-semibold text-sm">Approved Brands</h3>
-            {!brandsQuery.isLoading && (
-              <Badge variant="secondary" className="text-xs">{brands.length}</Badge>
-            )}
+            {!brandsQuery.isLoading && <Badge variant="secondary" className="text-xs">{brands.length}</Badge>}
           </div>
           <Button size="sm" className="gap-1.5" onClick={() => setBrandDialog({ open: true })}>
             <Plus className="h-3.5 w-3.5" /> Add Brand
           </Button>
         </div>
 
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Brand Name</TableHead>
-                <TableHead className="text-center">Chinese Brand</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {brandsQuery.isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 5 }).map((__, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : brands.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground text-sm">
-                    No brands defined yet. Add the first one.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                brands.map((brand, idx) => (
-                  <TableRow key={brand.id}>
-                    <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
-                    <TableCell className="font-medium">{brand.name}</TableCell>
-                    <TableCell className="text-center">
-                      {brand.isChinese ? (
-                        <Badge variant="outline" className="text-xs border-red-200 text-red-600 bg-red-50 dark:bg-red-950">Chinese</Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={brand.isActive
-                        ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950 text-xs"
-                        : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900 text-xs"}>
-                        {brand.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7"
-                          onClick={() => setBrandDialog({ open: true, brand })}>
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteBrand(brand.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* ── Approved Models ── */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-semibold text-sm">Approved Models</h3>
-            {!modelsQuery.isLoading && (
-              <Badge variant="secondary" className="text-xs">{filteredModels.length}</Badge>
-            )}
+        {brandsQuery.isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
           </div>
-          <div className="flex items-center gap-2">
-            <Select value={selectedBrandFilter} onValueChange={setSelectedBrandFilter}>
-              <SelectTrigger className="w-40 h-8 text-xs">
-                <SelectValue placeholder="All Brands" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {brands.map((b) => (
-                  <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button size="sm" className="gap-1.5" onClick={() => setModelDialog({ open: true })}>
-              <Plus className="h-3.5 w-3.5" /> Add Model
-            </Button>
+        ) : brands.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-12 text-center text-muted-foreground text-sm">
+            <Car className="h-7 w-7 mx-auto mb-2 opacity-30" />
+            No brands defined yet. Add the first one.
           </div>
-        </div>
-
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead>Model Name</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead className="text-center">Min Year</TableHead>
-                <TableHead className="text-center">Max Year</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {modelsQuery.isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : filteredModels.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
-                    No models found. Add the first one.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredModels.map((model, idx) => (
-                  <TableRow key={model.id}>
-                    <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
-                    <TableCell className="font-medium">{model.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{model.brandName ?? "—"}</TableCell>
-                    <TableCell className="text-center text-sm">{model.minYear}</TableCell>
-                    <TableCell className="text-center text-sm text-muted-foreground">
-                      {model.maxYear ?? <span className="italic text-xs">No limit</span>}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={model.isActive
-                        ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950 text-xs"
-                        : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900 text-xs"}>
-                        {model.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7"
-                          onClick={() => setModelDialog({ open: true, model })}>
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteModel(model.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {brands.map((brand) => (
+              <div
+                key={brand.id}
+                className="group relative rounded-xl border border-border bg-card p-4 cursor-pointer transition-all hover:border-primary/50 hover:shadow-md hover:bg-primary/[0.02]"
+                onClick={() => onSelectBrand(brand)}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Car className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="h-6 w-6 rounded-md flex items-center justify-center hover:bg-muted transition-colors"
+                      onClick={() => setBrandDialog({ open: true, brand })}
+                    >
+                      <Edit className="h-3 w-3 text-muted-foreground" />
+                    </button>
+                    <button
+                      className="h-6 w-6 rounded-md flex items-center justify-center hover:bg-destructive/10 transition-colors"
+                      onClick={() => setDeleteBrand(brand.id)}
+                    >
+                      <Trash2 className="h-3 w-3 text-destructive" />
+                    </button>
+                  </div>
+                </div>
+                <p className="font-semibold text-sm truncate">{brand.name}</p>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  {brand.isChinese && (
+                    <Badge variant="outline" className="text-[10px] border-red-200 text-red-600 bg-red-50 dark:bg-red-950 px-1.5">Chinese</Badge>
+                  )}
+                  <Badge variant="outline" className={`text-[10px] px-1.5 ${brand.isActive ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950" : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900"}`}>
+                    {brand.isActive ? "Active" : "Inactive"}
+                  </Badge>
+                </div>
+                <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <ChevronRight className="h-4 w-4 text-primary" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Approved Colors ── */}
@@ -652,189 +481,507 @@ export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }
           <div className="flex items-center gap-2">
             <Palette className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-semibold text-sm">Approved Colors</h3>
-            {!colorsQuery.isLoading && (
-              <Badge variant="secondary" className="text-xs">{colors.length}</Badge>
-            )}
+            {!colorsQuery.isLoading && <Badge variant="secondary" className="text-xs">{colors.length}</Badge>}
           </div>
           <Button size="sm" className="gap-1.5" onClick={() => setColorDialog({ open: true })}>
             <Plus className="h-3.5 w-3.5" /> Add Color
           </Button>
         </div>
 
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-10">#</TableHead>
-                <TableHead className="w-16">Swatch</TableHead>
-                <TableHead>English Name</TableHead>
-                <TableHead>Arabic Name</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {colorsQuery.isLoading ? (
-                Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((__, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : colors.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
-                    No colors defined yet. Add the first one.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                colors.map((color, idx) => (
-                  <TableRow key={color.id}>
-                    <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
-                    <TableCell>
-                      <div
-                        className="h-7 w-10 rounded-md border border-border shadow-sm"
-                        style={{ backgroundColor: color.hexCode }}
-                        title={color.hexCode}
-                      />
-                    </TableCell>
-                    <TableCell className="font-medium">{color.nameEn}</TableCell>
-                    <TableCell className="text-sm" dir="rtl">{color.nameAr}</TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant="outline" className={color.isActive
-                        ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950 text-xs"
-                        : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900 text-xs"}>
-                        {color.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7"
-                          onClick={() => setColorDialog({ open: true, color })}>
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                          onClick={() => setDeleteColor(color.id)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        {colorsQuery.isLoading ? (
+          <div className="flex flex-wrap gap-2">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-32 rounded-lg" />)}
+          </div>
+        ) : colors.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-foreground text-sm">
+            <Palette className="h-7 w-7 mx-auto mb-2 opacity-30" />
+            No colors defined yet.
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {colors.map((color) => (
+              <div key={color.id} className="group flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 hover:border-primary/40 transition-colors">
+                <div className="h-5 w-5 rounded-full border border-border shadow-sm shrink-0" style={{ backgroundColor: color.hexCode }} />
+                <span className="text-sm font-medium">{color.nameEn}</span>
+                <span className="text-xs text-muted-foreground" dir="rtl">{color.nameAr}</span>
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                  <button onClick={() => setColorDialog({ open: true, color })} className="h-5 w-5 rounded flex items-center justify-center hover:bg-muted">
+                    <Edit className="h-2.5 w-2.5 text-muted-foreground" />
+                  </button>
+                  <button onClick={() => setDeleteColor(color.id)} className="h-5 w-5 rounded flex items-center justify-center hover:bg-destructive/10">
+                    <Trash2 className="h-2.5 w-2.5 text-destructive" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* ── Color Dialog ── */}
-      {colorDialog.open && (
-        <ColorDialog
-          open={colorDialog.open}
-          onClose={() => setColorDialog({ open: false })}
-          initial={colorDialog.color}
-          saving={createColor.isPending || updateColor.isPending}
-          onSave={(data) => {
-            if (colorDialog.color?.id) {
-              updateColor.mutate({ id: colorDialog.color.id, data });
-            } else {
-              createColor.mutate(data);
-            }
-          }}
-        />
-      )}
-
-      <AlertDialog open={deleteColor !== null} onOpenChange={(v) => !v && setDeleteColor(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Color?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this color from the catalog.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteColor !== null && deleteColorMutation.mutate(deleteColor)}
-            >
-              {deleteColorMutation.isPending ? "Deleting…" : "Delete"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ── Dialogs ── */}
+      {/* Dialogs */}
       <BrandDialog
-        open={brandDialog.open}
-        onClose={() => setBrandDialog({ open: false })}
-        initial={brandDialog.brand}
+        open={brandDialog.open} onClose={() => setBrandDialog({ open: false })} initial={brandDialog.brand}
         saving={createBrand.isPending || updateBrand.isPending}
-        onSave={(data) => {
-          if (brandDialog.brand?.id) {
-            updateBrand.mutate({ id: brandDialog.brand.id, data });
-          } else {
-            createBrand.mutate(data);
-          }
-        }}
+        onSave={(data) => brandDialog.brand?.id ? updateBrand.mutate({ id: brandDialog.brand.id, data }) : createBrand.mutate(data)}
       />
-
-      <ModelDialog
-        open={modelDialog.open}
-        onClose={() => setModelDialog({ open: false })}
-        initial={modelDialog.model}
-        brands={brands}
-        isShuttle={isShuttle}
-        saving={createModel.isPending || updateModel.isPending}
-        onSave={(data) => {
-          if (modelDialog.model?.id) {
-            updateModel.mutate({ id: modelDialog.model.id, data });
-          } else {
-            createModel.mutate(data);
-          }
-        }}
+      <ColorDialog
+        open={colorDialog.open} onClose={() => setColorDialog({ open: false })} initial={colorDialog.color}
+        saving={createColor.isPending || updateColor.isPending}
+        onSave={(data) => colorDialog.color?.id ? updateColor.mutate({ id: colorDialog.color.id, data }) : createColor.mutate(data)}
       />
-
       <AlertDialog open={deleteBrand !== null} onOpenChange={(v) => !v && setDeleteBrand(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Brand?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove the brand and all its models from the catalog. This cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will permanently remove the brand and all its models from the catalog.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteBrand !== null && deleteBrandMutation.mutate(deleteBrand)}
-            >
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteBrand !== null && deleteBrandMutation.mutate(deleteBrand)}>
               {deleteBrandMutation.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={deleteColor !== null} onOpenChange={(v) => !v && setDeleteColor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Color?</AlertDialogTitle>
+            <AlertDialogDescription>This will permanently remove this color from the catalog.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteColor !== null && deleteColorMutation.mutate(deleteColor)}>
+              {deleteColorMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
 
+// ─── Level 2: Models View ─────────────────────────────────────────────────────
+
+function ModelsView({
+  brand,
+  onSelectModel,
+  isShuttle,
+}: {
+  brand: VehicleBrand;
+  onSelectModel: (model: VehicleModel) => void;
+  isShuttle: boolean;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [modelDialog, setModelDialog] = useState<{ open: boolean; model?: VehicleModel }>({ open: false });
+  const [deleteModel, setDeleteModel] = useState<number | null>(null);
+
+  const modelsQuery = useQuery({
+    queryKey: ["vehicle-catalog-models", brand.id],
+    queryFn: () => adminFetch<{ data: VehicleModel[] }>(`/admin/vehicle-catalog/models?brandId=${brand.id}`),
+  });
+  const models = modelsQuery.data?.data ?? [];
+
+  const createModel = useMutation({
+    mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/models", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setModelDialog({ open: false }); toast({ title: "Model added" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+  const updateModel = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/models/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setModelDialog({ open: false }); toast({ title: "Model updated" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+  const deleteModelMutation = useMutation({
+    mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/models/${id}`, { method: "DELETE" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setDeleteModel(null); toast({ title: "Model deleted" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Brand header card */}
+      <Card className="border-primary/20 bg-primary/[0.02]">
+        <CardContent className="py-3 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Car className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <p className="font-semibold">{brand.name}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              {brand.isChinese && <Badge variant="outline" className="text-[10px] border-red-200 text-red-600 bg-red-50 dark:bg-red-950 px-1.5">Chinese Brand</Badge>}
+              <span className="text-xs text-muted-foreground">{models.length} model{models.length !== 1 ? "s" : ""} registered</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Models table */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm">{brand.name} Approved Models</h3>
+          {!modelsQuery.isLoading && <Badge variant="secondary" className="text-xs">{models.length}</Badge>}
+        </div>
+        <Button size="sm" className="gap-1.5" onClick={() => setModelDialog({ open: true })}>
+          <Plus className="h-3.5 w-3.5" /> Add New Model
+        </Button>
+      </div>
+
+      <div className="rounded-lg border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">#</TableHead>
+              <TableHead>Model Name</TableHead>
+              <TableHead className="text-center">Year Range</TableHead>
+              {isShuttle && <TableHead className="text-center">Seats</TableHead>}
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {modelsQuery.isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: isShuttle ? 6 : 5 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : models.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={isShuttle ? 6 : 5} className="text-center py-12 text-muted-foreground text-sm">
+                  <Layers className="h-7 w-7 mx-auto mb-2 opacity-30" />
+                  No models for {brand.name} yet. Add the first one.
+                </TableCell>
+              </TableRow>
+            ) : (
+              models.map((model, idx) => (
+                <TableRow
+                  key={model.id}
+                  className="cursor-pointer hover:bg-primary/[0.02] group"
+                  onClick={() => onSelectModel(model)}
+                >
+                  <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{model.name}</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center text-sm">
+                    {model.minYear}
+                    {model.maxYear ? ` – ${model.maxYear}` : " – present"}
+                  </TableCell>
+                  {isShuttle && (
+                    <TableCell className="text-center text-sm">{model.seatCapacity ?? "—"}</TableCell>
+                  )}
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className={`text-xs ${model.isActive ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950" : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900"}`}>
+                      {model.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setModelDialog({ open: true, model })}>
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteModel(model.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <ModelDialog
+        open={modelDialog.open} onClose={() => setModelDialog({ open: false })} initial={modelDialog.model}
+        brandId={brand.id} isShuttle={isShuttle}
+        saving={createModel.isPending || updateModel.isPending}
+        onSave={(data) => modelDialog.model?.id ? updateModel.mutate({ id: modelDialog.model.id, data }) : createModel.mutate(data)}
+      />
       <AlertDialog open={deleteModel !== null} onOpenChange={(v) => !v && setDeleteModel(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Model?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this model from the catalog.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will permanently remove this model and all its registered years.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteModel !== null && deleteModelMutation.mutate(deleteModel)}
-            >
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteModel !== null && deleteModelMutation.mutate(deleteModel)}>
               {deleteModelMutation.isPending ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Level 3: Years View ──────────────────────────────────────────────────────
+
+function YearsView({
+  brand,
+  model,
+}: {
+  brand: VehicleBrand;
+  model: VehicleModel;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [yearDialog, setYearDialog] = useState(false);
+  const [deleteYear, setDeleteYear] = useState<number | null>(null);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+
+  const yearsQuery = useQuery({
+    queryKey: ["vehicle-catalog-years", model.id],
+    queryFn: () => adminFetch<{ data: VehicleYear[] }>(`/admin/vehicle-catalog/models/${model.id}/years`),
+  });
+  const years = (yearsQuery.data?.data ?? []).sort((a, b) => b.year - a.year);
+
+  const createYear = useMutation({
+    mutationFn: (data: object) => adminFetch(`/admin/vehicle-catalog/models/${model.id}/years`, { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); setYearDialog(false); toast({ title: "Year registered" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const updateYearCategory = useMutation({
+    mutationFn: ({ yearId, pricingCategory }: { yearId: number; pricingCategory: string }) =>
+      adminFetch(`/admin/vehicle-catalog/models/${model.id}/years/${yearId}`, { method: "PATCH", body: JSON.stringify({ pricingCategory }) }),
+    onMutate: ({ yearId }) => setUpdatingId(yearId),
+    onSuccess: (_data, { yearId, pricingCategory }) => {
+      setUpdatingId(null);
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] });
+      const cat = pricingMeta(pricingCategory);
+      toast({ title: "Pricing category updated", description: cat ? `Set to ${cat.label} (${cat.labelAr})` : undefined });
+    },
+    onError: (e: any) => { setUpdatingId(null); toast({ title: "Failed to update", description: e?.message, variant: "destructive" }); },
+  });
+
+  const deleteYearMutation = useMutation({
+    mutationFn: (yearId: number) => adminFetch(`/admin/vehicle-catalog/models/${model.id}/years/${yearId}`, { method: "DELETE" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); setDeleteYear(null); toast({ title: "Year removed" }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const updateYearStatus = useMutation({
+    mutationFn: ({ yearId, isActive }: { yearId: number; isActive: boolean }) =>
+      adminFetch(`/admin/vehicle-catalog/models/${model.id}/years/${yearId}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Model header card */}
+      <Card className="border-primary/20 bg-primary/[0.02]">
+        <CardContent className="py-3 flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10">
+            <Layers className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold">{brand.name} {model.name}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Model year range: {model.minYear}–{model.maxYear ?? "present"} · {years.length} year{years.length !== 1 ? "s" : ""} registered
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Pricing category legend */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-xs font-medium text-muted-foreground">Pricing Tiers:</span>
+        </div>
+        {PRICING_CATEGORIES.map((c) => (
+          <Badge key={c.value} variant="outline" className={`text-xs gap-1 ${c.color}`}>
+            {c.label} <span className="opacity-70">({c.labelAr})</span>
+          </Badge>
+        ))}
+      </div>
+
+      {/* Years & pricing category table */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm">{model.name} — Manufacturing Years</h3>
+          {!yearsQuery.isLoading && <Badge variant="secondary" className="text-xs">{years.length}</Badge>}
+        </div>
+        <Button size="sm" className="gap-1.5" onClick={() => setYearDialog(true)}>
+          <Plus className="h-3.5 w-3.5" /> Add Year
+        </Button>
+      </div>
+
+      <div className="rounded-lg border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-24">Year</TableHead>
+              <TableHead>Pricing Category</TableHead>
+              <TableHead className="text-center w-28">Status</TableHead>
+              <TableHead className="text-right w-20">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {yearsQuery.isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 4 }).map((__, j) => <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>)}
+                </TableRow>
+              ))
+            ) : years.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center py-12 text-muted-foreground text-sm">
+                  <Calendar className="h-7 w-7 mx-auto mb-2 opacity-30" />
+                  No manufacturing years registered yet. Click "Add Year" to start.
+                </TableCell>
+              </TableRow>
+            ) : (
+              years.map((yr) => {
+                const cat = pricingMeta(yr.pricingCategory);
+                const isUpdating = updatingId === yr.id;
+                return (
+                  <TableRow key={yr.id} className={isUpdating ? "opacity-60" : ""}>
+                    <TableCell>
+                      <span className="font-bold text-base tabular-nums">{yr.year}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Select
+                          value={yr.pricingCategory ?? ""}
+                          disabled={isUpdating}
+                          onValueChange={(value) => updateYearCategory.mutate({ yearId: yr.id, pricingCategory: value })}
+                        >
+                          <SelectTrigger className="w-52 h-8 text-sm">
+                            <SelectValue placeholder="— No category assigned —" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PRICING_CATEGORIES.map((c) => (
+                              <SelectItem key={c.value} value={c.value}>
+                                <div className="flex items-center gap-2">
+                                  <span>{c.label}</span>
+                                  <span className="text-muted-foreground text-xs">({c.labelAr})</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {cat && (
+                          <Badge variant="outline" className={`text-xs shrink-0 ${cat.color}`}>
+                            {cat.label}
+                          </Badge>
+                        )}
+                        {isUpdating && (
+                          <span className="text-xs text-muted-foreground animate-pulse">Saving…</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={yr.isActive}
+                        onCheckedChange={(checked) => updateYearStatus.mutate({ yearId: yr.id, isActive: checked })}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteYear(yr.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <YearDialog
+        open={yearDialog} onClose={() => setYearDialog(false)} modelId={model.id}
+        saving={createYear.isPending}
+        onSave={(data) => createYear.mutate(data)}
+      />
+      <AlertDialog open={deleteYear !== null} onOpenChange={(v) => !v && setDeleteYear(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Year?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove this manufacturing year entry from the catalog.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteYear !== null && deleteYearMutation.mutate(deleteYear)}>
+              {deleteYearMutation.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+
+export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }) {
+  const [viewState, setViewState] = useState<ViewState>({ level: "brands" });
+
+  return (
+    <div className="space-y-5">
+      {/* Breadcrumb nav — always visible when not at root */}
+      <div className="flex items-center justify-between gap-4">
+        <Breadcrumb viewState={viewState} onNavigate={setViewState} />
+        {viewState.level !== "brands" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground hover:text-foreground shrink-0"
+            onClick={() => {
+              if (viewState.level === "years") setViewState({ level: "models", brand: viewState.brand });
+              else setViewState({ level: "brands" });
+            }}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </Button>
+        )}
+      </div>
+
+      {/* Level separator */}
+      {viewState.level !== "brands" && (
+        <div className="h-px bg-border" />
+      )}
+
+      {/* Level renders */}
+      {viewState.level === "brands" && (
+        <BrandsView
+          isShuttle={isShuttle}
+          onSelectBrand={(brand) => setViewState({ level: "models", brand })}
+        />
+      )}
+
+      {viewState.level === "models" && (
+        <ModelsView
+          brand={viewState.brand}
+          isShuttle={isShuttle}
+          onSelectModel={(model) =>
+            setViewState({ level: "years", brand: viewState.brand, model })
+          }
+        />
+      )}
+
+      {viewState.level === "years" && (
+        <YearsView brand={viewState.brand} model={viewState.model} />
+      )}
     </div>
   );
 }
