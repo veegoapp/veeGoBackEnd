@@ -11,8 +11,9 @@ import {
   Tags, Wallet, CreditCard, ArrowUpRight, Percent, MessageSquare,
   Bell, BarChart3, DollarSign, Settings, LogOut, Menu, Clock,
   ChevronDown, ChevronRight, Shield, Star, CalendarClock, Trophy,
-  ShieldAlert, CalendarRange,
+  ShieldAlert, CalendarRange, Languages,
 } from "lucide-react";
+import { setStoredLanguage, applyDirection } from "@/lib/i18n";
 import logoUrl from "/logo.png";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Badge } from "@/components/ui/badge";
@@ -182,6 +183,38 @@ function SidebarGroup({
         ))}
       </div>
     </div>
+  );
+}
+
+function LanguageToggle() {
+  const { i18n } = useTranslation();
+  const isAr = i18n.language === "ar";
+
+  const toggle = () => {
+    const next = isAr ? "en" : "ar";
+    i18n.changeLanguage(next);
+    setStoredLanguage(next);
+    applyDirection(next);
+  };
+
+  return (
+    <TooltipProvider>
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggle}
+            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          >
+            <span className="text-base leading-none">{isAr ? "EN" : "ع"}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="text-xs">
+          {isAr ? "Switch to English" : "التبديل إلى العربية"}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -361,6 +394,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col min-h-0">
         {isAuthenticated && (
           <header className="sticky top-0 z-20 flex h-11 shrink-0 items-center justify-end border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm px-4 gap-2">
+            <LanguageToggle />
             <NotificationBell />
           </header>
         )}

@@ -30,8 +30,11 @@ import { useTranslation } from "react-i18next";
 
 const routeSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  nameAr: z.string().optional(),
   fromLocation: z.string().min(1, "Origin is required"),
+  fromLocationAr: z.string().optional(),
   toLocation: z.string().min(1, "Destination is required"),
+  toLocationAr: z.string().optional(),
   estimatedDuration: z.coerce.number().min(1, "Duration must be at least 1 minute"),
   basePrice: z.coerce.number().min(0, "Price must be positive"),
   isActive: z.boolean().default(true),
@@ -101,8 +104,11 @@ export default function RoutesList() {
     resolver: zodResolver(routeSchema),
     defaultValues: {
       name: "",
+      nameAr: "",
       fromLocation: "",
+      fromLocationAr: "",
       toLocation: "",
+      toLocationAr: "",
       estimatedDuration: 60,
       basePrice: 0,
       isActive: true,
@@ -113,8 +119,11 @@ export default function RoutesList() {
     resolver: zodResolver(routeSchema),
     defaultValues: {
       name: "",
+      nameAr: "",
       fromLocation: "",
+      fromLocationAr: "",
       toLocation: "",
+      toLocationAr: "",
       estimatedDuration: 60,
       basePrice: 0,
       isActive: true,
@@ -169,8 +178,11 @@ export default function RoutesList() {
   const handleOpenEdit = (route: any) => {
     editForm.reset({
       name: route.name,
+      nameAr: route.nameAr ?? "",
       fromLocation: route.fromLocation,
+      fromLocationAr: route.fromLocationAr ?? "",
       toLocation: route.toLocation,
+      toLocationAr: route.toLocationAr ?? "",
       estimatedDuration: route.estimatedDuration,
       basePrice: route.basePrice,
       isActive: route.isActive,
@@ -199,24 +211,38 @@ export default function RoutesList() {
   }) => (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        {/* English Name */}
         <FormField
           control={form.control}
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("routes.routeName")}</FormLabel>
+              <FormLabel>{t("routes.routeName", "Route Name (English)")}</FormLabel>
               <FormControl><Input placeholder="e.g. Nasr City → Smart Village #1" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+        {/* Arabic Name */}
+        <FormField
+          control={form.control}
+          name="nameAr"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>{t("routes.routeNameAr", "Route Name (Arabic)")}</FormLabel>
+              <FormControl><Input placeholder="مثال: مدينة نصر ← سمارت فيلدج" dir="rtl" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        {/* English From / To */}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
             name="fromLocation"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.from")}</FormLabel>
+                <FormLabel>{t("routes.from", "From (English)")}</FormLabel>
                 <FormControl><Input placeholder="e.g. Nasr City" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -227,13 +253,39 @@ export default function RoutesList() {
             name="toLocation"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.to")}</FormLabel>
+                <FormLabel>{t("routes.to", "To (English)")}</FormLabel>
                 <FormControl><Input placeholder="e.g. Smart Village" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
         </div>
+        {/* Arabic From / To */}
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="fromLocationAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("routes.fromAr", "From (Arabic)")}</FormLabel>
+                <FormControl><Input placeholder="مثال: مدينة نصر" dir="rtl" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="toLocationAr"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t("routes.toAr", "To (Arabic)")}</FormLabel>
+                <FormControl><Input placeholder="مثال: سمارت فيلدج" dir="rtl" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        {/* Duration & Price */}
         <div className="grid grid-cols-2 gap-4">
           <FormField
             control={form.control}
