@@ -102,3 +102,9 @@ id = "zfiXz4Mlku4fxVpgG9C0q"
 uri = "file://services-audit-report.md"
 type = "text"
 title = "Services Group Audit Report"
+
+[[outputs]]
+id = "SirxI99B93HflCnYNE8GK"
+uri = "file://zones-audit-report.md"
+type = "text"
+title = "Zones Technical Audit Report"
