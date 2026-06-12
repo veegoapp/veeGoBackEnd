@@ -60,6 +60,9 @@ catalogs:
     tailwindcss:
       specifier: ^4.1.14
       version: 4.3.0
+    tsx:
+      specifier: 4.21.0
+      version: 4.21.0
     vite:
       specifier: ^7.3.2
       version: 7.3.3
@@ -446,6 +449,9 @@ importers:
       thread-stream:
         specifier: 3.1.0
         version: 3.1.0
+      tsx:
+        specifier: 'catalog:'
+        version: 4.21.0
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@types/node@25.6.2)(@vitest/coverage-v8@4.1.7)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4)
