@@ -5,6 +5,7 @@ export const vehicleModelsTable = pgTable("vehicle_models", {
   id: serial("id").primaryKey(),
   brandId: integer("brand_id").notNull().references(() => vehicleBrandsTable.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
+  nameAr: text("name_ar"),
   minYear: integer("min_year").notNull(),
   maxYear: integer("max_year"),
   isActive: boolean("is_active").notNull().default(true),

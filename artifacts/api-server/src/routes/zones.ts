@@ -9,7 +9,9 @@ const router = Router();
 
 const ZoneBody = z.object({
   name: z.string().min(1, "Name is required"),
+  nameAr: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  descriptionAr: z.string().optional().nullable(),
   centerLat: z.number().min(-90).max(90),
   centerLng: z.number().min(-180).max(180),
   radiusKm: z.number().min(0.1).max(500).default(5),

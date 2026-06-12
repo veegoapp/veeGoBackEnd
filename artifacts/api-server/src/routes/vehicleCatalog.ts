@@ -19,6 +19,7 @@ const ColorIdParam  = z.object({ id: z.coerce.number().int().positive() });
 
 const CreateBrandBody = z.object({
   name:        z.string().min(1),
+  nameAr:      z.string().optional(),
   serviceType: z.string().min(1).default("car"),
   isChinese:   z.boolean().default(false),
   isActive:    z.boolean().default(true),
@@ -26,6 +27,7 @@ const CreateBrandBody = z.object({
 
 const UpdateBrandBody = z.object({
   name:      z.string().min(1).optional(),
+  nameAr:    z.string().optional(),
   isChinese: z.boolean().optional(),
   isActive:  z.boolean().optional(),
 });
@@ -52,6 +54,7 @@ const BulkImportBrandsWithModelsBody = z.object({
 const CreateModelBody = z.object({
   brandId: z.number().int().positive(),
   name:    z.string().min(1),
+  nameAr:  z.string().optional(),
   minYear: z.number().int().min(1900),
   maxYear: z.number().int().optional(),
   isActive: z.boolean().default(true),
@@ -59,6 +62,7 @@ const CreateModelBody = z.object({
 
 const UpdateModelBody = z.object({
   name:    z.string().min(1).optional(),
+  nameAr:  z.string().optional(),
   minYear: z.number().int().min(1900).optional(),
   maxYear: z.number().int().nullable().optional(),
   isActive: z.boolean().optional(),
@@ -334,6 +338,7 @@ router.get("/admin/vehicle-catalog/models", authenticate, requireRole("admin"), 
       id:        vehicleModelsTable.id,
       brandId:   vehicleModelsTable.brandId,
       name:      vehicleModelsTable.name,
+      nameAr:    vehicleModelsTable.nameAr,
       minYear:   vehicleModelsTable.minYear,
       maxYear:   vehicleModelsTable.maxYear,
       isActive:  vehicleModelsTable.isActive,

@@ -5,7 +5,9 @@ import { z } from "zod/v4";
 export const zonesTable = pgTable("zones", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  nameAr: text("name_ar"),
   description: text("description"),
+  descriptionAr: text("description_ar"),
   centerLat: real("center_lat").notNull(),
   centerLng: real("center_lng").notNull(),
   radiusKm: real("radius_km").notNull().default(5),

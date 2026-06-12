@@ -7,7 +7,9 @@ export const notificationsTable = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => usersTable.id),
   title: text("title").notNull(),
+  titleAr: text("title_ar"),
   body: text("body").notNull(),
+  bodyAr: text("body_ar"),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

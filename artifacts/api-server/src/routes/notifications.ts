@@ -12,9 +12,16 @@ import {
 
 const router = Router();
 
+const SendNotificationBodyExt = SendNotificationBody.extend({
+  titleAr: z.string().optional(),
+  bodyAr: z.string().optional(),
+});
+
 const BroadcastBody = z.object({
   title: z.string().min(1),
+  titleAr: z.string().optional(),
   body: z.string().min(1),
+  bodyAr: z.string().optional(),
   target: z.enum(["all", "users", "drivers", "specific"]).default("all"),
   userId: z.coerce.number().int().positive().optional(),
   includeBlocked: z.boolean().default(false),
@@ -50,7 +57,9 @@ router.get("/admin/notifications/history", authenticate, requireRole("admin"), a
       id: notificationsTable.id,
       userId: notificationsTable.userId,
       title: notificationsTable.title,
+      titleAr: notificationsTable.titleAr,
       body: notificationsTable.body,
+      bodyAr: notificationsTable.bodyAr,
       isRead: notificationsTable.isRead,
       createdAt: notificationsTable.createdAt,
       user: {
@@ -71,7 +80,7 @@ router.get("/admin/notifications/history", authenticate, requireRole("admin"), a
 });
 
 router.post("/notifications", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
-  const parsed = SendNotificationBody.safeParse(req.body);
+  const parsed = SendNotificationBodyExt.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [notification] = await db.insert(notificationsTable).values(parsed.data).returning();
   res.status(201).json(notification);
@@ -80,7 +89,7 @@ router.post("/notifications", authenticate, requireRole("admin"), async (req, re
 router.post("/admin/notifications/broadcast", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = BroadcastBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { title, body, target, userId, includeBlocked, minRating, minTripCount } = parsed.data;
+  const { title, titleAr, body, bodyAr, target, userId, includeBlocked, minRating, minTripCount } = parsed.data;
 
   let userIds: number[] = [];
 
@@ -123,7 +132,7 @@ router.post("/admin/notifications/broadcast", authenticate, requireRole("admin")
     return;
   }
 
-  const notifications = userIds.map((uid) => ({ userId: uid, title, body }));
+  const notifications = userIds.map((uid) => ({ userId: uid, title, titleAr, body, bodyAr }));
   const inserted = await db.insert(notificationsTable).values(notifications).returning();
 
   const io = getIO();

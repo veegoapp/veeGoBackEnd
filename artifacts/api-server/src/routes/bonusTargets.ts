@@ -23,7 +23,9 @@ function fmtProgress(p: Record<string, unknown>) {
 
 const CreateBonusTargetBody = z.object({
   name: z.string().min(1),
+  nameAr: z.string().optional(),
   description: z.string().optional(),
+  descriptionAr: z.string().optional(),
   serviceType: z.enum(["all", "car", "bike", "delivery", "scooter", "shuttle", "ride"]).default("all"),
   targetType: z.enum(["ride_count", "earnings_amount"]),
   targetValue: z.number().positive(),
@@ -34,7 +36,9 @@ const CreateBonusTargetBody = z.object({
 
 const UpdateBonusTargetBody = z.object({
   name: z.string().min(1).optional(),
+  nameAr: z.string().optional(),
   description: z.string().optional(),
+  descriptionAr: z.string().optional(),
   serviceType: z.enum(["all", "car", "bike", "delivery", "scooter", "shuttle", "ride"]).optional(),
   targetType: z.enum(["ride_count", "earnings_amount"]).optional(),
   targetValue: z.number().positive().optional(),

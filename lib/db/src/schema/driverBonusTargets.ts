@@ -5,7 +5,9 @@ import { z } from "zod/v4";
 export const driverBonusTargetsTable = pgTable("driver_bonus_targets", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  nameAr: text("name_ar"),
   description: text("description"),
+  descriptionAr: text("description_ar"),
   serviceType: text("service_type").notNull().default("all"),
   targetType: text("target_type").notNull(),
   targetValue: numeric("target_value", { precision: 12, scale: 2 }).notNull(),

@@ -1,0 +1,58 @@
+You are working on the VeeGo backend API server.
+
+New Arabic columns were added to the database. Your job is to update the API endpoints to read and write these new columns.
+
+CRITICAL RULES:
+- Do NOT install any new packages
+- Do NOT modify the database schema
+- Do NOT touch any frontend files
+- Do NOT rewrite entire files — only add the new fields where needed
+- Do NOT remove any existing fields from responses
+
+## New columns added:
+- routes: name_ar, from_location_ar, to_location_ar
+- stations: name_ar
+- zones: name_ar, description_ar
+- vehicle_brands: name_ar
+- vehicle_models: name_ar
+- driver_bonus_targets: name_ar, description_ar
+- notifications: title_ar, body_ar
+
+## What to do:
+
+### Step 1 — Update Drizzle schema file
+Find the schema file (likely src/db/schema.ts or similar).
+Add the new _ar columns to these tables:
+- routes table: name_ar, from_location_ar, to_location_ar (all text, nullable)
+- stations table: name_ar (text, nullable)
+- zones table: name_ar, description_ar (both text, nullable)
+- vehicle_brands table: name_ar (text, nullable)
+- vehicle_models table: name_ar (text, nullable)
+- driver_bonus_targets table: name_ar, description_ar (both text, nullable)
+- notifications table: title_ar, body_ar (both text, nullable)
+
+### Step 2 — Update GET endpoints to include _ar fields in responses
+Find and update these route files:
+- routes endpoint → include name_ar, from_location_ar, to_location_ar
+- stations endpoint → include name_ar
+- zones endpoint → include name_ar, description_ar
+- vehicle_brands endpoint → include name_ar
+- vehicle_models endpoint → include name_ar
+- driver_bonus_targets endpoint → include name_ar, description_ar
+- notifications endpoint → include title_ar, body_ar
+
+### Step 3 — Update POST and PUT endpoints to accept _ar fields
+For each of the above endpoints, update the create and update handlers to:
+- Accept name_ar (and other _ar fields) in the request body
+- Save them to the database
+- Return them in the response
+
+### Step 4 — Update Zod validation schemas
+If any of the above endpoints use Zod for input validation, add the _ar fields as optional strings:
+name_ar: z.string().optional()
+
+## After completing all steps, give me:
+1. List of every file you modified
+2. For each file, what exactly you changed
+3. Confirm the server restarts with no errors
+4. Confirm no existing endpoints were broken

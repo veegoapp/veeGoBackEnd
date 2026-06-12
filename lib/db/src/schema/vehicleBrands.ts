@@ -3,6 +3,7 @@ import { pgTable, serial, text, boolean, timestamp } from "drizzle-orm/pg-core";
 export const vehicleBrandsTable = pgTable("vehicle_brands", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
+  nameAr: text("name_ar"),
   serviceType: text("service_type").notNull().default("car"),
   isChinese: boolean("is_chinese").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),

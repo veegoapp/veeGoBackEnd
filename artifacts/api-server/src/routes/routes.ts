@@ -20,12 +20,26 @@ import {
 
 const router = Router();
 
+const CreateRouteBodyExt = CreateRouteBody.extend({
+  nameAr: z.string().optional(),
+  fromLocationAr: z.string().optional(),
+  toLocationAr: z.string().optional(),
+});
+
+const UpdateRouteBodyExt = UpdateRouteBody.extend({
+  nameAr: z.string().optional(),
+  fromLocationAr: z.string().optional(),
+  toLocationAr: z.string().optional(),
+});
+
 const AddStationBodyExt = AddStationBody.extend({
+  nameAr: z.string().optional(),
   direction: z.enum(["outbound", "return"]).default("outbound"),
   segmentPrice: z.coerce.number().min(0).nullable().optional(),
 });
 
 const UpdateStationBodyExt = UpdateStationBody.extend({
+  nameAr: z.string().optional(),
   direction: z.enum(["outbound", "return"]).optional(),
   segmentPrice: z.coerce.number().min(0).nullable().optional(),
 });
@@ -48,7 +62,7 @@ router.get("/routes", async (req, res): Promise<void> => {
 });
 
 router.post("/routes", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
-  const parsed = CreateRouteBody.safeParse(req.body);
+  const parsed = CreateRouteBodyExt.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [route] = await db.insert(routesTable).values({
     ...parsed.data,
@@ -68,7 +82,7 @@ router.get("/routes/:id", async (req, res): Promise<void> => {
 router.patch("/routes/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const params = UpdateRouteParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
-  const parsed = UpdateRouteBody.safeParse(req.body);
+  const parsed = UpdateRouteBodyExt.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const updateData: Record<string, unknown> = { ...parsed.data };
   if (parsed.data.basePrice !== undefined) updateData.basePrice = String(parsed.data.basePrice);
