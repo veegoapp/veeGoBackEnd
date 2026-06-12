@@ -96,3 +96,9 @@ id = "VQG1OU3RKDv6Kk_Eetrrs"
 uri = "file://backend_final_reference.md"
 type = "text"
 title = "VeeGo Backend — Master API Reference"
+
+[[outputs]]
+id = "zfiXz4Mlku4fxVpgG9C0q"
+uri = "file://services-audit-report.md"
+type = "text"
+title = "Services Group Audit Report"
