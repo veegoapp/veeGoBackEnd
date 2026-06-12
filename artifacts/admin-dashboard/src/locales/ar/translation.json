@@ -839,6 +839,7 @@
     "stationNameAr": "اسم المحطة (عربي)",
     "stationPlaceholder": "e.g. Ramses Square",
     "stationArPlaceholder": "مثال: ميدان رمسيس",
+    "autoFill": "تعبئة تلقائية ←",
     "latitude": "خط العرض",
     "longitude": "خط الطول",
     "stopOrder": "ترتيب المحطة",

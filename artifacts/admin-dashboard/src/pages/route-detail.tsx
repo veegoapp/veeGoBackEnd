@@ -55,6 +55,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { formatEGP } from "@/lib/currency";
 import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartTooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from "recharts";
 import { useTranslation } from "react-i18next";
+import { lookupStationAr } from "@/lib/station-translations";
+import { Wand2 } from "lucide-react";
 
 const stationSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -444,13 +446,40 @@ function OverviewTab({ route, trips, stations }: { route: any; trips: any[]; sta
 
 function StationFields({ form, showSegmentPrice = true }: { form: any; showSegmentPrice?: boolean }) {
   const { t } = useTranslation();
+  const watchedName: string = form.watch("name") ?? "";
+  const suggestion = lookupStationAr(watchedName);
+  const currentAr: string = form.watch("nameAr") ?? "";
+
+  const handleAutoFill = () => {
+    if (suggestion) form.setValue("nameAr", suggestion, { shouldValidate: true, shouldDirty: true });
+  };
+
   return (
     <>
       <FormField control={form.control} name="name" render={({ field }) => (
         <FormItem><FormLabel>{t("routeDetail.stationName", "Station Name (English)")}</FormLabel><FormControl><Input placeholder={t("routeDetail.stationPlaceholder", "e.g. Ramses Square")} {...field} /></FormControl><FormMessage /></FormItem>
       )} />
       <FormField control={form.control} name="nameAr" render={({ field }) => (
-        <FormItem><FormLabel>{t("routeDetail.stationNameAr", "Station Name (Arabic)")}</FormLabel><FormControl><Input placeholder={t("routeDetail.stationArPlaceholder", "مثال: ميدان رمسيس")} dir="rtl" {...field} /></FormControl><FormMessage /></FormItem>
+        <FormItem>
+          <div className="flex items-center justify-between">
+            <FormLabel>{t("routeDetail.stationNameAr", "Station Name (Arabic)")}</FormLabel>
+            {suggestion && suggestion !== currentAr && (
+              <button
+                type="button"
+                onClick={handleAutoFill}
+                className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
+              >
+                <Wand2 className="h-3 w-3" />
+                {t("routeDetail.autoFill", "Auto-fill")}
+                <span className="font-medium text-foreground ms-1 dir-rtl">{suggestion}</span>
+              </button>
+            )}
+          </div>
+          <FormControl>
+            <Input placeholder={t("routeDetail.stationArPlaceholder", "مثال: ميدان رمسيس")} dir="rtl" {...field} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
       )} />
       <div className="grid grid-cols-2 gap-4">
         <FormField control={form.control} name="latitude" render={({ field }) => (
