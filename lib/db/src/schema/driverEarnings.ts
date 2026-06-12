@@ -10,7 +10,9 @@ export const driverEarningsTable = pgTable("driver_earnings", {
   id: serial("id").primaryKey(),
   driverId: integer("driver_id").notNull().references(() => driversTable.id, { onDelete: "cascade" }),
   tripId: integer("trip_id").references(() => tripsTable.id, { onDelete: "set null" }),
+  rideId: integer("ride_id"),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  type: text("type").notNull().default("ride"),
   status: earningStatusEnum("status").notNull().default("pending"),
   notes:     text("notes"),
   date:      timestamp("date", { withTimezone: true }).notNull().defaultNow(),
@@ -18,7 +20,9 @@ export const driverEarningsTable = pgTable("driver_earnings", {
 }, (table) => [
   index("idx_driver_earnings_driver_id").on(table.driverId),
   index("idx_driver_earnings_trip_id").on(table.tripId),
+  index("idx_driver_earnings_ride_id").on(table.rideId),
   index("idx_driver_earnings_status").on(table.status),
+  index("idx_driver_earnings_type").on(table.type),
 ]);
 
 export const insertDriverEarningsSchema = createInsertSchema(driverEarningsTable).omit({ id: true, createdAt: true });

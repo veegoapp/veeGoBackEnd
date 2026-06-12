@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, walletTransactionsTable, paymentsTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD, notificationsTable, routesTable, stationsTable } from "@workspace/db";
+import { db, bookingsTable, tripsTable, usersTable, promoCodesTable, promoCodeUsagesTable, walletTransactionsTable, paymentsTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD, notificationsTable, routesTable, stationsTable } from "@workspace/db";
 import { eq, sql, and, asc } from "drizzle-orm";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
@@ -129,19 +129,66 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
 
     if (promoCodeStr) {
       const [promo] = await tx.select().from(promoCodesTable).where(eq(promoCodesTable.code, promoCodeStr));
-      if (promo && promo.isActive) {
-        if (!promo.expiryDate || new Date(promo.expiryDate) > new Date()) {
-          if (!promo.maxUsage || promo.usedCount < promo.maxUsage) {
-            if (promo.discountType === "percentage") {
-              totalPrice = totalPrice * (1 - parseFloat(promo.discountValue) / 100);
-            } else {
-              totalPrice = Math.max(0, totalPrice - parseFloat(promo.discountValue));
-            }
-            promoCodeId = promo.id;
-            await tx.update(promoCodesTable).set({ usedCount: promo.usedCount + 1 }).where(eq(promoCodesTable.id, promo.id));
-          }
+
+      if (!promo || !promo.isActive) {
+        return { error: "Promo code not found or inactive", status: 400 };
+      }
+      if (promo.expiryDate && new Date(promo.expiryDate) < new Date()) {
+        return { error: "Promo code has expired", status: 400 };
+      }
+      if (promo.maxUsage !== null && promo.usedCount >= promo.maxUsage) {
+        return { error: "Promo code usage limit reached", status: 400 };
+      }
+      // Applicable service check
+      const applicableService = (promo.applicableService as string | null) ?? "all";
+      if (applicableService !== "all" && applicableService !== "shuttle") {
+        return { error: `Promo code is only valid for ${applicableService} rides`, status: 400 };
+      }
+      // Minimum ride amount check
+      if (promo.minRideAmount !== null) {
+        const minAmount = parseFloat(promo.minRideAmount as string);
+        if (totalPrice < minAmount) {
+          return { error: `Promo code requires a minimum booking amount of ${minAmount.toFixed(2)} EGP`, status: 400 };
         }
       }
+      // Per-user usage limit check
+      if (promo.perUserLimit !== null) {
+        const [{ userUseCount }] = await tx
+          .select({ userUseCount: sql<number>`count(*)::int` })
+          .from(promoCodeUsagesTable)
+          .where(and(eq(promoCodeUsagesTable.promoCodeId, promo.id), eq(promoCodeUsagesTable.userId, req.user!.id)));
+        if (userUseCount >= promo.perUserLimit) {
+          return { error: "You have already used this promo code the maximum number of times", status: 400 };
+        }
+      }
+
+      // Atomically increment usedCount with SQL guard to prevent race conditions
+      const updatedPromo = await tx
+        .update(promoCodesTable)
+        .set({ usedCount: sql`used_count + 1` })
+        .where(and(
+          eq(promoCodesTable.id, promo.id),
+          sql`(max_usage IS NULL OR used_count < max_usage)`,
+        ))
+        .returning({ id: promoCodesTable.id });
+
+      if (updatedPromo.length === 0) {
+        return { error: "Promo code usage limit reached", status: 400 };
+      }
+
+      // Record per-user usage
+      await tx.insert(promoCodeUsagesTable).values({
+        promoCodeId: promo.id,
+        userId: req.user!.id,
+      });
+
+      if (promo.discountType === "percentage") {
+        totalPrice = totalPrice * (1 - parseFloat(promo.discountValue as string) / 100);
+      } else {
+        totalPrice = Math.max(0, totalPrice - parseFloat(promo.discountValue as string));
+      }
+      totalPrice = parseFloat(totalPrice.toFixed(2));
+      promoCodeId = promo.id;
     }
 
     // Check wallet balance before confirming the booking

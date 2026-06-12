@@ -29,6 +29,8 @@ export const driversTable = pgTable("drivers", {
   checkInDeadline:  timestamp("checkin_deadline",   { withTimezone: true }),
   lastCheckInAt:    timestamp("last_checkin_at",    { withTimezone: true }),
 
+  commissionRate: numeric("commission_rate", { precision: 5, scale: 4 }),
+
   // ── Smart dispatch stats (Feature 2) ──────────────────────────────────────
   // Used to compute acceptance rate = totalAccepted / totalDispatched.
   // Incremented in dispatchBatch() and onAccepted() respectively.

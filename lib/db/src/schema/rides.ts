@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
 import { driversTable } from "./drivers";
+import { promoCodesTable } from "./promoCodes";
 
 export const ridesTable = pgTable("rides", {
   id: serial("id").primaryKey(),
@@ -23,6 +24,7 @@ export const ridesTable = pgTable("rides", {
   estimatedPrice: numeric("estimated_price", { precision: 10, scale: 2 }),
   finalPrice: numeric("final_price", { precision: 10, scale: 2 }),
   waitingCharge: numeric("waiting_charge", { precision: 10, scale: 2 }).default("0.00"),
+  promoCodeId: integer("promo_code_id").references(() => promoCodesTable.id),
   status: text("status").notNull().default("requested"),
   cancelReason: text("cancel_reason"),
   cancelNote: text("cancel_note"),
@@ -39,6 +41,7 @@ export const ridesTable = pgTable("rides", {
   index("idx_rides_driver_id").on(table.driverId),
   index("idx_rides_status").on(table.status),
   index("idx_rides_requested_at").on(table.requestedAt),
+  index("idx_rides_promo_code_id").on(table.promoCodeId),
 ]);
 
 export const insertRideSchema = createInsertSchema(ridesTable).omit({ id: true, createdAt: true, updatedAt: true });

@@ -78,3 +78,9 @@ id = "_rY677QyVSKGJQ5GCOGIi"
 uri = "file://promotions_audit.md"
 type = "text"
 title = "Promotions & Incentives Audit"
+
+[[outputs]]
+id = "hQ-OZ9YlWPbe01tnXOYGf"
+uri = "file://phase4_promotions_report.md"
+type = "text"
+title = "Phase 4: Promotions & Driver Incentives Report"

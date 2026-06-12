@@ -36,6 +36,8 @@ import schedulesRouter from "./schedules";
 import shuttleTripsAdminRouter from "./shuttleTripsAdmin";
 import shuttleVehicleTypesRouter from "./shuttleVehicleTypes";
 import vehicleCatalogRouter from "./vehicleCatalog";
+import bonusTargetsRouter from "./bonusTargets";
+import commissionExemptionsRouter from "./commissionExemptions";
 
 const router: IRouter = Router();
 
@@ -76,5 +78,7 @@ router.use(schedulesRouter);
 router.use(shuttleTripsAdminRouter);
 router.use(shuttleVehicleTypesRouter);
 router.use(vehicleCatalogRouter);
+router.use(bonusTargetsRouter);
+router.use(commissionExemptionsRouter);
 
 export default router;

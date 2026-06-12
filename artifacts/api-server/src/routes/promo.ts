@@ -31,7 +31,7 @@ router.post("/promo/validate", authenticate, async (req, res): Promise<void> => 
   res.json(formatPromo(promo as Record<string, unknown>));
 });
 
-router.get("/promo", authenticate, async (req, res): Promise<void> => {
+router.get("/promo", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = ListPromoCodesQueryParams.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { page = 1, limit = 20 } = parsed.data;

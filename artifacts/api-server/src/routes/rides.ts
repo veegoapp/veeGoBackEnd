@@ -15,11 +15,15 @@ import {
   paymentsTable,
   ratingsTable,
   promoCodesTable,
+  promoCodeUsagesTable,
+  driverCommissionExemptionsTable,
   sosEventsTable,
   rideShareTokensTable,
   serviceControlsTable,
   carCategoriesTable,
 } from "@workspace/db";
+import { loadSetting } from "../lib/settings";
+import { updateBonusProgressAfterRide } from "../lib/bonus-targets";
 import crypto from "crypto";
 import { jobQueue } from "../lib/jobQueue";
 import { getCurrentSurge } from "../lib/surge-pricing";
@@ -562,6 +566,31 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         res.status(400).json({ error: "Promo code usage limit reached" });
         return;
       }
+      // Applicable service check — "all" allows any service type
+      const applicableService = (promo.applicableService as string | null) ?? "all";
+      if (applicableService !== "all" && applicableService !== vehicleType) {
+        res.status(400).json({ error: `Promo code is only valid for ${applicableService} rides` });
+        return;
+      }
+      // Minimum ride amount check
+      if (promo.minRideAmount !== null) {
+        const minAmount = parseFloat(promo.minRideAmount as string);
+        if (estimatedPrice < minAmount) {
+          res.status(400).json({ error: `Promo code requires a minimum ride amount of ${minAmount.toFixed(2)} EGP` });
+          return;
+        }
+      }
+      // Per-user usage limit check
+      if (promo.perUserLimit !== null) {
+        const [{ userUseCount }] = await db
+          .select({ userUseCount: sql<number>`count(*)::int` })
+          .from(promoCodeUsagesTable)
+          .where(and(eq(promoCodeUsagesTable.promoCodeId, promo.id), eq(promoCodeUsagesTable.userId, userId)));
+        if (userUseCount >= promo.perUserLimit) {
+          res.status(400).json({ error: "You have already used this promo code the maximum number of times" });
+          return;
+        }
+      }
 
       const discountValue = parseFloat(promo.discountValue as string);
       if (promo.discountType === "percentage") {
@@ -602,6 +631,9 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         if (updated.length === 0) {
           throw Object.assign(new Error("Promo code usage limit reached"), { code: "PROMO_LIMIT_REACHED" });
         }
+
+        // Record per-user promo usage inside the same transaction
+        await tx.insert(promoCodeUsagesTable).values({ promoCodeId: promoId, userId });
       }
 
       const [r] = await tx
@@ -620,6 +652,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
           distanceKm: distanceKm.toFixed(3),
           estimatedDurationMinutes,
           estimatedPrice: discountedPrice.toFixed(2),
+          promoCodeId: promoId ?? undefined,
           status: "searching",
         })
         .returning();
@@ -1275,19 +1308,42 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
     const waitingCharge = ride.waitingCharge ? parseFloat(ride.waitingCharge as string) : 0;
     const finalPrice = (ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0) + waitingCharge;
 
-    const [commissionSetting] = await db
-      .select({ value: settingsTable.value })
-      .from(settingsTable)
-      .where(eq(settingsTable.key, "driver_commission_rate"));
-    // commissionRate is the PLATFORM cut (e.g. 0.15 = 15%).
-    // Driver receives the remainder: (1 - commissionRate).
-    const commissionRate = commissionSetting ? parseFloat(commissionSetting.value) || 0.15 : 0.15;
+    // Commission priority: active exemption (0%) > driver personal rate > global rate.
+    const now = new Date();
+    const [activeExemption] = await db
+      .select({ id: driverCommissionExemptionsTable.id })
+      .from(driverCommissionExemptionsTable)
+      .where(and(
+        eq(driverCommissionExemptionsTable.driverId, driver.id),
+        eq(driverCommissionExemptionsTable.isActive, true),
+        sql`${driverCommissionExemptionsTable.startsAt} <= ${now}`,
+        sql`${driverCommissionExemptionsTable.endsAt} >= ${now}`,
+      ))
+      .limit(1);
+
+    const [driverRow] = await db
+      .select({ commissionRate: driversTable.commissionRate })
+      .from(driversTable)
+      .where(eq(driversTable.id, driver.id));
+
+    let commissionRate: number;
+    if (activeExemption) {
+      commissionRate = 0;
+    } else if (driverRow?.commissionRate !== null && driverRow?.commissionRate !== undefined) {
+      commissionRate = parseFloat(driverRow.commissionRate as string);
+    } else {
+      const commissionSettings = await loadSetting<{ appCommission: number }>("commission", { appCommission: 15 });
+      commissionRate = commissionSettings.appCommission / 100;
+    }
+
     const platformCut = parseFloat((finalPrice * commissionRate).toFixed(2));
     const driverCut   = parseFloat((finalPrice - platformCut).toFixed(2));
 
     // Check peak hours before entering the transaction (async settings read).
-    const isPeak    = await isCurrentlyPeakHour();
-    const peakBonus = isPeak ? parseFloat((driverCut * 0.20).toFixed(2)) : 0;
+    const isPeak = await isCurrentlyPeakHour();
+    const commissionSettings = await loadSetting<{ peakBonusRate?: number }>("commission", {});
+    const peakBonusRate = commissionSettings.peakBonusRate ?? 0.20;
+    const peakBonus = isPeak ? parseFloat((driverCut * peakBonusRate).toFixed(2)) : 0;
 
     await db.transaction(async (tx) => {
       await tx
@@ -1321,14 +1377,18 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
 
       await tx.insert(driverEarningsTable).values({
         driverId: driver.id,
+        rideId:   rideId,
         amount:   driverCut.toFixed(2),
+        type:     activeExemption ? "commission_exemption_saving" : "ride",
         status:   "confirmed",
       });
 
       if (peakBonus > 0) {
         await tx.insert(driverEarningsTable).values({
           driverId: driver.id,
+          rideId:   rideId,
           amount:   peakBonus.toFixed(2),
+          type:     "peak_bonus",
           status:   "confirmed",
           notes:    "peak_hours_bonus",
         });
@@ -1336,6 +1396,11 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
 
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));
     });
+
+    // Update bonus target progress (non-fatal)
+    updateBonusProgressAfterRide(driver.id, ride.vehicleType, finalPrice).catch(
+      (err) => console.error("Bonus progress update error (PATCH complete):", err),
+    );
 
     await db.insert(rideEventsTable).values({
       rideId,
@@ -1422,18 +1487,41 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
     const waitingCharge = ride.waitingCharge ? parseFloat(ride.waitingCharge as string) : 0;
     const finalPrice = (ride.estimatedPrice ? parseFloat(ride.estimatedPrice as string) : 0) + waitingCharge;
 
-    const [commissionSettingPost] = await db
-      .select({ value: settingsTable.value })
-      .from(settingsTable)
-      .where(eq(settingsTable.key, "driver_commission_rate"));
-    // commissionRatePost is the PLATFORM cut (e.g. 0.15 = 15%).
-    // Driver receives the remainder: (1 - commissionRatePost).
-    const commissionRatePost = commissionSettingPost ? parseFloat(commissionSettingPost.value) || 0.15 : 0.15;
+    // Commission priority: active exemption (0%) > driver personal rate > global rate.
+    const nowPost = new Date();
+    const [activeExemptionPost] = await db
+      .select({ id: driverCommissionExemptionsTable.id })
+      .from(driverCommissionExemptionsTable)
+      .where(and(
+        eq(driverCommissionExemptionsTable.driverId, driver.id),
+        eq(driverCommissionExemptionsTable.isActive, true),
+        sql`${driverCommissionExemptionsTable.startsAt} <= ${nowPost}`,
+        sql`${driverCommissionExemptionsTable.endsAt} >= ${nowPost}`,
+      ))
+      .limit(1);
+
+    const [driverRowPost] = await db
+      .select({ commissionRate: driversTable.commissionRate })
+      .from(driversTable)
+      .where(eq(driversTable.id, driver.id));
+
+    let commissionRatePost: number;
+    if (activeExemptionPost) {
+      commissionRatePost = 0;
+    } else if (driverRowPost?.commissionRate !== null && driverRowPost?.commissionRate !== undefined) {
+      commissionRatePost = parseFloat(driverRowPost.commissionRate as string);
+    } else {
+      const commissionSettingsPost = await loadSetting<{ appCommission: number }>("commission", { appCommission: 15 });
+      commissionRatePost = commissionSettingsPost.appCommission / 100;
+    }
+
     const platformCutPost = parseFloat((finalPrice * commissionRatePost).toFixed(2));
     const driverCut       = parseFloat((finalPrice - platformCutPost).toFixed(2));
 
-    const isPeakPost    = await isCurrentlyPeakHour();
-    const peakBonusPost = isPeakPost ? parseFloat((driverCut * 0.20).toFixed(2)) : 0;
+    const isPeakPost = await isCurrentlyPeakHour();
+    const commissionSettingsPost2 = await loadSetting<{ peakBonusRate?: number }>("commission", {});
+    const peakBonusRatePost = commissionSettingsPost2.peakBonusRate ?? 0.20;
+    const peakBonusPost = isPeakPost ? parseFloat((driverCut * peakBonusRatePost).toFixed(2)) : 0;
 
     await db.transaction(async (tx) => {
       await tx.update(ridesTable)
@@ -1461,12 +1549,30 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
         status:  "completed",
         notes:   `Ride #${rideId} (${ride.vehicleType}) — ${distanceKm.toFixed(1)} km`,
       });
-      await tx.insert(driverEarningsTable).values({ driverId: driver.id, amount: driverCut.toFixed(2), status: "confirmed" });
+      await tx.insert(driverEarningsTable).values({
+        driverId: driver.id,
+        rideId:   rideId,
+        amount:   driverCut.toFixed(2),
+        type:     activeExemptionPost ? "commission_exemption_saving" : "ride",
+        status:   "confirmed",
+      });
       if (peakBonusPost > 0) {
-        await tx.insert(driverEarningsTable).values({ driverId: driver.id, amount: peakBonusPost.toFixed(2), status: "confirmed", notes: "peak_hours_bonus" });
+        await tx.insert(driverEarningsTable).values({
+          driverId: driver.id,
+          rideId:   rideId,
+          amount:   peakBonusPost.toFixed(2),
+          type:     "peak_bonus",
+          status:   "confirmed",
+          notes:    "peak_hours_bonus",
+        });
       }
       await tx.update(driversTable).set({ status: "online" }).where(eq(driversTable.id, driver.id));
     });
+
+    // Update bonus target progress (non-fatal)
+    updateBonusProgressAfterRide(driver.id, ride.vehicleType, finalPrice).catch(
+      (err) => console.error("Bonus progress update error (POST complete):", err),
+    );
 
     await db.insert(rideEventsTable).values({ rideId, type: "RIDE_COMPLETED", metadata: { driverId: driver.id, finalPrice, waitingCharge } });
 

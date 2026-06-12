@@ -25,10 +25,11 @@ const CommissionPatchBody = z.object({
   driverShare: z.number().min(0).max(100).optional(),
   payoutSchedule: z.enum(["daily", "weekly", "monthly"]).optional(),
   minimumPayout: z.number().min(0).optional(),
+  peakBonusRate: z.number().min(0).max(1).optional(),
 });
 
-type CommissionSettings = { appCommission: number; driverShare: number; payoutSchedule: "daily" | "weekly" | "monthly"; minimumPayout: number };
-const defaultCommission: CommissionSettings = { appCommission: 15, driverShare: 85, payoutSchedule: "weekly", minimumPayout: 100 };
+type CommissionSettings = { appCommission: number; driverShare: number; payoutSchedule: "daily" | "weekly" | "monthly"; minimumPayout: number; peakBonusRate: number };
+const defaultCommission: CommissionSettings = { appCommission: 15, driverShare: 85, payoutSchedule: "weekly", minimumPayout: 100, peakBonusRate: 0.20 };
 
 // ─── Service settings ─────────────────────────────────────────────────────────
 type ServiceType = "car" | "shuttle" | "bike";
@@ -93,7 +94,29 @@ router.patch("/admin/settings/commission", authenticate, requireRole("admin"), a
   const current = await loadSetting<CommissionSettings>("commission", defaultCommission);
   const updated = { ...current, ...parsed.data };
   await saveSetting("commission", updated);
+  // Keep driver_commission_rate in sync — rides.ts reads this key directly.
+  await saveSetting("driver_commission_rate", String(updated.appCommission / 100));
   res.json(updated);
+});
+
+// ─── Per-driver commission override ───────────────────────────────────────────
+router.patch("/admin/drivers/:id/commission", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const driverId = parseInt(req.params.id as string);
+  if (isNaN(driverId)) { res.status(400).json({ error: "Invalid driver id" }); return; }
+
+  const parsed = z.object({
+    commissionRate: z.number().min(0).max(1).nullable(),
+  }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid data" }); return; }
+
+  const [updated] = await db
+    .update(driversTable)
+    .set({ commissionRate: parsed.data.commissionRate !== null ? String(parsed.data.commissionRate) : null })
+    .where(eq(driversTable.id, driverId))
+    .returning({ id: driversTable.id, name: driversTable.name, commissionRate: driversTable.commissionRate });
+
+  if (!updated) { res.status(404).json({ error: "Driver not found" }); return; }
+  res.json({ id: updated.id, name: updated.name, commissionRate: updated.commissionRate !== null ? parseFloat(updated.commissionRate as string) : null });
 });
 
 // ─── Service settings ─────────────────────────────────────────────────────────
