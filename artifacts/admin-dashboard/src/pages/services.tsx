@@ -13,7 +13,6 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -21,9 +20,9 @@ import {
   Car, Bus, Bike, PackageOpen, Navigation, DollarSign,
   CheckCircle2, XCircle, ArrowRight, Map, UserCircle,
   Settings2, ShieldCheck, Star, Pencil, Check, X,
-  ToggleLeft, Radio, MessageSquare, MousePointer, Globe,
+  ToggleLeft, Radio, MessageSquare, MousePointer,
   Activity, Clock, RotateCcw, History, AlertTriangle,
-  WrenchIcon, EyeOff, Zap,
+  WrenchIcon, EyeOff, Zap, Globe,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -205,11 +204,6 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
     queryFn: () => adminFetch<ServiceControlData>(`/admin/services/${type}/control`),
   });
 
-  const zonesQuery = useQuery({
-    queryKey: ["zones-list"],
-    queryFn: () => adminFetch<{ data: Zone[]; total: number }>("/zones?limit=200"),
-  });
-
   const [draft, setDraft] = useState<Partial<ServiceControlData>>({});
   const [isDirty, setIsDirty] = useState(false);
 
@@ -262,12 +256,6 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
     },
   });
 
-  const toggleZone = (id: number) => {
-    const current = draft.activeZoneIds ?? [];
-    const next = current.includes(id) ? current.filter(z => z !== id) : [...current, id];
-    updateDraft({ activeZoneIds: next });
-  };
-
   if (isLoading || !data || draft.isEnabled === undefined) {
     return (
       <Card>
@@ -277,8 +265,6 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
       </Card>
     );
   }
-
-  const zones = zonesQuery.data?.data ?? [];
 
   return (
     <Card>
@@ -313,7 +299,13 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
             )}
           </div>
         </div>
-        <CardDescription>Control service visibility and availability in passenger and driver apps</CardDescription>
+        <CardDescription>
+          Control service visibility and availability in passenger and driver apps.{" "}
+          <Link href={`/services/${type}/zones`} className="inline-flex items-center gap-1 text-primary font-medium hover:underline">
+            <Globe className="h-3.5 w-3.5" />
+            Manage Available Zones
+          </Link>
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
 
@@ -442,51 +434,7 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
           </>
         )}
 
-        {/* 6 — Zone restriction */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium flex items-center gap-2">
-            <Globe className="h-4 w-4 text-muted-foreground" />
-            Zone Restriction
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            Select zones where this service is active. Empty selection = available in all zones.
-          </p>
-          {zonesQuery.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
-            </div>
-          ) : zones.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No zones configured yet.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1">
-              {zones.map((zone) => {
-                const checked = (draft.activeZoneIds ?? data.activeZoneIds).includes(zone.id);
-                return (
-                  <div key={zone.id} className="flex items-center gap-2.5 p-2.5 rounded-lg border bg-muted/20">
-                    <Checkbox
-                      checked={checked}
-                      onCheckedChange={() => toggleZone(zone.id)}
-                      id={`zone-${zone.id}`}
-                    />
-                    <label htmlFor={`zone-${zone.id}`} className="text-sm cursor-pointer select-none flex-1">
-                      {zone.name}
-                      {!zone.isActive && <span className="text-xs text-muted-foreground ml-1">(inactive)</span>}
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {(draft.activeZoneIds ?? data.activeZoneIds).length === 0 && (
-            <p className="text-xs text-green-600 flex items-center gap-1">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Available in all zones
-            </p>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* 7 — Capacity limit */}
+        {/* 6 — Capacity limit */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <Label className="text-sm font-medium flex items-center gap-2">

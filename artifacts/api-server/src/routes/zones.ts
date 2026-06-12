@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, zonesTable } from "@workspace/db";
+import { db, zonesTable, serviceControlsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { writeAuditLog, getClientIp } from "../lib/auditLog";
@@ -94,18 +94,28 @@ router.patch("/zones/:id", authenticate, requireRole("admin"), async (req, res):
 router.delete("/zones/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const params = ZoneIdParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid zone id" }); return; }
-  const [deleted] = await db.delete(zonesTable).where(eq(zonesTable.id, params.data.id)).returning();
-  if (!deleted) { res.status(404).json({ error: "Zone not found" }); return; }
-  void writeAuditLog({
-    userId: req.user?.id,
-    action: "DELETE",
-    entityType: "zone",
-    entityId: deleted.id,
-    oldData: deleted as unknown as Record<string, unknown>,
-    ipAddress: getClientIp(req),
-    userAgent: req.headers["user-agent"] ?? null,
-  });
-  res.sendStatus(204);
+  try {
+    const [deleted] = await db.delete(zonesTable).where(eq(zonesTable.id, params.data.id)).returning();
+    if (!deleted) { res.status(404).json({ error: "Zone not found" }); return; }
+
+    // Cleanup: remove this zone's ID from activeZoneIds in all service_controls rows
+    await db.execute(
+      sql`UPDATE service_controls SET active_zone_ids = array_remove(active_zone_ids, ${params.data.id}::integer)`
+    );
+
+    void writeAuditLog({
+      userId: req.user?.id,
+      action: "DELETE",
+      entityType: "zone",
+      entityId: deleted.id,
+      oldData: deleted as unknown as Record<string, unknown>,
+      ipAddress: getClientIp(req),
+      userAgent: req.headers["user-agent"] ?? null,
+    });
+    res.sendStatus(204);
+  } catch {
+    res.status(500).json({ error: "Failed to delete zone" });
+  }
 });
 
 export default router;

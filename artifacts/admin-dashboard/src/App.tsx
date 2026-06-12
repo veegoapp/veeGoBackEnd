@@ -29,6 +29,7 @@ import DriverVerification from "@/pages/driver-verification";
 import Staff from "@/pages/staff";
 import Vehicles from "@/pages/vehicles";
 import Services from "@/pages/services";
+import ServiceZones from "@/pages/service-zones";
 import Pricing from "@/pages/pricing";
 import Zones from "@/pages/zones";
 import Payments from "@/pages/payments";
@@ -125,6 +126,7 @@ function Router() {
         <Route path="/pricing" component={() => <ProtectedRoute component={Pricing} />} />
         <Route path="/zones" component={() => <ProtectedRoute component={Zones} />} />
         <Route path="/services" component={() => <ProtectedRoute component={Services} />} />
+        <Route path="/services/:type/zones" component={() => <ProtectedRoute component={ServiceZones} />} />
         <Route path="/services/:type" component={() => <ProtectedRoute component={Services} />} />
         <Route path="/live-tracking" component={() => <ProtectedRoute component={LiveTracking} />} />
         <Route path="/support" component={() => <ProtectedRoute component={Support} />} />
