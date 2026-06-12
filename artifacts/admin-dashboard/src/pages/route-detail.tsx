@@ -58,6 +58,7 @@ import { useTranslation } from "react-i18next";
 
 const stationSchema = z.object({
   name: z.string().min(1, "Name is required"),
+  nameAr: z.string().optional(),
   latitude: z.coerce.number().min(-90).max(90),
   longitude: z.coerce.number().min(-180).max(180),
   order: z.coerce.number().int().min(0),
@@ -446,7 +447,10 @@ function StationFields({ form, showSegmentPrice = true }: { form: any; showSegme
   return (
     <>
       <FormField control={form.control} name="name" render={({ field }) => (
-        <FormItem><FormLabel>{t("routeDetail.stationName", "Station Name")}</FormLabel><FormControl><Input placeholder={t("routeDetail.stationPlaceholder", "e.g. Ramses Square")} {...field} /></FormControl><FormMessage /></FormItem>
+        <FormItem><FormLabel>{t("routeDetail.stationName", "Station Name (English)")}</FormLabel><FormControl><Input placeholder={t("routeDetail.stationPlaceholder", "e.g. Ramses Square")} {...field} /></FormControl><FormMessage /></FormItem>
+      )} />
+      <FormField control={form.control} name="nameAr" render={({ field }) => (
+        <FormItem><FormLabel>{t("routeDetail.stationNameAr", "Station Name (Arabic)")}</FormLabel><FormControl><Input placeholder={t("routeDetail.stationArPlaceholder", "مثال: ميدان رمسيس")} dir="rtl" {...field} /></FormControl><FormMessage /></FormItem>
       )} />
       <div className="grid grid-cols-2 gap-4">
         <FormField control={form.control} name="latitude" render={({ field }) => (
@@ -504,7 +508,8 @@ function DirectionTab({
   allDrivers: any[];
   allBuses: any[];
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = i18n.language === "ar";
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editStation, setEditStation] = useState<any | null>(null);
   const [isCreateTripOpen, setIsCreateTripOpen] = useState(false);
@@ -525,11 +530,11 @@ function DirectionTab({
 
   const addForm = useForm<StationFormValues>({
     resolver: zodResolver(stationSchema),
-    defaultValues: { name: "", latitude: 30.0444, longitude: 31.2357, order: nextOrder, segmentPrice: null },
+    defaultValues: { name: "", nameAr: "", latitude: 30.0444, longitude: 31.2357, order: nextOrder, segmentPrice: null },
   });
   const editForm = useForm<StationFormValues>({
     resolver: zodResolver(stationSchema),
-    defaultValues: { name: "", latitude: 0, longitude: 0, order: 0, segmentPrice: null },
+    defaultValues: { name: "", nameAr: "", latitude: 0, longitude: 0, order: 0, segmentPrice: null },
   });
 
   const tripDefaultValues: TripFormValues = {
@@ -688,7 +693,12 @@ function DirectionTab({
                       {idx + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">{station.name}</div>
+                      <div className="font-medium text-sm truncate">
+                        {isAr ? (station.nameAr || station.name) : station.name}
+                      </div>
+                      {isAr && !station.nameAr && (
+                        <div className="text-[10px] text-amber-500 truncate">{station.name}</div>
+                      )}
                       <div className="text-xs text-muted-foreground font-mono">
                         {station.latitude.toFixed(5)}, {station.longitude.toFixed(5)}
                       </div>
@@ -707,6 +717,7 @@ function DirectionTab({
                         onClick={() => {
                           editForm.reset({
                             name: station.name,
+                            nameAr: station.nameAr ?? "",
                             latitude: station.latitude,
                             longitude: station.longitude,
                             order: station.order,
@@ -727,7 +738,7 @@ function DirectionTab({
                         <ArrowDown className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div className="flex-1 text-xs text-muted-foreground">
-                        {station.name} → {stations[idx + 1].name}
+                        {isAr ? (station.nameAr || station.name) : station.name} → {isAr ? (stations[idx + 1].nameAr || stations[idx + 1].name) : stations[idx + 1].name}
                       </div>
                       <div className="shrink-0 text-xs font-medium">
                         {station.segmentPrice != null
