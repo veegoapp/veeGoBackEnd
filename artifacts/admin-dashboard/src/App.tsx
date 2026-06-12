@@ -47,6 +47,9 @@ import ShuttleCashDebts from "@/pages/shuttle-cash-debts";
 import ShuttleOffences from "@/pages/shuttle-offences";
 import FinancePayouts from "@/pages/finance-payouts";
 import FinanceCommission from "@/pages/finance-commission";
+import FraudAlerts from "@/pages/fraud-alerts";
+import CommissionExemptions from "@/pages/commission-exemptions";
+import BonusTargets from "@/pages/bonus-targets";
 
 const logoutRef = { current: () => {} };
 
@@ -151,6 +154,9 @@ function Router() {
         <Route path="/finance/payouts" component={() => <ProtectedRoute component={FinancePayouts} />} />
         <Route path="/finance/commission" component={() => <ProtectedRoute component={FinanceCommission} />} />
         <Route path="/finance/shuttle-cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
+        <Route path="/finance/commission-exemptions" component={() => <ProtectedRoute component={CommissionExemptions} />} />
+        <Route path="/finance/bonus-targets" component={() => <ProtectedRoute component={BonusTargets} />} />
+        <Route path="/security/fraud-alerts" component={() => <ProtectedRoute component={FraudAlerts} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

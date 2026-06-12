@@ -394,11 +394,18 @@ export default function Trips() {
     });
   };
 
-  const handleCancelTrip = (id: number) => {
+  const handleCancelTrip = (id: number, bookingCount?: number, tripPrice?: number) => {
     if (confirm(t("trips.cancelConfirm", "Cancel this trip? All related bookings will be cancelled and refunded."))) {
       cancelMutation.mutate({ id }, {
-        onSuccess: () => {
-          toast({ title: t("trips.tripCancelled", "Trip cancelled") });
+        onSuccess: (_data, vars) => {
+          const bookings = bookingCount ?? 0;
+          const totalRefund = bookings > 0 && tripPrice ? bookings * tripPrice : 0;
+          toast({
+            title: t("trips.tripCancelled", "Trip Cancelled Successfully"),
+            description: bookings > 0
+              ? `${bookings} linked booking${bookings === 1 ? "" : "s"} have been fully refunded to customer wallets${totalRefund > 0 ? ` (${totalRefund.toFixed(2)} EGP total)` : ""}.`
+              : "Trip has been cancelled and any related bookings have been refunded.",
+          });
           queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
         }
       });
@@ -408,13 +415,15 @@ export default function Trips() {
   const handleDeleteTrip = async () => {
     if (!deleteTrip) return;
     setIsDeleting(true);
+    const confirmedBookings = (deleteTrip as any).confirmedBookings ?? (deleteTrip as any).bookingsCount ?? 0;
     try {
-      const res = await adminFetch(`/trips/${deleteTrip.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to delete trip");
-      }
-      toast({ title: "Trip deleted" });
+      await adminFetch(`/trips/${deleteTrip.id}`, { method: "DELETE" });
+      toast({
+        title: "Trip Deleted Successfully",
+        description: confirmedBookings > 0
+          ? `${confirmedBookings} linked booking${confirmedBookings === 1 ? "" : "s"} have been fully refunded to customer wallets.`
+          : "Trip has been permanently deleted.",
+      });
       setDeleteTrip(null);
       queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
     } catch (err: any) {

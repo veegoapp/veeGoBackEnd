@@ -334,6 +334,40 @@ export default function DriverVerification() {
             )}
           </DialogHeader>
 
+          {viewDriver && (() => {
+            const REQUIRED_DOC_TYPES = [
+              "national_id_front", "national_id_back",
+              "driving_license_front", "driving_license_back",
+              "vehicle_license_front", "vehicle_license_back",
+              "profile_photo", "vehicle_photo",
+            ];
+            const approvedRequiredCount = REQUIRED_DOC_TYPES.filter((type) =>
+              viewDriver.documents.some((d) => d.type === type && d.verificationStatus === "approved")
+            ).length;
+            const allAlreadyApproved = approvedRequiredCount === REQUIRED_DOC_TYPES.length;
+            const isSeventhApproved = approvedRequiredCount === 7;
+            return (
+              <>
+                {isSeventhApproved && !allAlreadyApproved && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 p-3 flex items-start gap-2 mb-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                      Approving this final required document will trigger <strong>immediate automatic account activation</strong> for this driver.
+                    </p>
+                  </div>
+                )}
+                {allAlreadyApproved && (
+                  <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-950 p-3 flex items-start gap-2 mb-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+                      All required documents approved — this driver's account has been automatically activated.
+                    </p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
+
           {viewDriver && (
             <div className="flex-1 overflow-y-auto space-y-6 pr-1">
               {docGroups.map((group) => {

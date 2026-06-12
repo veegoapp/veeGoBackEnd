@@ -20,7 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Edit, Trash2, Tag, BookOpen } from "lucide-react";
+import { Plus, Edit, Trash2, Tag, BookOpen, Palette } from "lucide-react";
 import { Label } from "@/components/ui/label";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,6 +40,15 @@ type VehicleModel = {
   name: string;
   minYear: number;
   maxYear: number | null;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type VehicleColor = {
+  id: number;
+  hexCode: string;
+  nameEn: string;
+  nameAr: string;
   isActive: boolean;
   createdAt: string;
 };
@@ -234,6 +243,92 @@ function ModelDialog({
   );
 }
 
+// ─── Color Dialog ─────────────────────────────────────────────────────────────
+
+function ColorDialog({
+  open,
+  onClose,
+  initial,
+  onSave,
+  saving,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initial?: Partial<VehicleColor>;
+  onSave: (data: { hexCode: string; nameEn: string; nameAr: string; isActive: boolean }) => void;
+  saving: boolean;
+}) {
+  const [hexCode, setHexCode] = React.useState(initial?.hexCode ?? "#000000");
+  const [nameEn, setNameEn] = React.useState(initial?.nameEn ?? "");
+  const [nameAr, setNameAr] = React.useState(initial?.nameAr ?? "");
+  const [isActive, setIsActive] = React.useState(initial?.isActive ?? true);
+
+  React.useEffect(() => {
+    if (open) {
+      setHexCode(initial?.hexCode ?? "#000000");
+      setNameEn(initial?.nameEn ?? "");
+      setNameAr(initial?.nameAr ?? "");
+      setIsActive(initial?.isActive ?? true);
+    }
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{initial?.id ? "Edit Color" : "Add Color"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label>Color Swatch</Label>
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={hexCode}
+                onChange={(e) => setHexCode(e.target.value)}
+                className="h-10 w-12 rounded-md cursor-pointer border border-border bg-transparent p-0.5"
+              />
+              <Input
+                placeholder="#000000"
+                value={hexCode}
+                onChange={(e) => setHexCode(e.target.value)}
+                className="font-mono text-sm flex-1"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>English Name</Label>
+            <Input placeholder="e.g. Pearl White" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Arabic Name</Label>
+            <Input
+              placeholder="e.g. أبيض لؤلؤي"
+              value={nameAr}
+              onChange={(e) => setNameAr(e.target.value)}
+              dir="rtl"
+              className="text-right"
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <Label>Active</Label>
+            <Switch checked={isActive} onCheckedChange={setIsActive} />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            disabled={!nameEn.trim() || !hexCode || saving}
+            onClick={() => onSave({ hexCode, nameEn: nameEn.trim(), nameAr: nameAr.trim(), isActive })}
+          >
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }) {
@@ -242,8 +337,10 @@ export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }
 
   const [brandDialog, setBrandDialog] = useState<{ open: boolean; brand?: VehicleBrand }>({ open: false });
   const [modelDialog, setModelDialog] = useState<{ open: boolean; model?: VehicleModel }>({ open: false });
+  const [colorDialog, setColorDialog] = useState<{ open: boolean; color?: VehicleColor }>({ open: false });
   const [deleteBrand, setDeleteBrand] = useState<number | null>(null);
   const [deleteModel, setDeleteModel] = useState<number | null>(null);
+  const [deleteColor, setDeleteColor] = useState<number | null>(null);
   const [selectedBrandFilter, setSelectedBrandFilter] = useState<string>("all");
 
   // ── Brands query
@@ -294,6 +391,47 @@ export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }
       queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
       setDeleteBrand(null);
       toast({ title: "Brand deleted" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  // ── Colors query
+  const colorsQuery = useQuery({
+    queryKey: ["vehicle-catalog-colors"],
+    queryFn: () => adminFetch<{ data: VehicleColor[] }>("/admin/vehicle-catalog/colors"),
+  });
+  const colors = colorsQuery.data?.data ?? [];
+
+  // ── Color mutations
+  const createColor = useMutation({
+    mutationFn: (data: object) =>
+      adminFetch("/admin/vehicle-catalog/colors", { method: "POST", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] });
+      setColorDialog({ open: false });
+      toast({ title: "Color added" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const updateColor = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: object }) =>
+      adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] });
+      setColorDialog({ open: false });
+      toast({ title: "Color updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+  });
+
+  const deleteColorMutation = useMutation({
+    mutationFn: (id: number) =>
+      adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] });
+      setDeleteColor(null);
+      toast({ title: "Color deleted" });
     },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
@@ -507,6 +645,125 @@ export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }
           </Table>
         </div>
       </div>
+
+      {/* ── Approved Colors ── */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Palette className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold text-sm">Approved Colors</h3>
+            {!colorsQuery.isLoading && (
+              <Badge variant="secondary" className="text-xs">{colors.length}</Badge>
+            )}
+          </div>
+          <Button size="sm" className="gap-1.5" onClick={() => setColorDialog({ open: true })}>
+            <Plus className="h-3.5 w-3.5" /> Add Color
+          </Button>
+        </div>
+
+        <div className="rounded-lg border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">#</TableHead>
+                <TableHead className="w-16">Swatch</TableHead>
+                <TableHead>English Name</TableHead>
+                <TableHead>Arabic Name</TableHead>
+                <TableHead className="text-center">Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {colorsQuery.isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <TableRow key={i}>
+                    {Array.from({ length: 6 }).map((__, j) => (
+                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : colors.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                    No colors defined yet. Add the first one.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                colors.map((color, idx) => (
+                  <TableRow key={color.id}>
+                    <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
+                    <TableCell>
+                      <div
+                        className="h-7 w-10 rounded-md border border-border shadow-sm"
+                        style={{ backgroundColor: color.hexCode }}
+                        title={color.hexCode}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">{color.nameEn}</TableCell>
+                    <TableCell className="text-sm" dir="rtl">{color.nameAr}</TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant="outline" className={color.isActive
+                        ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950 text-xs"
+                        : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900 text-xs"}>
+                        {color.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7"
+                          onClick={() => setColorDialog({ open: true, color })}>
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                          onClick={() => setDeleteColor(color.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* ── Color Dialog ── */}
+      {colorDialog.open && (
+        <ColorDialog
+          open={colorDialog.open}
+          onClose={() => setColorDialog({ open: false })}
+          initial={colorDialog.color}
+          saving={createColor.isPending || updateColor.isPending}
+          onSave={(data) => {
+            if (colorDialog.color?.id) {
+              updateColor.mutate({ id: colorDialog.color.id, data });
+            } else {
+              createColor.mutate(data);
+            }
+          }}
+        />
+      )}
+
+      <AlertDialog open={deleteColor !== null} onOpenChange={(v) => !v && setDeleteColor(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Color?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this color from the catalog.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteColor !== null && deleteColorMutation.mutate(deleteColor)}
+            >
+              {deleteColorMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Dialogs ── */}
       <BrandDialog

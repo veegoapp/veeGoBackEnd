@@ -18,7 +18,9 @@ import {
   ArrowLeft, Star, Phone, Bus, ShieldX, ShieldCheck, ToggleLeft, ToggleRight,
   UserCircle, Activity, CheckCircle2, XCircle, Clock, FileImage, ZoomIn, Hash,
   CalendarDays, Wallet, CreditCard, Mail, Tag, Copy, Check, Bell, Trash2, MessageSquare, MapPin,
+  Percent, Trophy, TrendingUp, AlertTriangle, RefreshCw, Edit,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { useTranslation } from "react-i18next";
 
@@ -138,6 +140,8 @@ export default function DriverDetail() {
   const [msgBody, setMsgBody] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [, navigate] = useLocation();
+  const [commissionInput, setCommissionInput] = useState<string>("");
+  const [commissionEditing, setCommissionEditing] = useState(false);
 
   const qKey = ["driver-detail-page", driverId];
 
@@ -230,6 +234,58 @@ export default function DriverDetail() {
     },
     onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
   });
+
+  const { data: criminalRecord, refetch: recheckCriminal, isFetching: criminalChecking } = useQuery<{
+    totalCompletedTripsAndRides: number;
+    threshold: number;
+    hasCriminalRecordApproved: boolean;
+    suspended: boolean;
+  }>({
+    queryKey: [...qKey, "criminal-record"],
+    queryFn: () => adminFetch(`/admin/drivers/${driverId}/check-criminal-record`, { method: "POST" }),
+    enabled: !!driverId,
+    retry: false,
+  });
+
+  const { data: bonusProgressData } = useQuery<{ data: Array<{
+    targetId: number;
+    targetName: string;
+    serviceType: string;
+    targetType: "ride_count" | "earnings_amount";
+    targetValue: number;
+    bonusAmount: number;
+    currentValue: number;
+    isCompleted: boolean;
+    completedAt: string | null;
+    startsAt: string;
+    endsAt: string;
+  }> }>({
+    queryKey: [...qKey, "bonus-progress"],
+    queryFn: () => adminFetch(`/admin/drivers/${driverId}/bonus-progress`),
+    enabled: !!driverId,
+  });
+
+  const { data: commissionData } = useQuery<{ commissionRate: number | null }>({
+    queryKey: [...qKey, "commission"],
+    queryFn: () => adminFetch(`/drivers/${driverId}`),
+    enabled: !!driverId,
+    select: (d: any) => ({ commissionRate: d.commissionRate ?? null }),
+  });
+
+  const commissionMutation = useMutation({
+    mutationFn: (rate: number | null) =>
+      adminFetch(`/admin/drivers/${driverId}/commission`, {
+        method: "PATCH",
+        body: JSON.stringify({ commissionRate: rate }),
+      }),
+    onSuccess: () => {
+      toast({ title: rate !== null ? "Commission override saved" : "Commission override cleared" });
+      setCommissionEditing(false);
+      queryClient.invalidateQueries({ queryKey: [...qKey, "commission"] });
+    },
+    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+  });
+  let rate: number | null = null;
 
   // ─── Derived ────────────────────────────────────────────────────────────────
 
@@ -365,6 +421,9 @@ export default function DriverDetail() {
             {pendingDocs > 0 && <span className="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold">{pendingDocs}</span>}
           </TabsTrigger>
           <TabsTrigger value="locations">{t("locations.tabLocationHistory", "Location History")}</TabsTrigger>
+          <TabsTrigger value="bonus" className="gap-1.5">
+            <Trophy className="h-3.5 w-3.5" /> Bonus Milestones
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview */}
@@ -414,6 +473,129 @@ export default function DriverDetail() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Criminal Record Enforcement */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-500" /> Criminal Record Compliance
+              </CardTitle>
+              <Button
+                size="sm" variant="outline" className="h-7 text-xs gap-1"
+                disabled={criminalChecking}
+                onClick={() => recheckCriminal()}
+              >
+                <RefreshCw className={`h-3 w-3 ${criminalChecking ? "animate-spin" : ""}`} />
+                {criminalChecking ? "Checking…" : "Run Check"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {criminalRecord ? (
+                <div className="space-y-3">
+                  {criminalRecord.suspended && !criminalRecord.hasCriminalRecordApproved && criminalRecord.totalCompletedTripsAndRides >= criminalRecord.threshold && (
+                    <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                        Suspended: Criminal Record Threshold Exceeded — {criminalRecord.totalCompletedTripsAndRides} completed trips/rides ≥ {criminalRecord.threshold} limit without an approved criminal record document.
+                      </p>
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Completed Trips &amp; Rides</span>
+                      <span className="font-semibold">
+                        {criminalRecord.totalCompletedTripsAndRides} / {criminalRecord.threshold}
+                      </span>
+                    </div>
+                    <Progress
+                      value={Math.min(100, (criminalRecord.totalCompletedTripsAndRides / criminalRecord.threshold) * 100)}
+                      className={`h-2 ${criminalRecord.totalCompletedTripsAndRides >= criminalRecord.threshold ? "[&>div]:bg-red-500" : criminalRecord.totalCompletedTripsAndRides >= criminalRecord.threshold * 0.8 ? "[&>div]:bg-amber-500" : ""}`}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Criminal Record Document:</span>
+                    {criminalRecord.hasCriminalRecordApproved
+                      ? <span className="text-green-600 font-medium flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Approved</span>
+                      : <span className="text-red-600 font-medium flex items-center gap-1"><XCircle className="h-3 w-3" /> Not Approved</span>
+                    }
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Click "Run Check" to fetch criminal record compliance status.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Commission Override */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Percent className="h-4 w-4 text-purple-500" /> Commission Override
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  {commissionData?.commissionRate !== null && commissionData?.commissionRate !== undefined ? (
+                    <p className="text-sm">
+                      Personal Rate: <span className="font-bold text-purple-600">{(commissionData.commissionRate * 100).toFixed(1)}%</span>
+                      <span className="text-xs text-muted-foreground ml-2">(overrides global rate)</span>
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Using global commission rate</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {commissionEditing ? (
+                    <>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number" min={0} max={100} step={0.1}
+                          className="w-20 h-8 text-sm text-right"
+                          placeholder="0–100"
+                          value={commissionInput}
+                          onChange={(e) => setCommissionInput(e.target.value)}
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                      </div>
+                      <Button size="sm" className="h-8 text-xs"
+                        disabled={commissionMutation.isPending}
+                        onClick={() => {
+                          rate = commissionInput === "" ? null : Number(commissionInput) / 100;
+                          commissionMutation.mutate(rate);
+                        }}>
+                        Save
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setCommissionEditing(false)}>
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button size="sm" variant="outline" className="h-8 text-xs gap-1"
+                        onClick={() => {
+                          setCommissionInput(commissionData?.commissionRate !== null && commissionData?.commissionRate !== undefined
+                            ? String((commissionData.commissionRate * 100).toFixed(1)) : "");
+                          setCommissionEditing(true);
+                        }}>
+                        <Edit className="h-3 w-3" /> Set Override
+                      </Button>
+                      {commissionData?.commissionRate !== null && commissionData?.commissionRate !== undefined && (
+                        <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground"
+                          disabled={commissionMutation.isPending}
+                          onClick={() => { rate = null; commissionMutation.mutate(null); }}>
+                          Clear
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Setting a personal rate overrides the global commission for this driver only. Clear the override to revert to the system-wide rate.
+              </p>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Trips */}
@@ -554,6 +736,63 @@ export default function DriverDetail() {
         {/* Location History */}
         <TabsContent value="locations">
           <DriverLocationHistoryTab driverId={Number(driverId)} />
+        </TabsContent>
+
+        {/* Bonus Milestones */}
+        <TabsContent value="bonus">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Trophy className="h-5 w-5 text-amber-500" />
+              <h3 className="font-semibold text-base">Active Bonus Milestones</h3>
+            </div>
+            {!bonusProgressData?.data?.length ? (
+              <Card>
+                <CardContent className="py-12 text-center text-muted-foreground">
+                  <Trophy className="h-8 w-8 mx-auto mb-3 opacity-30" />
+                  <p>No active bonus targets for this driver</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {bonusProgressData.data.map((bp) => {
+                  const pct = Math.min(100, Math.round((bp.currentValue / bp.targetValue) * 100));
+                  return (
+                    <Card key={bp.targetId}>
+                      <CardContent className="pt-4 pb-3">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div>
+                            <p className="font-semibold text-sm">{bp.targetName}</p>
+                            <p className="text-xs text-muted-foreground capitalize">{bp.serviceType} · {bp.targetType === "ride_count" ? "Ride Count" : "Earnings"}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-bold text-green-600 text-sm">{formatEGP(bp.bonusAmount)}</p>
+                            <p className="text-xs text-muted-foreground">bonus</p>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>
+                              {bp.targetType === "ride_count"
+                                ? `${Math.round(bp.currentValue)} of ${bp.targetValue} rides`
+                                : `${formatEGP(bp.currentValue)} of ${formatEGP(bp.targetValue)}`}
+                            </span>
+                            <span className="font-bold text-foreground">{pct}%</span>
+                          </div>
+                          <Progress value={pct} className={`h-2 ${bp.isCompleted ? "[&>div]:bg-green-500" : ""}`} />
+                        </div>
+                        {bp.isCompleted && (
+                          <div className="flex items-center gap-1 mt-2 text-xs text-green-600 font-medium">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Completed {bp.completedAt ? format(parseISO(bp.completedAt), "MMM d, yyyy") : ""}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 

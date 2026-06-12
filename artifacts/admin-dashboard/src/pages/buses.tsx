@@ -6,7 +6,8 @@ import {
   useDeleteBus,
   getListBusesQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
+import { adminFetch } from "@/lib/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,7 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bus, Plus, Edit, Trash2, Search, List, BookOpen } from "lucide-react";
+import { Bus, Plus, Edit, Trash2, Search, List, BookOpen, Layers } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -368,6 +369,216 @@ function RegisteredFleetTab() {
   );
 }
 
+// ─── Shuttle Vehicle Types Tab ────────────────────────────────────────────────
+
+interface ShuttleVehicleType {
+  id: number;
+  name: string;
+  capacity: number;
+  minThreshold: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+function ShuttleVehicleTypesTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [typeDialog, setTypeDialog] = useState<{ open: boolean; item?: ShuttleVehicleType }>({ open: false });
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const [name, setName] = useState("");
+  const [capacity, setCapacity] = useState<number>(14);
+  const [minThreshold, setMinThreshold] = useState<number>(5);
+  const [isActive, setIsActive] = useState(true);
+
+  React.useEffect(() => {
+    if (typeDialog.open) {
+      setName(typeDialog.item?.name ?? "");
+      setCapacity(typeDialog.item?.capacity ?? 14);
+      setMinThreshold(typeDialog.item?.minThreshold ?? 5);
+      setIsActive(typeDialog.item?.isActive ?? true);
+    }
+  }, [typeDialog.open]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["shuttle-vehicle-types"],
+    queryFn: () => adminFetch<{ data: ShuttleVehicleType[] }>("/admin/shuttle/vehicle-types"),
+  });
+  const types = data?.data ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: (d: object) => adminFetch("/admin/shuttle/vehicle-types", { method: "POST", body: JSON.stringify(d) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shuttle-vehicle-types"] });
+      setTypeDialog({ open: false });
+      toast({ title: "Vehicle type created" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, d }: { id: number; d: object }) =>
+      adminFetch(`/admin/shuttle/vehicle-types/${id}`, { method: "PATCH", body: JSON.stringify(d) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shuttle-vehicle-types"] });
+      setTypeDialog({ open: false });
+      toast({ title: "Vehicle type updated" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => adminFetch(`/admin/shuttle/vehicle-types/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shuttle-vehicle-types"] });
+      setDeleteId(null);
+      toast({ title: "Vehicle type deleted" });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handleSave = () => {
+    const payload = { name: name.trim(), capacity, minThreshold, isActive };
+    if (typeDialog.item?.id) {
+      updateMutation.mutate({ id: typeDialog.item.id, d: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Layers className="h-4 w-4 text-muted-foreground" />
+          <h3 className="font-semibold text-sm">Shuttle Vehicle Types</h3>
+          {!isLoading && <Badge variant="secondary" className="text-xs">{types.length}</Badge>}
+        </div>
+        <Button size="sm" className="gap-1.5" onClick={() => setTypeDialog({ open: true })}>
+          <Plus className="h-3.5 w-3.5" /> Add Type
+        </Button>
+      </div>
+
+      <div className="rounded-lg border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-10">#</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead className="text-center">Capacity</TableHead>
+              <TableHead className="text-center">Min Threshold</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : types.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
+                  No vehicle types defined yet. Add the first one.
+                </TableCell>
+              </TableRow>
+            ) : (
+              types.map((t, idx) => (
+                <TableRow key={t.id}>
+                  <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
+                  <TableCell className="font-medium">{t.name}</TableCell>
+                  <TableCell className="text-center">{t.capacity} seats</TableCell>
+                  <TableCell className="text-center">{t.minThreshold}</TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant="outline" className={t.isActive
+                      ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950 text-xs"
+                      : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900 text-xs"}>
+                      {t.isActive ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-7 w-7"
+                        onClick={() => setTypeDialog({ open: true, item: t })}>
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => setDeleteId(t.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={typeDialog.open} onOpenChange={(v) => !v && setTypeDialog({ open: false })}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{typeDialog.item ? "Edit Vehicle Type" : "Add Vehicle Type"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Name</label>
+              <Input placeholder="e.g. Microbus, Minibus" value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Capacity (seats)</label>
+                <Input type="number" min={1} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">Min Threshold</label>
+                <Input type="number" min={0} value={minThreshold} onChange={(e) => setMinThreshold(Number(e.target.value))} />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Active</label>
+              <Switch checked={isActive} onCheckedChange={setIsActive} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTypeDialog({ open: false })}>Cancel</Button>
+            <Button disabled={!name.trim() || isSaving} onClick={handleSave}>
+              {isSaving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Vehicle Type?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently remove this vehicle type. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteId !== null && deleteMutation.mutate(deleteId)}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Buses() {
@@ -393,6 +604,10 @@ export default function Buses() {
             <BookOpen className="h-3.5 w-3.5" />
             Allowed Catalog
           </TabsTrigger>
+          <TabsTrigger value="vehicle-types" className="gap-2">
+            <Layers className="h-3.5 w-3.5" />
+            Vehicle Types
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="fleet">
@@ -401,6 +616,10 @@ export default function Buses() {
 
         <TabsContent value="catalog">
           <VehicleCatalogTab isShuttle={true} />
+        </TabsContent>
+
+        <TabsContent value="vehicle-types">
+          <ShuttleVehicleTypesTab />
         </TabsContent>
       </Tabs>
     </div>

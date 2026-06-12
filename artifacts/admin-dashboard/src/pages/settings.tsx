@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Globe, Moon, Sun, Monitor, LogOut, Bell, UsersRound, Info, Save } from "lucide-react";
+import { Globe, Moon, Sun, Monitor, LogOut, Bell, UsersRound, Info, Save, Cpu, Wallet as WalletIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { setStoredLanguage, applyDirection } from "@/lib/i18n";
@@ -56,6 +56,7 @@ export default function Settings() {
     { id: "general", label: t("settings.tabGeneral"), icon: Globe },
     { id: "app", label: t("settings.tabAppInfo"), icon: Info },
     { id: "staff", label: t("settings.tabStaff"), icon: UsersRound },
+    { id: "system", label: "System Engine", icon: Cpu },
   ];
 
   const [activeTab, setActiveTab] = useState("general");
@@ -315,6 +316,197 @@ export default function Settings() {
           <StaffPage />
         </Suspense>
       )}
+
+      {activeTab === "system" && (
+        <SystemEngineTab />
+      )}
+    </div>
+  );
+}
+
+function SystemSettingRow({
+  label,
+  description,
+  settingKey,
+}: {
+  label: string;
+  description: string;
+  settingKey: string;
+}) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [inputValue, setInputValue] = React.useState<string>("");
+  const [isEditing, setIsEditing] = React.useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["system-setting", settingKey],
+    queryFn: () => adminFetch<{ key: string; value: string }>(`/admin/settings/${settingKey}`),
+  });
+
+  React.useEffect(() => {
+    if (data?.value !== undefined && !isEditing) {
+      setInputValue(data.value);
+    }
+  }, [data?.value]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      adminFetch("/admin/settings", {
+        method: "PATCH",
+        body: JSON.stringify({ key: settingKey, value: inputValue }),
+      }),
+    onSuccess: () => {
+      toast({ title: `${label} updated` });
+      queryClient.invalidateQueries({ queryKey: ["system-setting", settingKey] });
+      setIsEditing(false);
+    },
+    onError: (e: Error) => toast({ title: "Failed to save", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
+      <div className="flex-1 min-w-0 pr-6">
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">{settingKey}</p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {isLoading ? (
+          <Skeleton className="h-8 w-24" />
+        ) : (
+          <>
+            <Input
+              type="number"
+              value={inputValue}
+              onChange={(e) => { setInputValue(e.target.value); setIsEditing(true); }}
+              className="w-24 h-8 text-sm text-right"
+              step="any"
+            />
+            {isEditing && (
+              <Button
+                size="sm"
+                className="h-8 text-xs"
+                disabled={saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+              >
+                <Save className="h-3 w-3 mr-1" />
+                {saveMutation.isPending ? "…" : "Save"}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WalletLimitsRow() {
+  const { toast } = useToast();
+  const [maxTopup, setMaxTopup] = React.useState("");
+  const [dailyLimit, setDailyLimit] = React.useState("");
+  const [editing, setEditing] = React.useState(false);
+
+  const { data: maxData } = useQuery({
+    queryKey: ["system-setting", "wallet_max_topup"],
+    queryFn: () => adminFetch<{ key: string; value: string }>("/admin/settings/wallet_max_topup"),
+  });
+  const { data: dailyData } = useQuery({
+    queryKey: ["system-setting", "wallet_daily_topup_limit"],
+    queryFn: () => adminFetch<{ key: string; value: string }>("/admin/settings/wallet_daily_topup_limit"),
+  });
+
+  React.useEffect(() => { if (maxData?.value && !editing) setMaxTopup(maxData.value); }, [maxData?.value]);
+  React.useEffect(() => { if (dailyData?.value && !editing) setDailyLimit(dailyData.value); }, [dailyData?.value]);
+
+  const saveMutation = useMutation({
+    mutationFn: () =>
+      adminFetch("/admin/settings/wallet-limits", {
+        method: "PATCH",
+        body: JSON.stringify({ wallet_max_topup: Number(maxTopup), wallet_daily_topup_limit: Number(dailyLimit) }),
+      }),
+    onSuccess: () => {
+      toast({ title: "Wallet limits updated" });
+      setEditing(false);
+    },
+    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1.5">
+          <Label className="text-sm">Max Top-Up per Request (EGP)</Label>
+          <Input
+            type="number" min={0} step={1}
+            value={maxTopup}
+            onChange={(e) => { setMaxTopup(e.target.value); setEditing(true); }}
+            placeholder="e.g. 1000"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-sm">Daily Top-Up Limit (EGP)</Label>
+          <Input
+            type="number" min={0} step={1}
+            value={dailyLimit}
+            onChange={(e) => { setDailyLimit(e.target.value); setEditing(true); }}
+            placeholder="e.g. 2000"
+          />
+        </div>
+      </div>
+      {editing && (
+        <div className="flex justify-end">
+          <Button size="sm" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
+            <Save className="h-3.5 w-3.5 mr-1.5" />
+            {saveMutation.isPending ? "Saving…" : "Save Wallet Limits"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SystemEngineTab() {
+  const SYSTEM_KEYS = [
+    { key: "dispatch_radius_km",            label: "Initial Search Radius (km)",       description: "Starting radius used to find nearby drivers when a booking is placed." },
+    { key: "dispatch_max_radius_km",         label: "Max Search Radius (km)",           description: "Maximum expansion radius before the dispatch engine gives up finding a driver." },
+    { key: "dispatch_offer_timeout_seconds", label: "Driver Offer Timeout (seconds)",   description: "How long a driver has to accept a trip offer before it expires and moves on." },
+    { key: "no_show_fee_egp",               label: "Shuttle No-Show Fee (EGP)",         description: "Penalty charged to passengers who book a shuttle seat but do not board." },
+    { key: "cancellation_grace_hours",       label: "Free Cancellation Window (hours)", description: "Bookings cancelled within this window before departure are refunded without a fee." },
+    { key: "criminal_record_trip_threshold", label: "Criminal Record Suspension Limit", description: "Drivers who exceed this completed-trip count without an approved criminal record are auto-suspended." },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Cpu className="h-4 w-4" /> Dispatch &amp; Operational Parameters
+          </CardTitle>
+          <CardDescription>
+            Core system settings that control dispatch radius, timing, fees, and compliance thresholds.
+            Changes take effect immediately — no restart required.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {SYSTEM_KEYS.map((k) => (
+            <SystemSettingRow key={k.key} settingKey={k.key} label={k.label} description={k.description} />
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <WalletIcon className="h-4 w-4" /> Wallet Financial Limits
+          </CardTitle>
+          <CardDescription>
+            Control how much passengers can top up their wallet per transaction and per day.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WalletLimitsRow />
+        </CardContent>
+      </Card>
     </div>
   );
 }
