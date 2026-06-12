@@ -138,6 +138,7 @@ function Router() {
         <Route path="/chat-inbox" component={() => <ProtectedRoute component={ChatInbox} />} />
         <Route path="/schedules" component={() => <ProtectedRoute component={Schedules} />} />
         <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
+        <Route path="/vehicles/shuttle" component={() => <ProtectedRoute component={Buses} />} />
         <Route path="/shuttle-trips" component={() => <ProtectedRoute component={ShuttleTrips} />} />
         <Route path="/shuttle-trips/:id" component={() => <ProtectedRoute component={ShuttleTripDetail} />} />
         <Route path="/shuttle/cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />

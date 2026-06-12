@@ -1,0 +1,21 @@
+Please execute Phase 1 of the admin dashboard overhaul focusing on navigation restructuring and UI cleanup across service overview pages. Ensure all changes reflect directly in the admin dashboard.
+
+Follow these exact steps:
+1. Standardise Sidebar Navigation (Rename Shuttle "Buses"):
+   - Open the admin dashboard sidebar navigation configuration file.
+   - Under the "Shuttle Service" group, change the sub-page name and route from "Buses" (`/buses`) to "Vehicles" (`/vehicles/shuttle`) to match Car, Scooter, and Delivery.
+
+2. Remove "Driver Requirements" Configuration UI:
+   - Open `artifacts/admin-dashboard/src/pages/services.tsx`.
+   - Locate the "Driver Requirements Form" card inside the Overview layout for all services (Car, Shuttle, Scooter, Delivery).
+   - Completely REMOVE the following fields/checkboxes: Required Driver Verifications (Vehicle Insurance, Background Check) and Required License Types (Standard License, Commercial License/CDL, Motorcycle License).
+   - Clean up any associated frontend `useState` hooks and remove these deleted fields from the `PATCH /admin/services/:type/control` API request payload configuration inside this file.
+   - CRITICAL SAFEGUARD: Do NOT touch backend database tables or driver registration/signup file upload logic.
+
+3. Redesign "Recent Changes" Log Layout:
+   - In `artifacts/admin-dashboard/src/pages/services.tsx`, add a clean button/icon labeled "Change Log" in the top header or action bar of each individual service Overview page.
+   - Implement a dynamic Popup Modal component that triggers when this button is clicked. Move the existing "Recent Changes" audit log data inside this modal (displaying Admin Identifier, Timestamp, and specific property updates). Add a close (X) button.
+
+---
+### REQUIRED OUTPUT FOR VERIFICATION:
+Provide a clean confirmation checklist showing the exact files modified/created and confirming that navigation updates, requirements removal, and the Change Log modals are fully live and functional.

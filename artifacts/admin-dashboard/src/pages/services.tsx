@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useListDrivers, useListBuses, useListTrips } from "@workspace/api-client-react";
 import { adminFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,9 +52,6 @@ type Ride = {
 type ServiceSettings = {
   isEnabled: boolean;
   minDriverRating: number;
-  requiredLicenseTypes: string[];
-  requireInsurance: boolean;
-  requireBackgroundCheck: boolean;
   maxActiveRidesPerDriver: number;
 };
 
@@ -95,13 +93,6 @@ const SERVICE_META: Record<string, { icon: React.ElementType; label: string; col
   motorcycle: { icon: Bike,        label: "Motorcycle Services", color: "text-orange-600", bg: "bg-orange-500/10", desc: "On-demand motorcycle rides" },
   delivery:   { icon: PackageOpen, label: "Delivery Services",   color: "text-violet-600", bg: "bg-violet-500/10", desc: "Package and food delivery" },
 };
-
-const ALL_LICENSE_TYPES = [
-  { value: "standard",    label: "Standard License" },
-  { value: "commercial",  label: "Commercial License" },
-  { value: "cdl",         label: "CDL (Commercial Driver's License)" },
-  { value: "motorcycle",  label: "Motorcycle License" },
-];
 
 const DISPLAY_MODE_OPTIONS = [
   { value: "live",         label: "Live",         icon: Zap,           desc: "Service is running normally",              color: "text-green-600",  badge: "bg-green-500/10 text-green-600 border-green-300" },
@@ -151,6 +142,54 @@ function formatChanges(changes: Record<string, { before: unknown; after: unknown
       <span className="text-green-600">{JSON.stringify(after)}</span>
     </span>
   ));
+}
+
+// ─── Change Log Modal ─────────────────────────────────────────────────────────
+
+function ChangeLogModal({ type, open, onClose }: { type: ServiceControlType; open: boolean; onClose: () => void }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ["service-control", type],
+    queryFn: () => adminFetch<ServiceControlData>(`/admin/services/${type}/control`),
+    enabled: open,
+  });
+
+  const logs = data?.logs ?? [];
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            Change Log
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto pr-1 space-y-2 py-2">
+          {isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)
+          ) : logs.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic py-6 text-center">No changes recorded yet.</p>
+          ) : (
+            logs.map((log) => (
+              <div key={log.id} className="p-3 rounded-lg border bg-muted/20 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {log.changedBy ? `Admin #${log.changedBy}` : "System"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(log.changedAt).toLocaleString()}
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  {formatChanges(log.changes as Record<string, { before: unknown; after: unknown }>)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ─── Service Control Panel ────────────────────────────────────────────────────
@@ -466,36 +505,6 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
           />
         </div>
 
-        <Separator />
-
-        {/* 8 — Activity log */}
-        <div className="space-y-3">
-          <Label className="text-sm font-medium flex items-center gap-2">
-            <History className="h-4 w-4 text-muted-foreground" />
-            Recent Changes
-          </Label>
-          {data.logs.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic py-2">No changes recorded yet.</p>
-          ) : (
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-              {data.logs.map((log) => (
-                <div key={log.id} className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {log.changedBy ? `Admin #${log.changedBy}` : "System"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(log.changedAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="space-y-0.5">
-                    {formatChanges(log.changes as Record<string, { before: unknown; after: unknown }>)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
       </CardContent>
     </Card>
@@ -544,17 +553,6 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
   const handleSave = () => {
     if (!draft) return;
     mutation.mutate(draft);
-  };
-
-  const toggleLicense = (value: string) => {
-    if (!draft) return;
-    const has = draft.requiredLicenseTypes.includes(value);
-    setDraft({
-      ...draft,
-      requiredLicenseTypes: has
-        ? draft.requiredLicenseTypes.filter((l) => l !== value)
-        : [...draft.requiredLicenseTypes, value],
-    });
   };
 
   if (isLoading || !data || !draft) {
@@ -633,64 +631,6 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
           )}
         </div>
 
-        <Separator />
-
-        <div className="space-y-3">
-          <Label className="text-sm font-medium flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-blue-500" /> Required Driver Verifications
-          </Label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {[
-              { key: "requireInsurance" as const, label: "Vehicle Insurance", desc: "Must have active insurance" },
-              { key: "requireBackgroundCheck" as const, label: "Background Check", desc: "Criminal background cleared" },
-            ].map(({ key, label, desc }) => (
-              <div key={key} className="flex items-start gap-2.5 p-3 rounded-lg border bg-muted/30">
-                {editing ? (
-                  <Checkbox
-                    checked={draft[key]}
-                    onCheckedChange={(v) => setDraft({ ...draft, [key]: !!v })}
-                    className="mt-0.5"
-                  />
-                ) : (
-                  display[key]
-                    ? <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                    : <XCircle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                )}
-                <div>
-                  <p className="text-sm font-medium">{label}</p>
-                  <p className="text-xs text-muted-foreground">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        <div className="space-y-3">
-          <Label className="text-sm font-medium">Required License Types</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {ALL_LICENSE_TYPES.map(({ value, label }) => {
-              const active = display.requiredLicenseTypes.includes(value);
-              return (
-                <div key={value} className="flex items-center gap-2.5 p-2.5 rounded-lg border bg-muted/30">
-                  {editing ? (
-                    <Checkbox
-                      checked={draft.requiredLicenseTypes.includes(value)}
-                      onCheckedChange={() => toggleLicense(value)}
-                    />
-                  ) : (
-                    active
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                      : <div className="h-3.5 w-3.5 rounded-sm border border-muted-foreground/40 shrink-0" />
-                  )}
-                  <span className={`text-sm ${active ? "font-medium" : "text-muted-foreground"}`}>{label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
         {editing && (
           <div className="flex items-center gap-2 pt-2">
             <Button onClick={handleSave} disabled={mutation.isPending} className="gap-1.5">
@@ -712,6 +652,7 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
 function CarBikeView({ type }: { type: "car" | "bike" }) {
   const meta = SERVICE_META[type];
   const Icon = meta.icon;
+  const [changeLogOpen, setChangeLogOpen] = useState(false);
 
   const ridesQuery = useQuery({
     queryKey: ["admin-rides", type],
@@ -733,14 +674,21 @@ function CarBikeView({ type }: { type: "car" | "bike" }) {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className={`p-3 rounded-xl ${meta.bg}`}>
-          <Icon className={`h-6 w-6 ${meta.color}`} />
+      <ChangeLogModal type={type as ServiceControlType} open={changeLogOpen} onClose={() => setChangeLogOpen(false)} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className={`p-3 rounded-xl ${meta.bg}`}>
+            <Icon className={`h-6 w-6 ${meta.color}`} />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{meta.label}</h1>
+            <p className="text-sm text-muted-foreground">{meta.desc}</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">{meta.label}</h1>
-          <p className="text-sm text-muted-foreground">{meta.desc}</p>
-        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setChangeLogOpen(true)}>
+          <History className="h-3.5 w-3.5" />
+          Change Log
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -843,6 +791,7 @@ function CarBikeView({ type }: { type: "car" | "bike" }) {
 // ─── Shuttle view ─────────────────────────────────────────────────────────────
 
 function ShuttleView() {
+  const [changeLogOpen, setChangeLogOpen] = useState(false);
   const routesQuery = useQuery({
     queryKey: ["routes-count"],
     queryFn: () => adminFetch<{ data: unknown[]; total: number }>("/routes?limit=1"),
@@ -853,14 +802,21 @@ function ShuttleView() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-amber-500/10">
-          <Bus className="h-6 w-6 text-amber-600" />
+      <ChangeLogModal type="shuttle" open={changeLogOpen} onClose={() => setChangeLogOpen(false)} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-amber-500/10">
+            <Bus className="h-6 w-6 text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Shuttle Services</h1>
+            <p className="text-sm text-muted-foreground">Overview of scheduled shuttle operations</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Shuttle Services</h1>
-          <p className="text-sm text-muted-foreground">Overview of scheduled shuttle operations</p>
-        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setChangeLogOpen(true)}>
+          <History className="h-3.5 w-3.5" />
+          Change Log
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -902,16 +858,24 @@ function ShuttleView() {
 // ─── Motorcycle view ──────────────────────────────────────────────────────────
 
 function MotorcycleView() {
+  const [changeLogOpen, setChangeLogOpen] = useState(false);
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-orange-500/10">
-          <Bike className="h-6 w-6 text-orange-600" />
+      <ChangeLogModal type="motorcycle" open={changeLogOpen} onClose={() => setChangeLogOpen(false)} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-orange-500/10">
+            <Bike className="h-6 w-6 text-orange-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Motorcycle Services</h1>
+            <p className="text-sm text-muted-foreground">On-demand motorcycle rides</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Motorcycle Services</h1>
-          <p className="text-sm text-muted-foreground">On-demand motorcycle rides</p>
-        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setChangeLogOpen(true)}>
+          <History className="h-3.5 w-3.5" />
+          Change Log
+        </Button>
       </div>
       <ServiceControlPanel type="motorcycle" />
     </div>
@@ -921,16 +885,24 @@ function MotorcycleView() {
 // ─── Delivery view ────────────────────────────────────────────────────────────
 
 function DeliveryView() {
+  const [changeLogOpen, setChangeLogOpen] = useState(false);
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-3 rounded-xl bg-violet-500/10">
-          <PackageOpen className="h-6 w-6 text-violet-600" />
+      <ChangeLogModal type="delivery" open={changeLogOpen} onClose={() => setChangeLogOpen(false)} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-xl bg-violet-500/10">
+            <PackageOpen className="h-6 w-6 text-violet-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Delivery Services</h1>
+            <p className="text-sm text-muted-foreground">Package and food delivery</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">Delivery Services</h1>
-          <p className="text-sm text-muted-foreground">Package and food delivery</p>
-        </div>
+        <Button variant="outline" size="sm" className="gap-1.5 shrink-0" onClick={() => setChangeLogOpen(true)}>
+          <History className="h-3.5 w-3.5" />
+          Change Log
+        </Button>
       </div>
       <ServiceControlPanel type="delivery" />
     </div>
