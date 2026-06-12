@@ -36,6 +36,18 @@ const BulkImportBrandsBody = z.object({
   })).min(1),
 });
 
+const BulkImportBrandsWithModelsBody = z.object({
+  brands: z.array(z.object({
+    name:      z.string().min(1),
+    isChinese: z.boolean().default(false),
+    models:    z.array(z.object({
+      name:    z.string().min(1),
+      minYear: z.number().int().min(1900),
+      maxYear: z.number().int().optional(),
+    })).default([]),
+  })).min(1),
+});
+
 const CreateModelBody = z.object({
   brandId: z.number().int().positive(),
   name:    z.string().min(1),
@@ -102,12 +114,12 @@ router.get("/vehicles/models/:id/years", authenticate, async (req, res): Promise
 
   if (!model) { res.status(404).json({ error: "Model not found" }); return; }
 
-  const currentYear = new Date().getFullYear() + 1;
-  const maxYear     = model.maxYear ?? currentYear;
+  const currentYear = new Date().getFullYear();
+  const maxYear     = Math.min(model.maxYear ?? currentYear, currentYear);
   const years: number[] = [];
   for (let y = model.minYear; y <= maxYear; y++) years.push(y);
 
-  res.json({ data: years, minYear: model.minYear, maxYear: model.maxYear });
+  res.json(years);
 });
 
 router.get("/vehicles/colors", authenticate, async (_req, res): Promise<void> => {
@@ -147,6 +159,66 @@ router.post("/admin/vehicle-catalog/brands/bulk", authenticate, requireRole("adm
     .returning();
 
   res.status(201).json({ inserted: inserted.length, data: inserted });
+});
+
+router.post("/admin/vehicle-brands/bulk-import", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const parsed = BulkImportBrandsWithModelsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  let brandsCreated = 0;
+  let brandsUpdated = 0;
+  let modelsCreated = 0;
+  let modelsUpdated = 0;
+
+  for (const brandInput of parsed.data.brands) {
+    const { models, ...brandData } = brandInput;
+
+    const existing = await db
+      .select({ id: vehicleBrandsTable.id })
+      .from(vehicleBrandsTable)
+      .where(eq(vehicleBrandsTable.name, brandData.name));
+
+    let brandId: number;
+
+    if (existing.length === 0) {
+      const [created] = await db
+        .insert(vehicleBrandsTable)
+        .values(brandData)
+        .returning({ id: vehicleBrandsTable.id });
+      brandId = created.id;
+      brandsCreated++;
+    } else {
+      await db
+        .update(vehicleBrandsTable)
+        .set({ isChinese: brandData.isChinese })
+        .where(eq(vehicleBrandsTable.name, brandData.name));
+      brandId = existing[0].id;
+      brandsUpdated++;
+    }
+
+    for (const modelInput of models) {
+      const existingModel = await db
+        .select({ id: vehicleModelsTable.id })
+        .from(vehicleModelsTable)
+        .where(and(
+          eq(vehicleModelsTable.brandId, brandId),
+          eq(vehicleModelsTable.name, modelInput.name),
+        ));
+
+      if (existingModel.length === 0) {
+        await db.insert(vehicleModelsTable).values({ ...modelInput, brandId });
+        modelsCreated++;
+      } else {
+        await db
+          .update(vehicleModelsTable)
+          .set({ minYear: modelInput.minYear, maxYear: modelInput.maxYear ?? null })
+          .where(eq(vehicleModelsTable.id, existingModel[0].id));
+        modelsUpdated++;
+      }
+    }
+  }
+
+  res.status(200).json({ brandsCreated, brandsUpdated, modelsCreated, modelsUpdated });
 });
 
 router.patch("/admin/vehicle-catalog/brands/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
