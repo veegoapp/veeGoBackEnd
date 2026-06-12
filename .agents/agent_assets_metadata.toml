@@ -66,3 +66,9 @@ id = "bNUyeuawy7xsPGGHvl79d"
 uri = "file://phase2_mobile_report.md"
 type = "text"
 title = "Phase 2 — Mobile Apps Impact Report"
+
+[[outputs]]
+id = "iqBlc2-5HCNQSVjctFpSI"
+uri = "file://audit_backend.md"
+type = "text"
+title = "VeeGo Backend — Deep Technical Audit"
