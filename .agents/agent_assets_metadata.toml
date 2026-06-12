@@ -72,3 +72,9 @@ id = "iqBlc2-5HCNQSVjctFpSI"
 uri = "file://audit_backend.md"
 type = "text"
 title = "VeeGo Backend — Deep Technical Audit"
+
+[[outputs]]
+id = "_rY677QyVSKGJQ5GCOGIi"
+uri = "file://promotions_audit.md"
+type = "text"
+title = "Promotions & Incentives Audit"
