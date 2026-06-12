@@ -90,3 +90,9 @@ id = "qwux8ebq-0cwRvn0WQxG6"
 uri = "file://phase4b_shuttle_bonus_report.md"
 type = "text"
 title = "Phase 4b: Shuttle Bonus Connection Report"
+
+[[outputs]]
+id = "VQG1OU3RKDv6Kk_Eetrrs"
+uri = "file://backend_final_reference.md"
+type = "text"
+title = "VeeGo Backend — Master API Reference"
