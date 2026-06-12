@@ -114,3 +114,9 @@ id = "TMZLkqpRWZE7HkP7gvKhi"
 uri = "file://veego-frontend-audit.md"
 type = "text"
 title = "VeeGo Admin Dashboard — Backend vs. Frontend Audit Report"
+
+[[outputs]]
+id = "NUiBmIrBFJt0BS8l1_p5Q"
+uri = "file://admin-dashboard-audit-report.md"
+type = "text"
+title = "Admin Dashboard Audit Report"
