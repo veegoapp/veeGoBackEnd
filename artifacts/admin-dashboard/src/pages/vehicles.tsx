@@ -535,7 +535,7 @@ export default function Vehicles() {
         </TabsContent>
 
         <TabsContent value="catalog">
-          <VehicleCatalogTab isShuttle={false} />
+          <VehicleCatalogTab isShuttle={false} serviceType={serviceType} />
         </TabsContent>
       </Tabs>
     </div>

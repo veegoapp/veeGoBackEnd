@@ -1,0 +1,26 @@
+Please fix two critical bugs in the recently refactored Vehicle Catalog (`src/components/VehicleCatalogTab.tsx` and related state views) immediately. The relational filtering is broken, and data is leaking across different service types.
+
+Follow these strict fixing instructions:
+
+---
+
+### 1. FIX THE BRAND-TO-MODEL FILTERING BUG (Data Leakage)
+- **The Issue:** Currently, opening ANY brand (e.g., Toyota) displays a list of ALL models in the entire database (e.g., BMW models, Hyundai models), instead of just that brand's models.
+- **The Fix:** Go to the Second Level View (Models View) code. Ensure that the API call or the client-side selector filtering the models strictly appends or filters by the parent `brandId`. 
+- **Code Logic:** It must query `GET /api/admin/vehicle-catalog/models?brandId=${selectedBrandId}` OR perform a strict array filter: `models.filter(m => m.brandId === selectedBrandId)`. Under no circumstances should models with a different `brandId` render inside this view.
+
+---
+
+### 2. ISOLATE CATALOGS BY SERVICE TYPE & WIPE COPIED DATA
+- **The Issue:** The entire car catalog (brands/models like Toyota, BMW) is mistakenly duplicating and rendering inside the independent tabs/pages for Scooter, Delivery, and Shuttle services.
+- **The Fix:** 
+  - Completely remove, wipe, and detach the Car Brands/Models components and data hooks from the **Scooter**, **Delivery**, and **Shuttle** catalog screens.
+  - Make the catalog views for Scooter, Delivery, and Shuttle completely **Empty/Blank** states by default. 
+  - Ensure each of these services filters its catalog by a `serviceType` parameter (e.g., `?serviceType=scooter`, `?serviceType=delivery`, `?serviceType=shuttle`).
+  - Leave them clean with an "Add Brand" button so that the admin can manually add specific, relevant brands for each service later (e.g., adding "Yamaha" under Scooter, or "Chevrolet Picker" under Delivery) without affecting the Car service catalog.
+
+---
+
+### REQUIREMENTS:
+- Ensure that mutations (Add/Edit/Delete) on one service's catalog do not alter or leak into another service's catalog.
+- Double-check that state resets completely when navigating away from a specific brand or service context.

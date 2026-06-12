@@ -18,9 +18,10 @@ const ModelIdParam  = z.object({ id: z.coerce.number().int().positive() });
 const ColorIdParam  = z.object({ id: z.coerce.number().int().positive() });
 
 const CreateBrandBody = z.object({
-  name:      z.string().min(1),
-  isChinese: z.boolean().default(false),
-  isActive:  z.boolean().default(true),
+  name:        z.string().min(1),
+  serviceType: z.string().min(1).default("car"),
+  isChinese:   z.boolean().default(false),
+  isActive:    z.boolean().default(true),
 });
 
 const UpdateBrandBody = z.object({
@@ -133,10 +134,12 @@ router.get("/vehicles/colors", authenticate, async (_req, res): Promise<void> =>
 
 // ─── BRANDS: admin CRUD ───────────────────────────────────────────────────────
 
-router.get("/admin/vehicle-catalog/brands", authenticate, requireRole("admin"), async (_req, res): Promise<void> => {
+router.get("/admin/vehicle-catalog/brands", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const serviceType = typeof req.query.serviceType === "string" ? req.query.serviceType : null;
   const brands = await db
     .select()
     .from(vehicleBrandsTable)
+    .where(serviceType ? eq(vehicleBrandsTable.serviceType, serviceType) : undefined)
     .orderBy(asc(vehicleBrandsTable.name));
   res.json({ data: brands });
 });
@@ -251,7 +254,10 @@ router.delete("/admin/vehicle-catalog/brands/:id", authenticate, requireRole("ad
 
 // ─── MODELS: admin CRUD ───────────────────────────────────────────────────────
 
-router.get("/admin/vehicle-catalog/models", authenticate, requireRole("admin"), async (_req, res): Promise<void> => {
+router.get("/admin/vehicle-catalog/models", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const brandIdRaw = req.query.brandId;
+  const brandId = typeof brandIdRaw === "string" ? parseInt(brandIdRaw, 10) : null;
+
   const models = await db
     .select({
       id:        vehicleModelsTable.id,
@@ -265,6 +271,7 @@ router.get("/admin/vehicle-catalog/models", authenticate, requireRole("admin"), 
     })
     .from(vehicleModelsTable)
     .leftJoin(vehicleBrandsTable, eq(vehicleModelsTable.brandId, vehicleBrandsTable.id))
+    .where(brandId && !isNaN(brandId) ? eq(vehicleModelsTable.brandId, brandId) : undefined)
     .orderBy(asc(vehicleBrandsTable.name), asc(vehicleModelsTable.name));
   res.json({ data: models });
 });

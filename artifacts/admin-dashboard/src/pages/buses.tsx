@@ -615,7 +615,7 @@ export default function Buses() {
         </TabsContent>
 
         <TabsContent value="catalog">
-          <VehicleCatalogTab isShuttle={true} />
+          <VehicleCatalogTab isShuttle={true} serviceType="shuttle" />
         </TabsContent>
 
         <TabsContent value="vehicle-types">

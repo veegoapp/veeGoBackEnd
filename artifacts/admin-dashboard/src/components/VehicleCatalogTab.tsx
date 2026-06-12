@@ -351,9 +351,11 @@ function ColorDialog({
 function BrandsView({
   onSelectBrand,
   isShuttle,
+  serviceType,
 }: {
   onSelectBrand: (brand: VehicleBrand) => void;
   isShuttle: boolean;
+  serviceType: string;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -363,8 +365,8 @@ function BrandsView({
   const [deleteColor, setDeleteColor] = useState<number | null>(null);
 
   const brandsQuery = useQuery({
-    queryKey: ["vehicle-catalog-brands"],
-    queryFn: () => adminFetch<{ data: VehicleBrand[] }>("/admin/vehicle-catalog/brands"),
+    queryKey: ["vehicle-catalog-brands", serviceType],
+    queryFn: () => adminFetch<{ data: VehicleBrand[] }>(`/admin/vehicle-catalog/brands?serviceType=${encodeURIComponent(serviceType)}`),
   });
   const brands = brandsQuery.data?.data ?? [];
 
@@ -375,18 +377,18 @@ function BrandsView({
   const colors = colorsQuery.data?.data ?? [];
 
   const createBrand = useMutation({
-    mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] }); setBrandDialog({ open: false }); toast({ title: "Brand added" }); },
+    mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify({ ...data, serviceType }) }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setBrandDialog({ open: false }); toast({ title: "Brand added" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
   const updateBrand = useMutation({
     mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] }); setBrandDialog({ open: false }); toast({ title: "Brand updated" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setBrandDialog({ open: false }); toast({ title: "Brand updated" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
   const deleteBrandMutation = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "DELETE" }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands"] }); setDeleteBrand(null); toast({ title: "Brand deleted" }); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setDeleteBrand(null); toast({ title: "Brand deleted" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
   const createColor = useMutation({
@@ -932,7 +934,13 @@ function YearsView({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }) {
+export function VehicleCatalogTab({
+  isShuttle = false,
+  serviceType = "car",
+}: {
+  isShuttle?: boolean;
+  serviceType?: string;
+}) {
   const [viewState, setViewState] = useState<ViewState>({ level: "brands" });
 
   return (
@@ -965,6 +973,7 @@ export function VehicleCatalogTab({ isShuttle = false }: { isShuttle?: boolean }
       {viewState.level === "brands" && (
         <BrandsView
           isShuttle={isShuttle}
+          serviceType={serviceType}
           onSelectBrand={(brand) => setViewState({ level: "models", brand })}
         />
       )}
