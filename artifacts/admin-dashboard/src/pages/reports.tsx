@@ -230,10 +230,10 @@ function RevenueReport() {
             onClick={() => downloadCSV(splitData, `revenue-${period}.csv`)}
             disabled={isLoading || series.length === 0}
           >
-            <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+            <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 mr-1.5" /> Print
+            <Printer className="h-3.5 w-3.5 me-1.5" /> Print
           </Button>
         </div>
       </div>
@@ -379,7 +379,7 @@ function TripsReport() {
           onClick={() => downloadCSV(peakHoursAll, "trips-peak-hours.csv")}
           disabled={isLoading}
         >
-          <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
         </Button>
       </div>
 
@@ -530,7 +530,7 @@ function DriversReport() {
           onClick={() => downloadCSV(tabData as Record<string, unknown>[], `drivers-${tab}.csv`)}
           disabled={isLoading}
         >
-          <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
         </Button>
       </div>
 
@@ -599,10 +599,10 @@ function DriversReport() {
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                       {(d.rating ?? 0).toFixed(1)}
-                      {d.status && <span className="ml-1 capitalize">· {d.status}</span>}
+                      {d.status && <span className="ms-1 capitalize">· {d.status}</span>}
                     </div>
                   </div>
-                  <div className="text-right shrink-0 space-y-0.5">
+                  <div className="text-end shrink-0 space-y-0.5">
                     {tab === "cancellations" ? (
                       <>
                         <p className="text-sm font-bold text-red-500">{d.cancellations ?? 0} cancelled</p>
@@ -669,7 +669,7 @@ function PassengersReport() {
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => downloadCSV(rows as unknown as Record<string, unknown>[], "passengers.csv")}>
-          <Download className="h-3.5 w-3.5 mr-1.5" /> CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> CSV
         </Button>
       </div>
 
@@ -745,7 +745,7 @@ function PassengersReport() {
                       <p className="text-sm font-medium truncate">{r.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{r.email}</p>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-end shrink-0">
                       <p className="text-sm font-semibold">
                         {tab === "By Spending" ? `${r.total_spent.toFixed(0)} EGP` :
                          tab === "By Trips" ? `${r.total_bookings} trips` :
@@ -884,7 +884,7 @@ function ZonesReport() {
                         {zone.description ? ` · ${zone.description}` : ""}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-end shrink-0">
                       <p className="text-xs font-medium text-muted-foreground">{zonePrices.length} price {zonePrices.length === 1 ? "entry" : "entries"}</p>
                       {zonePrices.map((p) => (
                         <p key={p.id} className="text-xs text-muted-foreground">{p.vehicleType}: ${p.baseFare.toFixed(2)} base</p>
@@ -937,7 +937,7 @@ function ServicesReport() {
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => downloadCSV(revenue as unknown as Record<string, unknown>[], "services-revenue.csv")}>
-          <Download className="h-3.5 w-3.5 mr-1.5" /> CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> CSV
         </Button>
       </div>
 
@@ -1045,7 +1045,7 @@ function PromoReport() {
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => downloadCSV(codes as unknown as Record<string, unknown>[], "promo-codes.csv")}>
-          <Download className="h-3.5 w-3.5 mr-1.5" /> CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> CSV
         </Button>
       </div>
 
@@ -1176,7 +1176,7 @@ function ComplaintsReport() {
           onClick={() => downloadCSV(tickets as unknown as Record<string, unknown>[], "complaints.csv")}
           disabled={isLoading}
         >
-          <Download className="h-3.5 w-3.5 mr-1.5" /> Export CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
         </Button>
       </div>
 

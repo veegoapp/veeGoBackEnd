@@ -126,7 +126,7 @@ export default function Suggestions() {
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder={t("suggestions.searchSuggestions")} className="pl-9 w-48"
+            <Input placeholder={t("suggestions.searchSuggestions")} className="ps-9 w-48"
               value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
           <Button type="submit" variant="secondary" size="sm">{t("common.search")}</Button>
@@ -297,13 +297,13 @@ export default function Suggestions() {
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate({ id: selected.id, status: "rejected", notes: adminNotes })}
                   >
-                    <XCircle className="h-4 w-4 mr-2" /> {t("suggestions.reject", "Reject")}
+                    <XCircle className="h-4 w-4 me-2" /> {t("suggestions.reject", "Reject")}
                   </Button>
                   <Button
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate({ id: selected.id, status: "approved", notes: adminNotes })}
                   >
-                    <CheckCircle2 className="h-4 w-4 mr-2" /> {t("suggestions.approve", "Approve")}
+                    <CheckCircle2 className="h-4 w-4 me-2" /> {t("suggestions.approve", "Approve")}
                   </Button>
                 </DialogFooter>
               )}

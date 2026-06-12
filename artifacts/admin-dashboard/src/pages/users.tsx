@@ -106,7 +106,7 @@ export default function Customers() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder={t("users.searchUsers")} 
-              className="pl-9"
+              className="ps-9"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
@@ -124,7 +124,7 @@ export default function Customers() {
               <TableHead>{t("staff.role")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
               <TableHead>{t("users.joined", "Joined")}</TableHead>
-              <TableHead className="text-right">{t("common.actions")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -135,7 +135,7 @@ export default function Customers() {
                   <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                  <TableCell className="text-end"><Skeleton className="h-8 w-8 ms-auto" /></TableCell>
                 </TableRow>
               ))
             ) : data?.data.length === 0 ? (
@@ -175,7 +175,7 @@ export default function Customers() {
                       {format(new Date(user.createdAt), "MMM d, yyyy")}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -186,7 +186,7 @@ export default function Customers() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
                           <Link href={`/users/${user.id}`} className="flex w-full items-center cursor-pointer">
-                            <Eye className="mr-2 h-4 w-4" />
+                            <Eye className="me-2 h-4 w-4" />
                             {t("common.details")}
                           </Link>
                         </DropdownMenuItem>
@@ -199,16 +199,16 @@ export default function Customers() {
                             setWalletDialog({ open: true, userId: user.id, userName: user.name });
                           }}
                         >
-                          <Wallet className="mr-2 h-4 w-4" /> {t("users.adjustWallet")}
+                          <Wallet className="me-2 h-4 w-4" /> {t("users.adjustWallet")}
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handleToggleBlock(user.id)}
                           className={user.isBlocked ? "text-green-600" : "text-destructive"}
                         >
                           {user.isBlocked ? (
-                            <><UserCheck className="mr-2 h-4 w-4" /> {t("users.unblockUser", "Unblock User")}</>
+                            <><UserCheck className="me-2 h-4 w-4" /> {t("users.unblockUser", "Unblock User")}</>
                           ) : (
-                            <><Ban className="mr-2 h-4 w-4" /> {t("users.blockUser", "Block User")}</>
+                            <><Ban className="me-2 h-4 w-4" /> {t("users.blockUser", "Block User")}</>
                           )}
                         </DropdownMenuItem>
                       </DropdownMenuContent>

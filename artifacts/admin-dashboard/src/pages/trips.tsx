@@ -484,7 +484,7 @@ export default function Trips() {
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" /> {t("trips.scheduleTrip", "Schedule Trip")}
+              <Plus className="me-2 h-4 w-4" /> {t("trips.scheduleTrip", "Schedule Trip")}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
@@ -543,7 +543,7 @@ export default function Trips() {
       </Dialog>
 
       <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-xl border border-border">
-        <div className="flex items-center gap-2 mr-1">
+        <div className="flex items-center gap-2 me-1">
           <Filter className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">{t("trips.filters", "Filters")}:</span>
         </div>
@@ -582,7 +582,7 @@ export default function Trips() {
         />
 
         {(routeIdFilter !== "all" || statusFilter !== "all" || dateFilter !== "") && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="ml-auto">
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="ms-auto">
             {t("common.clear", "Clear")}
           </Button>
         )}
@@ -599,7 +599,7 @@ export default function Trips() {
               <TableHead>{t("trips.price", "Price")}</TableHead>
               <TableHead>{t("trips.crewBus", "Crew & Bus")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
-              <TableHead className="text-right">{t("common.actions")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -664,7 +664,7 @@ export default function Trips() {
                       {statusLabel(trip.status)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <div className="flex items-center justify-end gap-1">
                       <Link href={`/trips/${trip.id}`} onClick={(e) => e.stopPropagation()} title="View trip detail">
                         <Button variant="ghost" size="icon" className="h-7 w-7">

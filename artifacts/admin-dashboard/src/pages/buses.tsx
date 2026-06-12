@@ -222,7 +222,7 @@ function RegisteredFleetTab() {
           <div className="relative max-w-xs">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              className="pl-8 w-56"
+              className="ps-8 w-56"
               placeholder="Search by plate or model..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -236,7 +236,7 @@ function RegisteredFleetTab() {
           )}
         </div>
         <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add Bus
+          <Plus className="h-4 w-4 me-1.5" /> Add Bus
         </Button>
       </div>
 
@@ -250,7 +250,7 @@ function RegisteredFleetTab() {
               <TableHead className="text-center">Seat Capacity</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <TableHead>Added</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -277,7 +277,7 @@ function RegisteredFleetTab() {
                   <TableCell>{bus.model}</TableCell>
                   <TableCell className="text-center">
                     <span className="font-medium">{bus.capacity}</span>
-                    <span className="text-xs text-muted-foreground ml-1">seats</span>
+                    <span className="text-xs text-muted-foreground ms-1">seats</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className={bus.isActive
@@ -289,7 +289,7 @@ function RegisteredFleetTab() {
                   <TableCell className="text-sm text-muted-foreground">
                     {new Date(bus.createdAt).toLocaleDateString()}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditBus(bus)}>
                         <Edit className="h-3.5 w-3.5" />
@@ -470,7 +470,7 @@ function ShuttleVehicleTypesTab() {
               <TableHead className="text-center">Capacity</TableHead>
               <TableHead className="text-center">Min Threshold</TableHead>
               <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -502,7 +502,7 @@ function ShuttleVehicleTypesTab() {
                       {t.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7"
                         onClick={() => setTypeDialog({ open: true, item: t })}>

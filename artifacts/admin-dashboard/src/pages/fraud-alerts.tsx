@@ -165,7 +165,7 @@ export default function FraudAlerts() {
           </SelectContent>
         </Select>
         {data && (
-          <p className="ml-auto text-sm text-muted-foreground">{total} total alerts</p>
+          <p className="ms-auto text-sm text-muted-foreground">{total} total alerts</p>
         )}
       </div>
 
@@ -179,7 +179,7 @@ export default function FraudAlerts() {
               <TableHead>Match Type</TableHead>
               <TableHead>Flagged At</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Action</TableHead>
+              <TableHead className="text-end">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -239,7 +239,7 @@ export default function FraudAlerts() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     {!alert.resolvedAt && (
                       <Button
                         size="sm"
@@ -251,7 +251,7 @@ export default function FraudAlerts() {
                       </Button>
                     )}
                     {alert.resolvedAt && alert.notes && (
-                      <span className="text-xs text-muted-foreground italic truncate max-w-[120px] block text-right">
+                      <span className="text-xs text-muted-foreground italic truncate max-w-[120px] block text-end">
                         {alert.notes}
                       </span>
                     )}

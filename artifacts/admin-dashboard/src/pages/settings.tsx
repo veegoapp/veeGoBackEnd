@@ -295,7 +295,7 @@ export default function Settings() {
 
                   <div className="flex justify-end pt-2">
                     <Button onClick={() => appForm && saveAppMutation.mutate(appForm)} disabled={saveAppMutation.isPending}>
-                      <Save className="h-3.5 w-3.5 mr-1.5" />
+                      <Save className="h-3.5 w-3.5 me-1.5" />
                       {saveAppMutation.isPending ? t("common.saving") : t("settings.saveAppInfo")}
                     </Button>
                   </div>
@@ -365,7 +365,7 @@ function SystemSettingRow({
 
   return (
     <div className="flex items-center justify-between py-3 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0 pr-6">
+      <div className="flex-1 min-w-0 pe-6">
         <p className="text-sm font-medium">{label}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
         <p className="text-[10px] font-mono text-muted-foreground/60 mt-0.5">{settingKey}</p>
@@ -379,7 +379,7 @@ function SystemSettingRow({
               type="number"
               value={inputValue}
               onChange={(e) => { setInputValue(e.target.value); setIsEditing(true); }}
-              className="w-24 h-8 text-sm text-right"
+              className="w-24 h-8 text-sm text-end"
               step="any"
             />
             {isEditing && (
@@ -389,7 +389,7 @@ function SystemSettingRow({
                 disabled={saveMutation.isPending}
                 onClick={() => saveMutation.mutate()}
               >
-                <Save className="h-3 w-3 mr-1" />
+                <Save className="h-3 w-3 me-1" />
                 {saveMutation.isPending ? "…" : "Save"}
               </Button>
             )}
@@ -456,7 +456,7 @@ function WalletLimitsRow() {
       {editing && (
         <div className="flex justify-end">
           <Button size="sm" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
-            <Save className="h-3.5 w-3.5 mr-1.5" />
+            <Save className="h-3.5 w-3.5 me-1.5" />
             {saveMutation.isPending ? "Saving…" : "Save Wallet Limits"}
           </Button>
         </div>

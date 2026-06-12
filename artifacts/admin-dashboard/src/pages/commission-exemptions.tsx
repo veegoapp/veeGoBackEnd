@@ -123,7 +123,7 @@ function ExemptionDialog({
                       key={d.id}
                       type="button"
                       onClick={() => { setSelectedDriverId(d.id); setDriverSearch(d.name); }}
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors ${selectedDriverId === d.id ? "bg-primary/10 text-primary font-medium" : ""}`}
+                      className={`w-full text-start px-3 py-2 text-sm hover:bg-muted transition-colors ${selectedDriverId === d.id ? "bg-primary/10 text-primary font-medium" : ""}`}
                     >
                       {d.name} <span className="text-muted-foreground text-xs">· {d.phone}</span>
                     </button>
@@ -266,7 +266,7 @@ export default function CommissionExemptions() {
               <TableHead>Window</TableHead>
               <TableHead>Reason</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -321,7 +321,7 @@ export default function CommissionExemptions() {
                         <Icon className="h-2.5 w-2.5" /> {meta.label}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost" size="icon" className="h-7 w-7"

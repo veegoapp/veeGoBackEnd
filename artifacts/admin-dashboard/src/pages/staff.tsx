@@ -136,17 +136,17 @@ export default function Staff() {
       <Tabs defaultValue="staff">
         <TabsList>
           <TabsTrigger value="staff">
-            <UsersRound className="h-4 w-4 mr-2" />{t("staff.staffUsers", "Staff Users")}
+            <UsersRound className="h-4 w-4 me-2" />{t("staff.staffUsers", "Staff Users")}
           </TabsTrigger>
           <TabsTrigger value="roles">
-            <Key className="h-4 w-4 mr-2" />{t("staff.rolesPermissions", "Roles & Permissions")}
+            <Key className="h-4 w-4 me-2" />{t("staff.rolesPermissions", "Roles & Permissions")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="staff" className="space-y-4 mt-4">
           <div className="flex justify-end">
             <Button onClick={() => setStaffModal({ open: true, editing: null })}>
-              <Plus className="h-4 w-4 mr-2" /> {t("staff.addStaffMember", "Add Staff Member")}
+              <Plus className="h-4 w-4 me-2" /> {t("staff.addStaffMember", "Add Staff Member")}
             </Button>
           </div>
 
@@ -159,7 +159,7 @@ export default function Staff() {
                   <TableHead>{t("users.role")}</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
                   <TableHead>{t("staff.joined", "Joined")}</TableHead>
-                  <TableHead className="text-right">{t("common.actions")}</TableHead>
+                  <TableHead className="text-end">{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -197,7 +197,7 @@ export default function Staff() {
                       <TableCell className="text-sm text-muted-foreground">
                         {member.createdAt ? format(new Date(member.createdAt), "MMM d, yyyy") : "—"}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-end">
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost" size="icon" className="h-7 w-7"
@@ -205,7 +205,7 @@ export default function Staff() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <div className="flex items-center gap-1 ml-1" title={member.isBlocked ? t("staff.activate", "Activate") : t("staff.deactivate", "Deactivate")}>
+                          <div className="flex items-center gap-1 ms-1" title={member.isBlocked ? t("staff.activate", "Activate") : t("staff.deactivate", "Deactivate")}>
                             <Switch
                               checked={!member.isBlocked}
                               onCheckedChange={(checked) => toggleBlockMut.mutate({ id: member.id, isBlocked: !checked })}
@@ -231,7 +231,7 @@ export default function Staff() {
         <TabsContent value="roles" className="space-y-4 mt-4">
           <div className="flex justify-end">
             <Button onClick={() => setRoleModal({ open: true, editing: null })}>
-              <Plus className="h-4 w-4 mr-2" /> {t("staff.createRole", "Create Role")}
+              <Plus className="h-4 w-4 me-2" /> {t("staff.createRole", "Create Role")}
             </Button>
           </div>
 

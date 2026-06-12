@@ -354,7 +354,7 @@ export default function ShuttleTripDetail() {
                           className={`h-3 w-3 ${i <= Math.round(trip.driver!.rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
                         />
                       ))}
-                      <span className="ml-1 text-sm font-bold">{Number(trip.driver.rating).toFixed(1)}</span>
+                      <span className="ms-1 text-sm font-bold">{Number(trip.driver.rating).toFixed(1)}</span>
                     </div>
                   }
                 />
@@ -455,7 +455,7 @@ export default function ShuttleTripDetail() {
           <CardTitle className="text-sm flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
             Passengers
-            <Badge variant="outline" className="ml-1 text-xs">{trip.totalPassengers}</Badge>
+            <Badge variant="outline" className="ms-1 text-xs">{trip.totalPassengers}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -474,7 +474,7 @@ export default function ShuttleTripDetail() {
                   <TableHead className="text-xs text-center">Seats</TableHead>
                   <TableHead className="text-xs">Booking Status</TableHead>
                   <TableHead className="text-xs">Payment</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
+                  <TableHead className="text-xs text-end">Amount</TableHead>
                   <TableHead className="text-xs">Booked At</TableHead>
                 </TableRow>
               </TableHeader>
@@ -515,7 +515,7 @@ export default function ShuttleTripDetail() {
                           {pm.label}
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm font-medium text-right tabular-nums">
+                      <TableCell className="text-sm font-medium text-end tabular-nums">
                         {formatEGP(p.totalPrice)}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground tabular-nums">

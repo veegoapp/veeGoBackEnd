@@ -179,7 +179,7 @@ export default function LiveTracking() {
             Updated: {lastRefresh.toLocaleTimeString()}
           </span>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 mr-1" /> Refresh
+            <RefreshCw className="h-4 w-4 me-1" /> Refresh
           </Button>
         </div>
       </div>
@@ -208,7 +208,7 @@ export default function LiveTracking() {
 
       {/* Service filter bar */}
       <div className="flex flex-wrap gap-2 items-center bg-card border border-border rounded-xl px-4 py-3">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">Service</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide me-1">Service</span>
         {SERVICE_OPTIONS.map((opt) => (
           <button
             key={opt.value}
@@ -229,7 +229,7 @@ export default function LiveTracking() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className="ps-9"
             placeholder="Search by name or phone…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -253,7 +253,7 @@ export default function LiveTracking() {
           </Button>
         )}
         {(searchQuery || statusFilter !== "all" || serviceFilter !== "all") && (
-          <span className="text-xs text-muted-foreground ml-auto">
+          <span className="text-xs text-muted-foreground ms-auto">
             {filteredDrivers.length} of {drivers.length} drivers
           </span>
         )}
@@ -265,12 +265,12 @@ export default function LiveTracking() {
           <CardTitle className="text-base flex items-center gap-2">
             <MapPin className="h-4 w-4" /> Fleet Map
             {withGps.length > 0 && (
-              <span className="text-xs font-normal text-muted-foreground ml-2">
+              <span className="text-xs font-normal text-muted-foreground ms-2">
                 {withGps.length} driver{withGps.length !== 1 ? "s" : ""} with GPS signal
               </span>
             )}
             {connected && locationUpdates.size > 0 && (
-              <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ml-1">
+              <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ms-1">
                 · {locationUpdates.size} live
               </span>
             )}
@@ -305,7 +305,7 @@ export default function LiveTracking() {
               return (
                 <Card
                   key={d.id}
-                  className={`border-l-4 cursor-pointer transition-all hover:shadow-md ${selectedDriver === d.id ? "ring-2 ring-primary" : ""}`}
+                  className={`border-s-4 cursor-pointer transition-all hover:shadow-md ${selectedDriver === d.id ? "ring-2 ring-primary" : ""}`}
                   style={{ borderLeftColor: STATUS_COLOR[d.status] ?? "#94a3b8" }}
                   onClick={() => setSelectedDriver(selectedDriver === d.id ? null : d.id)}
                 >
@@ -394,10 +394,10 @@ export default function LiveTracking() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-left px-4 py-3 font-medium">Driver</th>
-                  <th className="text-left px-4 py-3 font-medium">Phone</th>
-                  <th className="text-left px-4 py-3 font-medium">Status</th>
-                  <th className="text-left px-4 py-3 font-medium">Last Seen</th>
+                  <th className="text-start px-4 py-3 font-medium">Driver</th>
+                  <th className="text-start px-4 py-3 font-medium">Phone</th>
+                  <th className="text-start px-4 py-3 font-medium">Status</th>
+                  <th className="text-start px-4 py-3 font-medium">Last Seen</th>
                 </tr>
               </thead>
               <tbody>

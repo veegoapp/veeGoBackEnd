@@ -91,7 +91,7 @@ export default function ShuttleOffences() {
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-4 w-4 me-2" />
           Refresh
         </Button>
       </div>
@@ -172,7 +172,7 @@ export default function ShuttleOffences() {
                   <TableHead>Offence Count</TableHead>
                   <TableHead>Last Action</TableHead>
                   <TableHead>Last Offence</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-end">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -199,7 +199,7 @@ export default function ShuttleOffences() {
                       <TableCell className="text-sm text-muted-foreground">
                         {new Date(row.lastOffenceAt).toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-end">
                         <Button
                           size="sm"
                           variant="outline"

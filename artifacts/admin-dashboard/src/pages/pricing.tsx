@@ -247,10 +247,10 @@ function CarCategoryEditor() {
                       type="number" step="0.01" min="0"
                       value={form[field.key]}
                       onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      className="w-28 text-right"
+                      className="w-28 text-end"
                     />
                   ) : (
-                    <span className="text-lg font-bold w-28 text-right">
+                    <span className="text-lg font-bold w-28 text-end">
                       EGP {parseFloat(form[field.key] || "0").toFixed(2)}
                     </span>
                   )}
@@ -402,10 +402,10 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
                       type="number" step="0.01" min="0"
                       value={form[field.key]}
                       onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      className="w-28 text-right"
+                      className="w-28 text-end"
                     />
                   ) : (
-                    <span className="text-lg font-bold w-28 text-right">
+                    <span className="text-lg font-bold w-28 text-end">
                       ${parseFloat(form[field.key] || "0").toFixed(2)}
                     </span>
                   )}
@@ -545,10 +545,10 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    <th className="text-left px-4 py-2.5 text-xs font-semibold text-muted-foreground">Zone</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-muted-foreground">Base Fare</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-muted-foreground">Per Km</th>
-                    <th className="text-right px-3 py-2.5 text-xs font-semibold text-muted-foreground">Min Fare</th>
+                    <th className="text-start px-4 py-2.5 text-xs font-semibold text-muted-foreground">Zone</th>
+                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">Base Fare</th>
+                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">Per Km</th>
+                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">Min Fare</th>
                     <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground">Status</th>
                     <th className="px-4 py-2.5" />
                   </tr>
@@ -561,9 +561,9 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
                         <td className="px-4 py-3 font-medium">{row.zoneName}</td>
                         {isEditing ? (
                           <>
-                            <td className="px-3 py-2"><Input type="number" step="0.01" min="0" value={editForm.baseFare} onChange={(e) => setEditForm((p) => ({ ...p, baseFare: e.target.value }))} className="w-24 text-right h-8 text-xs" /></td>
-                            <td className="px-3 py-2"><Input type="number" step="0.01" min="0" value={editForm.perKmRate} onChange={(e) => setEditForm((p) => ({ ...p, perKmRate: e.target.value }))} className="w-24 text-right h-8 text-xs" /></td>
-                            <td className="px-3 py-2"><Input type="number" step="0.01" min="0" value={editForm.minimumFare} onChange={(e) => setEditForm((p) => ({ ...p, minimumFare: e.target.value }))} className="w-24 text-right h-8 text-xs" /></td>
+                            <td className="px-3 py-2"><Input type="number" step="0.01" min="0" value={editForm.baseFare} onChange={(e) => setEditForm((p) => ({ ...p, baseFare: e.target.value }))} className="w-24 text-end h-8 text-xs" /></td>
+                            <td className="px-3 py-2"><Input type="number" step="0.01" min="0" value={editForm.perKmRate} onChange={(e) => setEditForm((p) => ({ ...p, perKmRate: e.target.value }))} className="w-24 text-end h-8 text-xs" /></td>
+                            <td className="px-3 py-2"><Input type="number" step="0.01" min="0" value={editForm.minimumFare} onChange={(e) => setEditForm((p) => ({ ...p, minimumFare: e.target.value }))} className="w-24 text-end h-8 text-xs" /></td>
                             <td className="px-3 py-2 text-center">
                               <Switch checked={editForm.isActive} onCheckedChange={(v) => setEditForm((p) => ({ ...p, isActive: v }))} />
                             </td>
@@ -580,9 +580,9 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-3 text-right font-mono">${row.baseFare.toFixed(2)}</td>
-                            <td className="px-3 py-3 text-right font-mono">${row.perKmRate.toFixed(2)}</td>
-                            <td className="px-3 py-3 text-right font-mono">${row.minimumFare.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-end font-mono">${row.baseFare.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-end font-mono">${row.perKmRate.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-end font-mono">${row.minimumFare.toFixed(2)}</td>
                             <td className="px-3 py-3 text-center">
                               <Badge variant="outline" className={row.isActive ? "text-green-600 border-green-200 text-xs" : "text-muted-foreground text-xs"}>
                                 {row.isActive ? "Active" : "Inactive"}

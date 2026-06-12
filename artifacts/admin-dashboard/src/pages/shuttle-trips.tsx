@@ -164,13 +164,13 @@ export default function ShuttleTrips() {
             placeholder="Search route, driver, plate…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 h-8 w-52 text-sm"
+            className="ps-8 h-8 w-52 text-sm"
           />
         </div>
 
         <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
           <SelectTrigger className="h-8 w-40 text-sm">
-            <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+            <Filter className="h-3.5 w-3.5 me-1.5 text-muted-foreground" />
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -208,7 +208,7 @@ export default function ShuttleTrips() {
           </Button>
         )}
 
-        <span className="ml-auto text-xs text-muted-foreground">
+        <span className="ms-auto text-xs text-muted-foreground">
           {total.toLocaleString()} trip{total !== 1 ? "s" : ""} total
         </span>
       </div>
@@ -225,7 +225,7 @@ export default function ShuttleTrips() {
               <TableHead className="text-xs">Driver</TableHead>
               <TableHead className="text-xs">Bus</TableHead>
               <TableHead className="text-xs">Seats</TableHead>
-              <TableHead className="text-xs text-right">Price</TableHead>
+              <TableHead className="text-xs text-end">Price</TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -323,7 +323,7 @@ export default function ShuttleTrips() {
                     </div>
                   </TableCell>
 
-                  <TableCell className="text-right text-sm font-medium tabular-nums">
+                  <TableCell className="text-end text-sm font-medium tabular-nums">
                     {formatEGP(trip.price)}
                   </TableCell>
 

@@ -171,7 +171,7 @@ export default function Notifications() {
                       <span className="text-xs text-muted-foreground">#{specificUserId}</span>
                       <button
                         type="button"
-                        className="ml-1 text-muted-foreground hover:text-foreground"
+                        className="ms-1 text-muted-foreground hover:text-foreground"
                         onClick={() => { setSelectedUserName(""); setSpecificUserId(""); setUserSearch(""); }}
                       >
                         <X className="h-3.5 w-3.5" />
@@ -182,7 +182,7 @@ export default function Notifications() {
                       <div className="relative">
                         <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
-                          className="pl-8"
+                          className="ps-8"
                           placeholder={t("notifications.searchUserPlaceholder")}
                           value={userSearch}
                           onChange={(e) => { setUserSearch(e.target.value); setShowUserDropdown(true); }}
@@ -195,7 +195,7 @@ export default function Notifications() {
                             <button
                               key={u.id}
                               type="button"
-                              className="flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
+                              className="flex w-full items-start gap-2 px-3 py-2 text-start text-sm hover:bg-muted transition-colors"
                               onClick={() => {
                                 setSpecificUserId(String(u.id));
                                 setSelectedUserName(u.name);
@@ -208,7 +208,7 @@ export default function Notifications() {
                                 <p className="font-medium truncate">{u.name}</p>
                                 <p className="text-xs text-muted-foreground truncate">{u.email} · {u.phone}</p>
                               </div>
-                              <span className="ml-auto text-xs text-muted-foreground shrink-0">#{u.id}</span>
+                              <span className="ms-auto text-xs text-muted-foreground shrink-0">#{u.id}</span>
                             </button>
                           ))}
                         </div>
@@ -299,7 +299,7 @@ export default function Notifications() {
                 onClick={handleSend}
                 disabled={broadcastMutation.isPending}
               >
-                <Send className="mr-2 h-4 w-4" />
+                <Send className="me-2 h-4 w-4" />
                 {sendButtonLabel}
               </Button>
             </CardContent>

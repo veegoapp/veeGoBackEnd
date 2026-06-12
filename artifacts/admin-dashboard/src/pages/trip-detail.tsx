@@ -242,14 +242,14 @@ export default function TripDetail() {
         </div>
         {canCancel && (
           <Button variant="destructive" size="sm" onClick={() => setCancelOpen(true)}>
-            <Ban className="h-4 w-4 mr-2" /> {t("tripDetail.cancelTrip")}
+            <Ban className="h-4 w-4 me-2" /> {t("tripDetail.cancelTrip")}
           </Button>
         )}
         <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-          <Trash2 className="h-4 w-4 mr-2" /> Delete Trip
+          <Trash2 className="h-4 w-4 me-2" /> Delete Trip
         </Button>
         <Button variant="outline" size="sm" onClick={() => setNoteOpen(true)}>
-          <MessageSquare className="h-4 w-4 mr-2" /> {t("tripDetail.addNote")}
+          <MessageSquare className="h-4 w-4 me-2" /> {t("tripDetail.addNote")}
         </Button>
       </div>
 
@@ -330,7 +330,7 @@ export default function TripDetail() {
                     {[1,2,3,4,5].map((i) => (
                       <Star key={i} className={`h-3.5 w-3.5 ${i <= Math.round(driverInfo.rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
                     ))}
-                    <span className="ml-1 text-sm font-bold">{Number(driverInfo.rating).toFixed(1)}</span>
+                    <span className="ms-1 text-sm font-bold">{Number(driverInfo.rating).toFixed(1)}</span>
                   </div>
                 } />
               </>
@@ -369,9 +369,9 @@ export default function TripDetail() {
                 <TableHead>{t("tripDetail.colSeats")}</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
                 <TableHead>{t("tripDetail.colPayment")}</TableHead>
-                <TableHead className="text-right">{t("tripDetail.colTotal")}</TableHead>
+                <TableHead className="text-end">{t("tripDetail.colTotal")}</TableHead>
                 <TableHead>{t("tripDetail.colBookedAt")}</TableHead>
-                <TableHead className="text-right">{t("common.actions")}</TableHead>
+                <TableHead className="text-end">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -408,16 +408,16 @@ export default function TripDetail() {
                     <TableCell>
                       <Badge variant="outline" className="capitalize text-[10px]">{b.paymentStatus}</Badge>
                     </TableCell>
-                    <TableCell className="text-right font-mono font-semibold">{formatEGP(parseFloat(String(b.totalPrice)))}</TableCell>
+                    <TableCell className="text-end font-mono font-semibold">{formatEGP(parseFloat(String(b.totalPrice)))}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{fmtUtcShort(b.createdAt)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       {(b.status === "confirmed" || b.status === "completed") && b.paymentStatus !== "refunded" && (
                         <Button
                           variant="ghost" size="sm"
                           className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 text-xs px-2"
                           onClick={() => setRefundBookingId(b.id)}
                         >
-                          <Wallet className="h-3 w-3 mr-1" /> {t("tripDetail.refund")}
+                          <Wallet className="h-3 w-3 me-1" /> {t("tripDetail.refund")}
                         </Button>
                       )}
                     </TableCell>
@@ -453,7 +453,7 @@ export default function TripDetail() {
               disabled={cancelMutation.isPending}
               onClick={() => cancelMutation.mutate()}
             >
-              <Ban className="h-4 w-4 mr-2" /> {t("tripDetail.confirmCancel")}
+              <Ban className="h-4 w-4 me-2" /> {t("tripDetail.confirmCancel")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -472,7 +472,7 @@ export default function TripDetail() {
               disabled={refundMutation.isPending}
               onClick={() => refundBookingId && refundMutation.mutate(refundBookingId)}
             >
-              <Wallet className="h-4 w-4 mr-2" /> {t("tripDetail.issueRefund")}
+              <Wallet className="h-4 w-4 me-2" /> {t("tripDetail.issueRefund")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -504,7 +504,7 @@ export default function TripDetail() {
               disabled={deleteMutation.isPending || trip.status === "active" || trip.status === "waiting_driver"}
               onClick={() => deleteMutation.mutate()}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
+              <Trash2 className="h-4 w-4 me-2" />
               {deleteMutation.isPending ? "Deleting…" : "Delete Permanently"}
             </Button>
           </DialogFooter>

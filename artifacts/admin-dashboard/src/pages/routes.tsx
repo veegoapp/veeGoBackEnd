@@ -295,7 +295,7 @@ export default function RoutesList() {
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" /> {t("routes.addRoute")}
+              <Plus className="me-2 h-4 w-4" /> {t("routes.addRoute")}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[520px]">
@@ -334,7 +334,7 @@ export default function RoutesList() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
               placeholder={t("routes.searchRoutes")} 
-              className="pl-9"
+              className="ps-9"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
             />
@@ -342,7 +342,7 @@ export default function RoutesList() {
           <Button type="submit" variant="secondary">{t("common.search")}</Button>
         </form>
         {data && (
-          <p className="ml-auto text-sm text-muted-foreground">{data.total} {t("routes.routesTotal", "routes total")}</p>
+          <p className="ms-auto text-sm text-muted-foreground">{data.total} {t("routes.routesTotal", "routes total")}</p>
         )}
       </div>
 
@@ -356,7 +356,7 @@ export default function RoutesList() {
               <TableHead>{t("routes.basePrice")}</TableHead>
               <TableHead>{t("routes.activity", "Activity")}</TableHead>
               <TableHead>{t("routes.active")}</TableHead>
-              <TableHead className="text-right">{t("common.actions")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -369,7 +369,7 @@ export default function RoutesList() {
                   <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-12" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                  <TableCell className="text-end"><Skeleton className="h-8 w-8 ms-auto" /></TableCell>
                 </TableRow>
               ))
             ) : data?.data.length === 0 ? (
@@ -419,7 +419,7 @@ export default function RoutesList() {
                       aria-label={route.isActive ? t("routes.deactivate", "Deactivate route") : t("routes.activate", "Activate route")}
                     />
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -430,12 +430,12 @@ export default function RoutesList() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
                           <Link href={`/routes/${route.id}`} className="flex w-full items-center cursor-pointer">
-                            <RouteIcon className="mr-2 h-4 w-4" />
+                            <RouteIcon className="me-2 h-4 w-4" />
                             {t("routes.manageStations", "Manage Stations")}
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleOpenEdit(route)}>
-                          <Edit className="mr-2 h-4 w-4" />
+                          <Edit className="me-2 h-4 w-4" />
                           {t("routes.editRoute", "Edit Route")}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
@@ -443,7 +443,7 @@ export default function RoutesList() {
                           onClick={() => handleDelete(route.id)}
                           className="text-destructive"
                         >
-                          <Trash2 className="mr-2 h-4 w-4" />
+                          <Trash2 className="me-2 h-4 w-4" />
                           {t("routes.deleteRoute", "Delete Route")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>

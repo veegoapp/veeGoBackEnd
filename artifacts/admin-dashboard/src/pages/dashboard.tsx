@@ -260,7 +260,7 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
                     <p className="text-xs text-muted-foreground">{trip.driverName}</p>
                   )}
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-end shrink-0">
                   <p className="text-sm font-medium">{format(parseISO(trip.departureTime), "HH:mm")}</p>
                   <p className="text-xs text-muted-foreground">
                     {trip.totalSeats - trip.availableSeats}/{trip.totalSeats} {t("bookings.seats")}
@@ -296,7 +296,7 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
                   <p className="text-sm font-medium truncate">{b.userName ?? b.userEmail ?? `User #${b.id}`}</p>
                   <p className="text-xs text-muted-foreground">{relativeTime(b.createdAt)}</p>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-end shrink-0">
                   <p className="text-sm font-semibold">${parseFloat(b.totalPrice).toFixed(2)}</p>
                   <Badge
                     variant="outline"
@@ -337,7 +337,7 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
                     {dep.fromLocation} → {dep.toLocation}
                   </p>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-end shrink-0">
                   <p className="text-sm font-medium">{format(parseISO(dep.departureTime), "HH:mm")}</p>
                   <Badge
                     variant="outline"
@@ -376,7 +376,7 @@ function ActivitySection({ activity, loading }: { activity?: Activity; loading: 
                   <p className="text-sm font-medium truncate">{tk.subject}</p>
                   <p className="text-xs text-muted-foreground">{relativeTime(tk.createdAt)}</p>
                 </div>
-                <div className="text-right shrink-0 space-y-1">
+                <div className="text-end shrink-0 space-y-1">
                   <Badge
                     variant="outline"
                     className={`text-[10px] capitalize px-1.5 py-0 block ${STATUS_COLOR[tk.status] ? `border-transparent text-white ${STATUS_COLOR[tk.status]}` : ""}`}
@@ -552,7 +552,7 @@ export default function Dashboard() {
                 <span className="text-3xl font-bold">{(activity?.activeTrips ?? []).length}</span>
               )}
             </div>
-            <div className="ml-auto">
+            <div className="ms-auto">
               <Link href="/live-tracking">
                 <Button variant="outline" className="gap-2">
                   <Navigation className="h-4 w-4" />

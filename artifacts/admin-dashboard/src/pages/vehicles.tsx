@@ -313,7 +313,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
           {data ? `${data.total} vehicles registered` : "Loading…"}
         </p>
         <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add Vehicle
+          <Plus className="h-4 w-4 me-1.5" /> Add Vehicle
         </Button>
       </div>
 
@@ -321,7 +321,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-8 w-56"
+            className="ps-8 w-56"
             placeholder="Search plate, make, model..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -364,7 +364,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
               <TableHead>Color</TableHead>
               <TableHead>Driver</TableHead>
               <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -411,7 +411,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
                       {vehicle.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditVehicle(vehicle)}>
                         <Edit className="h-3.5 w-3.5" />

@@ -430,7 +430,7 @@ function OverviewTab({ route, trips, stations }: { route: any; trips: any[]; sta
                 <div key={label} className="flex items-center gap-2">
                   <div className={`h-2.5 w-2.5 rounded-full ${color}`} />
                   <span className="text-sm text-muted-foreground">{label}</span>
-                  <span className="text-sm font-semibold ml-auto">{count}</span>
+                  <span className="text-sm font-semibold ms-auto">{count}</span>
                 </div>
               ))}
             </div>
@@ -644,7 +644,7 @@ function DirectionTab({
           </div>
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogTrigger asChild>
-              <Button size="sm"><Plus className="mr-2 h-4 w-4" />{t("routeDetail.addStation", "Add Station")}</Button>
+              <Button size="sm"><Plus className="me-2 h-4 w-4" />{t("routeDetail.addStation", "Add Station")}</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -777,7 +777,7 @@ function DirectionTab({
           <Dialog open={isCreateTripOpen} onOpenChange={setIsCreateTripOpen}>
             <DialogTrigger asChild>
               <Button size="sm" variant="outline">
-                <Plus className="mr-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}
+                <Plus className="me-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
@@ -916,7 +916,7 @@ function SchedulesTab({
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="mr-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}</Button>
+            <Button size="sm"><Plus className="me-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}</Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -1004,7 +1004,7 @@ function SchedulesTab({
                 <TableHead>{t("trips.seats", "Seats")}</TableHead>
                 <TableHead>{t("trips.price", "Price")}</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
-                <TableHead className="text-right">{t("common.actions")}</TableHead>
+                <TableHead className="text-end">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1027,7 +1027,7 @@ function SchedulesTab({
                   <TableCell>{trip.availableSeats} / {trip.totalSeats}</TableCell>
                   <TableCell>{formatEGP(trip.price)}</TableCell>
                   <TableCell><StatusBadge status={trip.status} /></TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(trip)}><Edit className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDuplicate(trip)}><Copy className="h-3.5 w-3.5" /></Button>
@@ -1153,8 +1153,8 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
         {sorted.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-auto">
-                <Download className="h-4 w-4 mr-2" />{t("routeDetail.export", "Export")}
+              <Button variant="outline" size="sm" className="ms-auto">
+                <Download className="h-4 w-4 me-2" />{t("routeDetail.export", "Export")}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -1199,7 +1199,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
                 <TableHead>{t("trips.seats", "Seats")}</TableHead>
                 <TableHead>{t("trips.price", "Price")}</TableHead>
                 <TableHead>{t("common.status")}</TableHead>
-                <TableHead className="text-right">{t("common.actions")}</TableHead>
+                <TableHead className="text-end">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1224,7 +1224,7 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
                   <TableCell className="text-sm">{trip.availableSeats} / {trip.totalSeats}</TableCell>
                   <TableCell className="text-sm">{formatEGP(trip.price)}</TableCell>
                   <TableCell><StatusBadge status={trip.status} /></TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-end">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleOpenEdit(trip)}><Edit className="h-3.5 w-3.5" /></Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleCancel(trip.id)} disabled={trip.status === "cancelled"}>
@@ -1530,7 +1530,7 @@ export default function RouteDetail() {
             {route.fromLocation}
             <ArrowRight className="h-3 w-3" />
             {route.toLocation}
-            <Minus className="h-3 w-3 ml-2" />
+            <Minus className="h-3 w-3 ms-2" />
             <Clock className="h-3 w-3" />
             {route.estimatedDuration} {t("routes.min", "min")}
             <Minus className="h-3 w-3" />
@@ -1547,17 +1547,17 @@ export default function RouteDetail() {
         <TabsList className="flex-wrap h-auto">
           <TabsTrigger value="overview">{t("routeDetail.overview", "Overview")}</TabsTrigger>
           <TabsTrigger value="outbound">
-            <MoveRight className="h-3.5 w-3.5 mr-1.5 text-blue-500" />
+            <MoveRight className="h-3.5 w-3.5 me-1.5 text-blue-500" />
             {t("routeDetail.outbound", "Outbound")}
-            <span className="ml-1.5 text-xs opacity-70">({outboundStations.length})</span>
+            <span className="ms-1.5 text-xs opacity-70">({outboundStations.length})</span>
           </TabsTrigger>
           <TabsTrigger value="return">
-            <MoveLeft className="h-3.5 w-3.5 mr-1.5 text-violet-500" />
+            <MoveLeft className="h-3.5 w-3.5 me-1.5 text-violet-500" />
             {t("routeDetail.return", "Return")}
-            <span className="ml-1.5 text-xs opacity-70">({returnStations.length})</span>
+            <span className="ms-1.5 text-xs opacity-70">({returnStations.length})</span>
           </TabsTrigger>
           <TabsTrigger value="schedules">{t("routeDetail.schedules", "Schedules")}</TabsTrigger>
-          <TabsTrigger value="trips">{t("trips.title")} <span className="ml-1.5 text-xs opacity-70">({trips.length})</span></TabsTrigger>
+          <TabsTrigger value="trips">{t("trips.title")} <span className="ms-1.5 text-xs opacity-70">({trips.length})</span></TabsTrigger>
           <TabsTrigger value="drivers">{t("drivers.title")}</TabsTrigger>
           <TabsTrigger value="analytics">{t("nav.analytics")}</TabsTrigger>
         </TabsList>

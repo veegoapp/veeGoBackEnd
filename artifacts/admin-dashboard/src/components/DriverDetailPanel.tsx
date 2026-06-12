@@ -186,7 +186,7 @@ function StarRating({ rating }: { rating: number }) {
       {[1, 2, 3, 4, 5].map(i => (
         <Star key={i} className={`h-4 w-4 ${i <= Math.round(rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
       ))}
-      <span className="text-sm font-bold ml-1">{Number(rating).toFixed(1)}</span>
+      <span className="text-sm font-bold ms-1">{Number(rating).toFixed(1)}</span>
       <span className="text-xs text-muted-foreground">/ 5</span>
     </div>
   );
@@ -213,9 +213,9 @@ function StatCard({ icon: Icon, iconClass, label, value }: {
 }
 
 function DocStatusBadge({ status, t }: { status: "pending" | "approved" | "rejected"; t: (k: string) => string }) {
-  if (status === "approved") return <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-600 bg-green-500/10"><CheckCircle2 className="h-2.5 w-2.5 mr-1" />{t("driverPanel.docApproved")}</Badge>;
-  if (status === "rejected") return <Badge variant="destructive" className="text-[10px]"><XCircle className="h-2.5 w-2.5 mr-1" />{t("driverPanel.docRejected")}</Badge>;
-  return <Badge variant="secondary" className="text-[10px] text-amber-600"><Clock className="h-2.5 w-2.5 mr-1" />{t("driverPanel.docPending")}</Badge>;
+  if (status === "approved") return <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-600 bg-green-500/10"><CheckCircle2 className="h-2.5 w-2.5 me-1" />{t("driverPanel.docApproved")}</Badge>;
+  if (status === "rejected") return <Badge variant="destructive" className="text-[10px]"><XCircle className="h-2.5 w-2.5 me-1" />{t("driverPanel.docRejected")}</Badge>;
+  return <Badge variant="secondary" className="text-[10px] text-amber-600"><Clock className="h-2.5 w-2.5 me-1" />{t("driverPanel.docPending")}</Badge>;
 }
 
 function RideStatusBadge({ status, label }: { status: string; label: string }) {
@@ -259,11 +259,11 @@ function DocumentCard({ doc, labelEn, labelAr, onZoom, onVerify, isPending, t, l
           <div className="flex gap-1 mt-1">
             <Button size="sm" variant="destructive" className="flex-1 h-6 text-[10px] px-1" disabled={isPending}
               onClick={() => onVerify("rejected")}>
-              <XCircle className="h-2.5 w-2.5 mr-1" />{t("driverPanel.rejectBtn")}
+              <XCircle className="h-2.5 w-2.5 me-1" />{t("driverPanel.rejectBtn")}
             </Button>
             <Button size="sm" className="flex-1 h-6 text-[10px] px-1" disabled={isPending}
               onClick={() => onVerify("approved")}>
-              <CheckCircle2 className="h-2.5 w-2.5 mr-1" />{t("driverPanel.approveBtn")}
+              <CheckCircle2 className="h-2.5 w-2.5 me-1" />{t("driverPanel.approveBtn")}
             </Button>
           </div>
         )}
@@ -470,7 +470,7 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-lg font-bold">{driver?.name ?? `Driver #${driverId}`}</span>
                         <Badge variant="outline" className="text-[10px]">
-                          <ServiceIcon className="h-3 w-3 mr-1" />{serviceType}
+                          <ServiceIcon className="h-3 w-3 me-1" />{serviceType}
                         </Badge>
                         {driver && (
                           <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[driver.status]}`}>
@@ -530,7 +530,7 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                   <TabsTrigger value="documents">
                     {t("driverPanel.tabDocuments")}
                     {pendingDocs > 0 && (
-                      <span className="ml-1.5 rounded-full bg-amber-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center">
+                      <span className="ms-1.5 rounded-full bg-amber-500 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center">
                         {pendingDocs}
                       </span>
                     )}
@@ -668,16 +668,16 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                     <div className="flex items-center gap-3 flex-wrap">
                       <span className="text-sm font-semibold text-muted-foreground">{t("driverPanel.docSummaryLabel")}</span>
                       <Badge variant="outline" className="text-green-600 border-green-500/30 bg-green-500/10">
-                        <CheckCircle2 className="h-3 w-3 mr-1" />{approvedDocs} {t("driverPanel.approvedCount")}
+                        <CheckCircle2 className="h-3 w-3 me-1" />{approvedDocs} {t("driverPanel.approvedCount")}
                       </Badge>
                       {pendingDocs > 0 && (
                         <Badge variant="secondary" className="text-amber-600">
-                          <Clock className="h-3 w-3 mr-1" />{pendingDocs} {t("driverPanel.pendingCount")}
+                          <Clock className="h-3 w-3 me-1" />{pendingDocs} {t("driverPanel.pendingCount")}
                         </Badge>
                       )}
                       {rejectedDocs > 0 && (
                         <Badge variant="destructive">
-                          <XCircle className="h-3 w-3 mr-1" />{rejectedDocs} {t("driverPanel.rejectedCount")}
+                          <XCircle className="h-3 w-3 me-1" />{rejectedDocs} {t("driverPanel.rejectedCount")}
                         </Badge>
                       )}
                     </div>
@@ -967,8 +967,8 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                               size="sm" onClick={handleToggleBlock}
                               disabled={toggleBlockMutation.isPending || userLoading || !userInfo}>
                               {userInfo?.isBlocked
-                                ? <><ToggleRight className="h-4 w-4 mr-2" />{t("driverPanel.unblockBtn")}</>
-                                : <><ToggleLeft className="h-4 w-4 mr-2" />{t("driverPanel.blockBtn")}</>}
+                                ? <><ToggleRight className="h-4 w-4 me-2" />{t("driverPanel.unblockBtn")}</>
+                                : <><ToggleLeft className="h-4 w-4 me-2" />{t("driverPanel.blockBtn")}</>}
                             </Button>
                           </div>
                         </div>
@@ -993,8 +993,8 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                               size="sm" onClick={handleToggleActive}
                               disabled={toggleActiveMutation.isPending || driverLoading || !driver}>
                               {driver?.isActive
-                                ? <><XCircle className="h-4 w-4 mr-2" />{t("driverPanel.suspendBtn")}</>
-                                : <><CheckCircle2 className="h-4 w-4 mr-2" />{t("driverPanel.activateBtn")}</>}
+                                ? <><XCircle className="h-4 w-4 me-2" />{t("driverPanel.suspendBtn")}</>
+                                : <><CheckCircle2 className="h-4 w-4 me-2" />{t("driverPanel.activateBtn")}</>}
                             </Button>
                           </div>
                         </div>
@@ -1041,9 +1041,9 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                 {zoomDoc.mimeType && <><span>·</span><span>{zoomDoc.mimeType}</span></>}
                 <DocStatusBadge status={zoomDoc.verificationStatus} t={t} />
                 {zoomDoc.fileUrl && (
-                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 ml-auto"
+                  <Button size="sm" variant="outline" className="h-6 text-[10px] px-2 ms-auto"
                     onClick={() => window.open(zoomDoc.fileUrl, "_blank")}>
-                    <ExternalLink className="h-3 w-3 mr-1" />{t("driverPanel.openNewTab")}
+                    <ExternalLink className="h-3 w-3 me-1" />{t("driverPanel.openNewTab")}
                   </Button>
                 )}
               </div>
@@ -1059,11 +1059,11 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                 <div className="flex gap-3">
                   <Button variant="destructive" className="flex-1" disabled={verifyMutation.isPending}
                     onClick={() => verifyMutation.mutate({ id: zoomDoc.id, status: "rejected" })}>
-                    <XCircle className="h-4 w-4 mr-2" />{t("driverPanel.rejectBtn")}
+                    <XCircle className="h-4 w-4 me-2" />{t("driverPanel.rejectBtn")}
                   </Button>
                   <Button className="flex-1" disabled={verifyMutation.isPending}
                     onClick={() => verifyMutation.mutate({ id: zoomDoc.id, status: "approved" })}>
-                    <CheckCircle2 className="h-4 w-4 mr-2" />{t("driverPanel.approveBtn")}
+                    <CheckCircle2 className="h-4 w-4 me-2" />{t("driverPanel.approveBtn")}
                   </Button>
                 </div>
               )}

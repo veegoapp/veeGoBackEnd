@@ -231,7 +231,7 @@ export default function Promo() {
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="mr-2 h-4 w-4" /> {t("promo.addPromo")}
+              <Plus className="me-2 h-4 w-4" /> {t("promo.addPromo")}
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -261,7 +261,7 @@ export default function Promo() {
               <TableHead>{t("promo.usage", "Usage")}</TableHead>
               <TableHead>{t("promo.expiry")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
-              <TableHead className="text-right">{t("common.actions")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -273,7 +273,7 @@ export default function Promo() {
                   <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                  <TableCell className="text-end"><Skeleton className="h-8 w-16 ms-auto" /></TableCell>
                 </TableRow>
               ))
             ) : data?.data.length === 0 ? (
@@ -336,7 +336,7 @@ export default function Promo() {
                         <Badge variant="outline">{t("common.disabled")}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(promo)}>
                           <Edit className="h-4 w-4" />

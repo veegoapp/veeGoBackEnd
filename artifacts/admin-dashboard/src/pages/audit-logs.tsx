@@ -143,7 +143,7 @@ export default function AuditLogs() {
         )}
 
         {data && (
-          <span className="ml-auto text-sm text-muted-foreground self-center">
+          <span className="ms-auto text-sm text-muted-foreground self-center">
             {data.total} {t("auditLogs.records", "records")}
           </span>
         )}
@@ -190,7 +190,7 @@ export default function AuditLogs() {
                     <TableCell>
                       <span className="font-medium capitalize">{log.entityType}</span>
                       {log.entityId && (
-                        <span className="text-xs text-muted-foreground ml-1">#{log.entityId}</span>
+                        <span className="text-xs text-muted-foreground ms-1">#{log.entityId}</span>
                       )}
                     </TableCell>
                     <TableCell>
@@ -260,7 +260,7 @@ export default function AuditLogs() {
             </DialogTitle>
           </DialogHeader>
           {selectedLog && (
-            <ScrollArea className="max-h-[60vh] pr-4">
+            <ScrollArea className="max-h-[60vh] pe-4">
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>

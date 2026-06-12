@@ -135,7 +135,7 @@ export default function ServiceZones() {
       {/* Header */}
       <div className="flex items-start gap-4">
         <Link href={`/services/${type}`}>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground -ml-2 mt-0.5">
+          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground -ms-2 mt-0.5">
             <ArrowLeft className="h-4 w-4" />
             Back to {meta?.label ?? type}
           </Button>

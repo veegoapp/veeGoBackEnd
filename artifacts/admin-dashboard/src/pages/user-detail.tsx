@@ -296,7 +296,7 @@ export default function UserDetail() {
       {/* Action bar */}
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
-          <Edit2 className="h-3.5 w-3.5 mr-1.5" /> {t("common.edit")}
+          <Edit2 className="h-3.5 w-3.5 me-1.5" /> {t("common.edit")}
         </Button>
         <Button
           variant={user.isBlocked ? "outline" : "destructive"}
@@ -307,27 +307,27 @@ export default function UserDetail() {
           }}
           disabled={toggleBlockMutation.isPending}
         >
-          {user.isBlocked ? <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> : <ShieldX className="h-3.5 w-3.5 mr-1.5" />}
+          {user.isBlocked ? <ShieldCheck className="h-3.5 w-3.5 me-1.5" /> : <ShieldX className="h-3.5 w-3.5 me-1.5" />}
           {user.isBlocked ? t("driverDetail.unblockAccount") : t("driverDetail.blockAccount")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setBalanceOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" /> {t("userDetail.addBalance")}
+          <Plus className="h-3.5 w-3.5 me-1.5" /> {t("userDetail.addBalance")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setMessageOpen(true)}>
-          <Bell className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.sendMessage")}
+          <Bell className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.sendMessage")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setNoteOpen(true)}>
-          <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> {t("userDetail.addNote")}
+          <MessageSquare className="h-3.5 w-3.5 me-1.5" /> {t("userDetail.addNote")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setPromoOpen(true)}>
-          <Tag className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.sendPromo")}
+          <Tag className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.sendPromo")}
         </Button>
         <Button
           variant="destructive"
           size="sm"
           onClick={() => setDeleteOpen(true)}
         >
-          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.deleteAccount")}
+          <Trash2 className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.deleteAccount")}
         </Button>
       </div>
 
@@ -402,7 +402,7 @@ export default function UserDetail() {
                     <TableHead>{t("tripDetail.colSeats")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
                     <TableHead>{t("tripDetail.colPayment")}</TableHead>
-                    <TableHead className="text-right">{t("tripDetail.colTotal")}</TableHead>
+                    <TableHead className="text-end">{t("tripDetail.colTotal")}</TableHead>
                     <TableHead>{t("common.date")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -421,7 +421,7 @@ export default function UserDetail() {
                         <TableCell className="text-sm">{b.seatCount}</TableCell>
                         <TableCell><BookingStatusBadge status={b.status} /></TableCell>
                         <TableCell><Badge variant="outline" className="capitalize text-[10px]">{b.paymentStatus}</Badge></TableCell>
-                        <TableCell className="text-right font-mono text-sm">{formatEGP(b.totalPrice)}</TableCell>
+                        <TableCell className="text-end font-mono text-sm">{formatEGP(b.totalPrice)}</TableCell>
                         <TableCell className="text-xs text-muted-foreground">{format(new Date(b.createdAt), "MMM d, yyyy")}</TableCell>
                       </TableRow>
                     ))
@@ -458,7 +458,7 @@ export default function UserDetail() {
                     <TableHead>{t("userDetail.colTxnId")}</TableHead>
                     <TableHead>{t("common.type")}</TableHead>
                     <TableHead>{t("userDetail.colDescription")}</TableHead>
-                    <TableHead className="text-right">{t("userDetail.colAmount")}</TableHead>
+                    <TableHead className="text-end">{t("userDetail.colAmount")}</TableHead>
                     <TableHead>{t("common.date")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -481,7 +481,7 @@ export default function UserDetail() {
                           }`}>{t.type}</Badge>
                         </TableCell>
                         <TableCell className="text-sm max-w-[200px] truncate">{t.description}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold">
+                        <TableCell className="text-end font-mono font-semibold">
                           <span className={t.type === "payment" ? "text-destructive" : "text-green-600"}>
                             {t.type === "payment" ? "-" : "+"}{formatEGP(t.amount)}
                           </span>
@@ -611,7 +611,7 @@ export default function UserDetail() {
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>{t("common.cancel")}</Button>
                 <Button type="submit" disabled={updateMutation.isPending}>
-                  <Save className="h-4 w-4 mr-2" /> {t("common.saveChanges")}
+                  <Save className="h-4 w-4 me-2" /> {t("common.saveChanges")}
                 </Button>
               </DialogFooter>
             </form>
@@ -639,7 +639,7 @@ export default function UserDetail() {
               disabled={addBalanceMutation.isPending || !balanceAmount}
               onClick={() => addBalanceMutation.mutate({ amount: parseFloat(balanceAmount), description: balanceNote || "Manual balance top-up" })}
             >
-              <Plus className="h-4 w-4 mr-2" /> {t("userDetail.addBalance")}
+              <Plus className="h-4 w-4 me-2" /> {t("userDetail.addBalance")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -665,7 +665,7 @@ export default function UserDetail() {
               disabled={sendMessageMutation.isPending || !msgTitle || !msgBody}
               onClick={() => sendMessageMutation.mutate({ title: msgTitle, body: msgBody })}
             >
-              <Bell className="h-4 w-4 mr-2" /> {t("common.send")}
+              <Bell className="h-4 w-4 me-2" /> {t("common.send")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -681,7 +681,7 @@ export default function UserDetail() {
               {promosData ? t("driverDetail.noActivePromos") : t("common.loading")}
             </div>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-80 overflow-y-auto pe-1">
               {promosData.data.filter((p) => p.isActive).map((promo) => (
                 <div key={promo.id} className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/40 transition-colors">
                   <div>
@@ -713,7 +713,7 @@ export default function UserDetail() {
                         setPromoOpen(false);
                       }}
                     >
-                      <Bell className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.notifyBtn")}
+                      <Bell className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.notifyBtn")}
                     </Button>
                   </div>
                 </div>
@@ -766,7 +766,7 @@ export default function UserDetail() {
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              <Trash2 className="h-3.5 w-3.5 me-1.5" />
               {deleteMutation.isPending ? t("common.loading") : t("driverDetail.deleteAccount")}
             </Button>
           </DialogFooter>

@@ -145,7 +145,7 @@ export function NotificationBell() {
                   className="h-6 text-[11px] px-2 text-muted-foreground"
                   onClick={markAllRead}
                 >
-                  <CheckCheck className="h-3 w-3 mr-1" />
+                  <CheckCheck className="h-3 w-3 me-1" />
                   {t("notifBell.markRead")}
                 </Button>
               )}

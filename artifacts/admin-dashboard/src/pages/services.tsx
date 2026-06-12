@@ -163,7 +163,7 @@ function ChangeLogModal({ type, open, onClose }: { type: ServiceControlType; ope
             Change Log
           </DialogTitle>
         </DialogHeader>
-        <div className="flex-1 overflow-y-auto pr-1 space-y-2 py-2">
+        <div className="flex-1 overflow-y-auto pe-1 space-y-2 py-2">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)
           ) : logs.length === 0 ? (
@@ -346,7 +346,7 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
                   key={opt.value}
                   type="button"
                   onClick={() => updateDraft({ displayMode: opt.value })}
-                  className={`flex items-start gap-3 p-3 rounded-lg border text-left transition-all ${
+                  className={`flex items-start gap-3 p-3 rounded-lg border text-start transition-all ${
                     selected
                       ? "border-primary bg-primary/5 ring-1 ring-primary/30"
                       : "border-border bg-muted/20 hover:bg-muted/50"
@@ -357,7 +357,7 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
                     <p className="text-sm font-medium">{opt.label}</p>
                     <p className="text-xs text-muted-foreground">{opt.desc}</p>
                   </div>
-                  {selected && <CheckCircle2 className="h-4 w-4 text-primary ml-auto shrink-0 mt-0.5" />}
+                  {selected && <CheckCircle2 className="h-4 w-4 text-primary ms-auto shrink-0 mt-0.5" />}
                 </button>
               );
             })}
@@ -398,7 +398,7 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
                   key={opt.value}
                   type="button"
                   onClick={() => updateDraft({ unavailableAction: opt.value })}
-                  className={`flex flex-col gap-1 p-3 rounded-lg border text-left transition-all ${
+                  className={`flex flex-col gap-1 p-3 rounded-lg border text-start transition-all ${
                     selected
                       ? "border-primary bg-primary/5 ring-1 ring-primary/30"
                       : "border-border bg-muted/20 hover:bg-muted/50"
@@ -449,7 +449,7 @@ function ServiceControlPanel({ type }: { type: ServiceControlType }) {
             placeholder="No limit"
             value={draft.maxActiveRides ?? ""}
             onChange={(e) => updateDraft({ maxActiveRides: e.target.value ? parseInt(e.target.value) : null })}
-            className="w-28 text-right text-sm"
+            className="w-28 text-end text-sm"
           />
         </div>
 
@@ -551,7 +551,7 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
               max="5"
               value={draft.minDriverRating}
               onChange={(e) => setDraft({ ...draft, minDriverRating: parseFloat(e.target.value) || 0 })}
-              className="w-24 text-right"
+              className="w-24 text-end"
             />
           ) : (
             <span className="text-lg font-bold">{display.minDriverRating.toFixed(1)} ★</span>
@@ -572,7 +572,7 @@ function ServiceSettingsPanel({ type }: { type: "car" | "shuttle" | "bike" }) {
               max="10"
               value={draft.maxActiveRidesPerDriver}
               onChange={(e) => setDraft({ ...draft, maxActiveRidesPerDriver: parseInt(e.target.value) || 1 })}
-              className="w-24 text-right"
+              className="w-24 text-end"
             />
           ) : (
             <span className="text-lg font-bold">{display.maxActiveRidesPerDriver}</span>
@@ -659,7 +659,7 @@ function CarBikeView({ type }: { type: "car" | "bike" }) {
               Current Pricing
               <Badge
                 variant="outline"
-                className={`ml-auto text-xs ${pricing.isActive ? "text-green-600 border-green-300" : "text-red-500 border-red-300"}`}
+                className={`ms-auto text-xs ${pricing.isActive ? "text-green-600 border-green-300" : "text-red-500 border-red-300"}`}
               >
                 {pricing.isActive ? "Active" : "Inactive"}
               </Badge>

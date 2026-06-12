@@ -329,7 +329,7 @@ function ColorDialog({
           </div>
           <div className="space-y-1.5"><Label>Arabic Name</Label>
             <Input placeholder="e.g. أبيض لؤلؤي" value={nameAr} onChange={(e) => setNameAr(e.target.value)}
-              dir="rtl" className="text-right" />
+              dir="rtl" className="text-end" />
           </div>
           <div className="flex items-center justify-between"><Label>Active</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
@@ -694,7 +694,7 @@ function BrandsView({
                 <div className="h-5 w-5 rounded-full border border-border shadow-sm shrink-0" style={{ backgroundColor: color.hexCode }} />
                 <span className="text-sm font-medium">{color.nameEn}</span>
                 <span className="text-xs text-muted-foreground" dir="rtl">{color.nameAr}</span>
-                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ml-1">
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity ms-1">
                   <button onClick={() => setColorDialog({ open: true, color })} className="h-5 w-5 rounded flex items-center justify-center hover:bg-muted">
                     <Edit className="h-2.5 w-2.5 text-muted-foreground" />
                   </button>
@@ -837,7 +837,7 @@ function ModelsView({
               <TableHead className="text-center">Year Range</TableHead>
               {isShuttle && <TableHead className="text-center">Seats</TableHead>}
               <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="text-end">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -882,7 +882,7 @@ function ModelsView({
                       {model.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                  <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setModelDialog({ open: true, model })}>
                         <Edit className="h-3.5 w-3.5" />
@@ -1026,7 +1026,7 @@ function YearsView({
               <TableHead className="w-24">Year</TableHead>
               <TableHead>Pricing Category</TableHead>
               <TableHead className="text-center w-28">Status</TableHead>
-              <TableHead className="text-right w-20">Actions</TableHead>
+              <TableHead className="text-end w-20">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1089,7 +1089,7 @@ function YearsView({
                         onCheckedChange={(checked) => updateYearStatus.mutate({ yearId: yr.id, isActive: checked })}
                       />
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
                         onClick={() => setDeleteYear(yr.id)}>
                         <Trash2 className="h-3.5 w-3.5" />

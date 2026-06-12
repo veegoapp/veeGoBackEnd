@@ -212,7 +212,7 @@ export default function Zones() {
   return (
     <div className="flex h-[calc(100vh-4rem)] overflow-hidden">
       {/* ─── Left Sidebar ─── */}
-      <div className="w-80 shrink-0 flex flex-col border-r border-border bg-card overflow-hidden">
+      <div className="w-80 shrink-0 flex flex-col border-e border-border bg-card overflow-hidden">
         {isFormMode ? (
           /* ── Create / Edit Form ── */
           <div className="flex flex-col h-full overflow-hidden">
@@ -305,7 +305,7 @@ export default function Zones() {
                       >
                         <Icon className="h-4 w-4" />
                         {t(meta.tKey)}
-                        {active && <CheckCircle2 className="h-3.5 w-3.5 ml-auto" />}
+                        {active && <CheckCircle2 className="h-3.5 w-3.5 ms-auto" />}
                       </button>
                     );
                   })}

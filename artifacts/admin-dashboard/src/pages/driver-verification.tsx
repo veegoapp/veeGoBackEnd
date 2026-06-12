@@ -219,7 +219,7 @@ export default function DriverVerification() {
         {statusFilter !== "all" && (
           <Button variant="ghost" size="sm" onClick={() => setStatusFilter("all")}>Clear</Button>
         )}
-        {data && <p className="ml-auto text-sm text-muted-foreground">{data.total} {t("verification.documentsTotal", "documents total")}</p>}
+        {data && <p className="ms-auto text-sm text-muted-foreground">{data.total} {t("verification.documentsTotal", "documents total")}</p>}
       </div>
 
       {isLoading ? (
@@ -369,7 +369,7 @@ export default function DriverVerification() {
           })()}
 
           {viewDriver && (
-            <div className="flex-1 overflow-y-auto space-y-6 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-6 pe-1">
               {docGroups.map((group) => {
                 const groupDocs = viewDriver.documents.filter((d) => group.keys.includes(d.type));
                 if (groupDocs.length === 0) return null;
@@ -404,7 +404,7 @@ export default function DriverVerification() {
                               <p className="text-xs font-medium truncate">{docTypeLabels[doc.type] || doc.type}</p>
                               <div className="flex items-center gap-1 mt-1">
                                 <Badge variant={cfg.variant} className="text-[10px]">
-                                  <StatusIcon className="h-2.5 w-2.5 mr-1" />
+                                  <StatusIcon className="h-2.5 w-2.5 me-1" />
                                   {doc.verificationStatus}
                                 </Badge>
                               </div>
@@ -539,7 +539,7 @@ export default function DriverVerification() {
                   disabled={updateMutation.isPending || zoomDoc.verificationStatus === "rejected"}
                   onClick={() => updateMutation.mutate({ id: zoomDoc.id, status: "rejected", notes: adminNotes })}
                 >
-                  <XCircle className="h-4 w-4 mr-2" />
+                  <XCircle className="h-4 w-4 me-2" />
                   {zoomDoc.verificationStatus === "rejected" ? t("verification.rejected") : t("verification.reject", "Reject")}
                 </Button>
                 <Button
@@ -547,7 +547,7 @@ export default function DriverVerification() {
                   disabled={updateMutation.isPending || zoomDoc.verificationStatus === "approved"}
                   onClick={() => updateMutation.mutate({ id: zoomDoc.id, status: "approved", notes: adminNotes })}
                 >
-                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  <CheckCircle2 className="h-4 w-4 me-2" />
                   {zoomDoc.verificationStatus === "approved" ? t("verification.approved") : t("verification.approve", "Approve")}
                 </Button>
               </div>

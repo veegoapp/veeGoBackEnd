@@ -52,7 +52,7 @@ function Stars({ score }: { score: number }) {
           className={`h-3.5 w-3.5 ${s <= Math.round(score) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`}
         />
       ))}
-      <span className="ml-1 text-xs font-medium text-muted-foreground">{score.toFixed(1)}</span>
+      <span className="ms-1 text-xs font-medium text-muted-foreground">{score.toFixed(1)}</span>
     </div>
   );
 }
@@ -70,7 +70,7 @@ function ScoreBar({ score, count, total }: { score: number; count: number; total
       <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
         <div className="h-full bg-amber-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-8 text-right text-muted-foreground">{count}</span>
+      <span className="w-8 text-end text-muted-foreground">{count}</span>
     </div>
   );
 }
@@ -216,7 +216,7 @@ export default function Ratings() {
           </Button>
         )}
         {data && (
-          <span className="text-xs text-muted-foreground ml-auto">{data.total} {t("auditLogs.records", "records")}</span>
+          <span className="text-xs text-muted-foreground ms-auto">{data.total} {t("auditLogs.records", "records")}</span>
         )}
       </div>
 
@@ -327,7 +327,7 @@ export default function Ratings() {
               ].map((row) => (
                 <div key={row.label} className="flex items-start justify-between gap-4 py-1 border-b border-border last:border-0">
                   <span className="text-muted-foreground text-xs w-28 shrink-0">{row.label}</span>
-                  <span className="text-xs text-right">{row.value}</span>
+                  <span className="text-xs text-end">{row.value}</span>
                 </div>
               ))}
             </div>
@@ -335,7 +335,7 @@ export default function Ratings() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelected(null)}>{t("common.close", "Close")}</Button>
             <Button variant="destructive" size="sm" onClick={() => { if (selected) setDeleteTarget(selected); setSelected(null); }}>
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t("ratings.deleteRating", "Delete")}
+              <Trash2 className="h-3.5 w-3.5 me-1.5" /> {t("ratings.deleteRating", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

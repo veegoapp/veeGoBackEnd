@@ -258,8 +258,8 @@ function ConversationList({
           <button
             key={conv.trip_id}
             onClick={() => onSelect(conv.trip_id)}
-            className={`w-full text-left px-4 py-3.5 transition-colors hover:bg-muted/50 ${
-              isSelected ? "bg-primary/5 border-l-2 border-primary" : ""
+            className={`w-full text-start px-4 py-3.5 transition-colors hover:bg-muted/50 ${
+              isSelected ? "bg-primary/5 border-s-2 border-primary" : ""
             }`}
           >
             <div className="flex items-start justify-between gap-2">
@@ -401,7 +401,7 @@ export default function ChatInbox() {
       {/* Split pane */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: conversation list */}
-        <div className="w-80 border-r flex flex-col overflow-hidden shrink-0">
+        <div className="w-80 border-e flex flex-col overflow-hidden shrink-0">
           <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Conversations ({convs.length})

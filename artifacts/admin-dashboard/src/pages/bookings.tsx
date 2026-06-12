@@ -74,7 +74,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   return (
     <div className="flex justify-between gap-4 py-1.5 border-b last:border-0 text-sm">
       <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className="font-medium text-right">{value ?? "—"}</span>
+      <span className="font-medium text-end">{value ?? "—"}</span>
     </div>
   );
 }
@@ -228,7 +228,7 @@ export default function Bookings() {
 
       {/* Service filter bar */}
       <div className="flex flex-wrap gap-2 items-center bg-card border border-border rounded-xl px-4 py-3">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mr-1">{t("nav.services")}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide me-1">{t("nav.services")}</span>
         {SERVICE_OPTIONS_KEYS.map((opt) => (
           <button
             key={opt.value}
@@ -250,7 +250,7 @@ export default function Bookings() {
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder={t("bookings.searchPlaceholder", "Search by customer name, email, or phone…")}
-            className="pl-9"
+            className="ps-9"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           />
@@ -295,7 +295,7 @@ export default function Bookings() {
               <TableHead>{t("common.amount")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
               <TableHead>{t("common.payment")}</TableHead>
-              <TableHead className="text-right w-16">{t("common.actions")}</TableHead>
+              <TableHead className="text-end w-16">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
 
@@ -377,7 +377,7 @@ export default function Bookings() {
                       </Badge>
                     </TableCell>
 
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -386,7 +386,7 @@ export default function Bookings() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => setDetailBooking(b)}>
-                            <Eye className="mr-2 h-4 w-4" /> {t("bookings.viewDetails", "View Details")}
+                            <Eye className="me-2 h-4 w-4" /> {t("bookings.viewDetails", "View Details")}
                           </DropdownMenuItem>
                           {canRefund && (
                             <DropdownMenuItem
@@ -396,7 +396,7 @@ export default function Bookings() {
                                 setRefundDialog({ open: true, booking: b });
                               }}
                             >
-                              <DollarSign className="mr-2 h-4 w-4 text-green-600" />
+                              <DollarSign className="me-2 h-4 w-4 text-green-600" />
                               <span className="text-green-700 dark:text-green-400">{t("bookings.refundToWallet", "Refund to Wallet")}</span>
                             </DropdownMenuItem>
                           )}
@@ -408,7 +408,7 @@ export default function Bookings() {
                                 onClick={() => handleCancel(b.id)}
                                 disabled={cancelMutation.isPending}
                               >
-                                <Ban className="mr-2 h-4 w-4" /> {t("bookings.cancelBooking", "Cancel Booking")}
+                                <Ban className="me-2 h-4 w-4" /> {t("bookings.cancelBooking", "Cancel Booking")}
                               </DropdownMenuItem>
                             </>
                           )}
@@ -511,7 +511,7 @@ export default function Bookings() {
                   setDetailBooking(null);
                 }}
               >
-                <DollarSign className="mr-1.5 h-3.5 w-3.5 text-green-600" /> {t("bookings.refundToWallet", "Refund to Wallet")}
+                <DollarSign className="me-1.5 h-3.5 w-3.5 text-green-600" /> {t("bookings.refundToWallet", "Refund to Wallet")}
               </Button>
             )}
             {detailBooking && (detailBooking.status === "confirmed" || detailBooking.status === "pending") && (
@@ -520,7 +520,7 @@ export default function Bookings() {
                 size="sm"
                 onClick={() => { setDetailBooking(null); handleCancel(detailBooking.id); }}
               >
-                <Ban className="mr-1.5 h-3.5 w-3.5" /> {t("bookings.cancelBooking", "Cancel Booking")}
+                <Ban className="me-1.5 h-3.5 w-3.5" /> {t("bookings.cancelBooking", "Cancel Booking")}
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>{t("common.close", "Close")}</Button>

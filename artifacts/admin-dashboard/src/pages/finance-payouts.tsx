@@ -48,8 +48,8 @@ const statusColor = (s: string) =>
 function SortIcon({ field, sortField, sortDir }: { field: string; sortField: string; sortDir: string }) {
   if (sortField !== field) return null;
   return sortDir === "asc"
-    ? <ChevronDown className="h-3 w-3 ml-1 inline" />
-    : <ChevronUp className="h-3 w-3 ml-1 inline" />;
+    ? <ChevronDown className="h-3 w-3 ms-1 inline" />
+    : <ChevronUp className="h-3 w-3 ms-1 inline" />;
 }
 
 export default function FinancePayouts() {
@@ -187,22 +187,22 @@ export default function FinancePayouts() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Driver</th>
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Service</th>
+                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">Driver</th>
+                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">Service</th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("total_trips")}
                       >
                         Trips <SortIcon field="total_trips" sortField={String(sortField)} sortDir={sortDir} />
                       </th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("driver_share")}
                       >
                         Total Balance <SortIcon field="driver_share" sortField={String(sortField)} sortDir={sortDir} />
                       </th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("commission_amount")}
                       >
                         Commission <SortIcon field="commission_amount" sortField={String(sortField)} sortDir={sortDir} />
@@ -225,7 +225,7 @@ export default function FinancePayouts() {
                                 <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                                 {(row.rating ?? 0).toFixed(1)}
                                 {row.last_earning_date && (
-                                  <span className="ml-1">· Last: {format(new Date(row.last_earning_date), "MMM d")}</span>
+                                  <span className="ms-1">· Last: {format(new Date(row.last_earning_date), "MMM d")}</span>
                                 )}
                               </div>
                             </div>
@@ -238,9 +238,9 @@ export default function FinancePayouts() {
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">{row.total_trips}</td>
-                        <td className="px-4 py-3 text-right text-green-600 font-bold">${row.driver_share.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-amber-600 font-medium">${row.commission_amount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-end font-medium">{row.total_trips}</td>
+                        <td className="px-4 py-3 text-end text-green-600 font-bold">${row.driver_share.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-end text-amber-600 font-medium">${row.commission_amount.toFixed(2)}</td>
                         <td className="px-4 py-3 text-center">
                           <Badge variant="outline" className={`text-xs gap-1 ${statusColor(row.payout_status)}`}>
                             {statusIcon(row.payout_status)}
@@ -255,7 +255,7 @@ export default function FinancePayouts() {
                               disabled={confirmMutation.isPending}
                               onClick={() => confirmMutation.mutate(row.driver_id)}
                             >
-                              <CheckCircle2 className="h-3 w-3 mr-1" /> Confirm Payout
+                              <CheckCircle2 className="h-3 w-3 me-1" /> Confirm Payout
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>

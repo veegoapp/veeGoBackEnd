@@ -112,7 +112,7 @@ export default function Wallet() {
         <Dialog open={isRefundOpen} onOpenChange={setIsRefundOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-              <RefreshCcw className="mr-2 h-4 w-4" /> Issue Manual Refund
+              <RefreshCcw className="me-2 h-4 w-4" /> Issue Manual Refund
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -164,7 +164,7 @@ export default function Wallet() {
             placeholder="Search name or description..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="pl-8 w-[220px]"
+            className="ps-8 w-[220px]"
           />
         </div>
 
@@ -209,7 +209,7 @@ export default function Wallet() {
         </div>
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="ml-auto gap-1">
+          <Button variant="ghost" size="sm" onClick={clearFilters} className="ms-auto gap-1">
             <X className="h-3.5 w-3.5" /> Clear
           </Button>
         )}
@@ -224,7 +224,7 @@ export default function Wallet() {
               <TableHead>User</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Description</TableHead>
-              <TableHead className="text-right">Amount (EGP)</TableHead>
+              <TableHead className="text-end">Amount (EGP)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -275,7 +275,7 @@ export default function Wallet() {
                     </div>
                   </TableCell>
                   <TableCell className="text-sm max-w-[280px] truncate">{txn.description}</TableCell>
-                  <TableCell className="text-right font-mono font-semibold">
+                  <TableCell className="text-end font-mono font-semibold">
                     <span className={txn.type === "payment" ? "text-destructive" : "text-green-600 dark:text-green-500"}>
                       {txn.type === "payment" ? "-" : "+"}{formatEGP(txn.amount)}
                     </span>

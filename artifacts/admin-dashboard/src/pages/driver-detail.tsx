@@ -118,9 +118,9 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 
 function DocStatusBadge({ status }: { status: "pending" | "approved" | "rejected" }) {
   const { t } = useTranslation();
-  if (status === "approved") return <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-600 bg-green-500/10"><CheckCircle2 className="h-2.5 w-2.5 mr-1" />{t("driverDetail.approvedLabel")}</Badge>;
-  if (status === "rejected") return <Badge variant="destructive" className="text-[10px]"><XCircle className="h-2.5 w-2.5 mr-1" />{t("driverDetail.rejectedLabel")}</Badge>;
-  return <Badge variant="secondary" className="text-[10px] text-amber-600"><Clock className="h-2.5 w-2.5 mr-1" />{t("driverDetail.pendingLabel")}</Badge>;
+  if (status === "approved") return <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-600 bg-green-500/10"><CheckCircle2 className="h-2.5 w-2.5 me-1" />{t("driverDetail.approvedLabel")}</Badge>;
+  if (status === "rejected") return <Badge variant="destructive" className="text-[10px]"><XCircle className="h-2.5 w-2.5 me-1" />{t("driverDetail.rejectedLabel")}</Badge>;
+  return <Badge variant="secondary" className="text-[10px] text-amber-600"><Clock className="h-2.5 w-2.5 me-1" />{t("driverDetail.pendingLabel")}</Badge>;
 }
 
 // ─── Main Component ─────────────────────────────────────────────────────────
@@ -363,7 +363,7 @@ export default function DriverDetail() {
           }}
           disabled={toggleBlockMutation.isPending}
         >
-          {userInfo?.isBlocked ? <ShieldCheck className="h-3.5 w-3.5 mr-1.5" /> : <ShieldX className="h-3.5 w-3.5 mr-1.5" />}
+          {userInfo?.isBlocked ? <ShieldCheck className="h-3.5 w-3.5 me-1.5" /> : <ShieldX className="h-3.5 w-3.5 me-1.5" />}
           {userInfo?.isBlocked ? t("driverDetail.unblockAccount") : t("driverDetail.blockAccount")}
         </Button>
         <Button
@@ -375,17 +375,17 @@ export default function DriverDetail() {
           }}
           disabled={toggleActiveMutation.isPending}
         >
-          {driver.isActive ? <ToggleLeft className="h-3.5 w-3.5 mr-1.5" /> : <ToggleRight className="h-3.5 w-3.5 mr-1.5 text-green-600" />}
+          {driver.isActive ? <ToggleLeft className="h-3.5 w-3.5 me-1.5" /> : <ToggleRight className="h-3.5 w-3.5 me-1.5 text-green-600" />}
           {driver.isActive ? t("driverDetail.suspendDriver") : t("driverDetail.activateDriver")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setPromoOpen(true)}>
-          <Tag className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.sendPromo")}
+          <Tag className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.sendPromo")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setMsgOpen(true)}>
-          <MessageSquare className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.sendMessage")}
+          <MessageSquare className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.sendMessage")}
         </Button>
         <Button variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
-          <Trash2 className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.deleteAccount")}
+          <Trash2 className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.deleteAccount")}
         </Button>
       </div>
 
@@ -418,7 +418,7 @@ export default function DriverDetail() {
           <TabsTrigger value="trips">{t("driverDetail.tabTrips")}</TabsTrigger>
           <TabsTrigger value="documents">
             {t("driverDetail.tabDocuments")}
-            {pendingDocs > 0 && <span className="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold">{pendingDocs}</span>}
+            {pendingDocs > 0 && <span className="ms-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold">{pendingDocs}</span>}
           </TabsTrigger>
           <TabsTrigger value="locations">{t("locations.tabLocationHistory", "Location History")}</TabsTrigger>
           <TabsTrigger value="bonus" className="gap-1.5">
@@ -465,7 +465,7 @@ export default function DriverDetail() {
                     {[1,2,3,4,5].map((i) => (
                       <Star key={i} className={`h-3.5 w-3.5 ${i <= Math.round(driver.rating) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
                     ))}
-                    <span className="text-sm font-bold ml-1">{Number(driver.rating).toFixed(1)}</span>
+                    <span className="text-sm font-bold ms-1">{Number(driver.rating).toFixed(1)}</span>
                   </div>
                 } />
                 <InfoRow icon={Wallet} label={t("driverDetail.walletBalance")} value={<span className="font-bold text-green-600">{formatEGP(userInfo?.walletBalance ?? 0)}</span>} />
@@ -539,7 +539,7 @@ export default function DriverDetail() {
                   {commissionData?.commissionRate !== null && commissionData?.commissionRate !== undefined ? (
                     <p className="text-sm">
                       Personal Rate: <span className="font-bold text-purple-600">{(commissionData.commissionRate * 100).toFixed(1)}%</span>
-                      <span className="text-xs text-muted-foreground ml-2">(overrides global rate)</span>
+                      <span className="text-xs text-muted-foreground ms-2">(overrides global rate)</span>
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground">Using global commission rate</p>
@@ -551,7 +551,7 @@ export default function DriverDetail() {
                       <div className="flex items-center gap-1">
                         <Input
                           type="number" min={0} max={100} step={0.1}
-                          className="w-20 h-8 text-sm text-right"
+                          className="w-20 h-8 text-sm text-end"
                           placeholder="0–100"
                           value={commissionInput}
                           onChange={(e) => setCommissionInput(e.target.value)}
@@ -611,7 +611,7 @@ export default function DriverDetail() {
                     <TableHead>{t("driverDetail.colArrival")}</TableHead>
                     <TableHead>{t("driverDetail.colSeats")}</TableHead>
                     <TableHead>{t("driverDetail.colStatus")}</TableHead>
-                    <TableHead className="text-right">{t("driverDetail.colPrice")}</TableHead>
+                    <TableHead className="text-end">{t("driverDetail.colPrice")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -635,7 +635,7 @@ export default function DriverDetail() {
                             tr.status === "active" ? "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950" : ""
                           }`}>{TRIP_STATUS_LABELS[tr.status] ?? tr.status}</Badge>
                         </TableCell>
-                        <TableCell className="text-right font-mono">{formatEGP(tr.price)}</TableCell>
+                        <TableCell className="text-end font-mono">{formatEGP(tr.price)}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -716,11 +716,11 @@ export default function DriverDetail() {
                           <div className="flex gap-1 mt-1">
                             <Button size="sm" variant="destructive" className="flex-1 h-6 text-[10px] px-1" disabled={verifyMutation.isPending}
                               onClick={() => verifyMutation.mutate({ id: doc.id, status: "rejected" })}>
-                              <XCircle className="h-2.5 w-2.5 mr-1" />{t("common.reject")}
+                              <XCircle className="h-2.5 w-2.5 me-1" />{t("common.reject")}
                             </Button>
                             <Button size="sm" className="flex-1 h-6 text-[10px] px-1" disabled={verifyMutation.isPending}
                               onClick={() => verifyMutation.mutate({ id: doc.id, status: "approved" })}>
-                              <CheckCircle2 className="h-2.5 w-2.5 mr-1" />{t("common.approve")}
+                              <CheckCircle2 className="h-2.5 w-2.5 me-1" />{t("common.approve")}
                             </Button>
                           </div>
                         )}
@@ -764,7 +764,7 @@ export default function DriverDetail() {
                             <p className="font-semibold text-sm">{bp.targetName}</p>
                             <p className="text-xs text-muted-foreground capitalize">{bp.serviceType} · {bp.targetType === "ride_count" ? "Ride Count" : "Earnings"}</p>
                           </div>
-                          <div className="text-right shrink-0">
+                          <div className="text-end shrink-0">
                             <p className="font-bold text-green-600 text-sm">{formatEGP(bp.bonusAmount)}</p>
                             <p className="text-xs text-muted-foreground">bonus</p>
                           </div>
@@ -806,7 +806,7 @@ export default function DriverDetail() {
               {promosData ? t("driverDetail.noActivePromos") : t("common.loading")}
             </div>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-80 overflow-y-auto pe-1">
               {promosData.data.filter((p) => p.isActive).map((promo) => (
                 <div key={promo.id} className="flex items-center justify-between rounded-lg border border-border p-3 hover:bg-muted/40 transition-colors">
                   <div>
@@ -822,7 +822,7 @@ export default function DriverDetail() {
                       {copiedCode === promo.code ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
                     </Button>
                     <Button size="sm" disabled={sendNotifMutation.isPending} onClick={() => sendNotifMutation.mutate({ title: `Promo code: ${promo.code}`, body: `You've been sent a promo code: ${promo.code}. Use it on your next booking for ${promo.discountType === "percentage" ? `${promo.discountValue}% off` : `EGP ${promo.discountValue} off`}!` })}>
-                      <Bell className="h-3.5 w-3.5 mr-1.5" /> {t("driverDetail.notifyBtn")}
+                      <Bell className="h-3.5 w-3.5 me-1.5" /> {t("driverDetail.notifyBtn")}
                     </Button>
                   </div>
                 </div>
@@ -848,11 +848,11 @@ export default function DriverDetail() {
                   <div className="flex gap-2">
                     <Button size="sm" variant="destructive" disabled={verifyMutation.isPending}
                       onClick={() => verifyMutation.mutate({ id: zoomDoc.id, status: "rejected" })}>
-                      <XCircle className="h-4 w-4 mr-1.5" /> {t("common.reject")}
+                      <XCircle className="h-4 w-4 me-1.5" /> {t("common.reject")}
                     </Button>
                     <Button size="sm" disabled={verifyMutation.isPending}
                       onClick={() => verifyMutation.mutate({ id: zoomDoc.id, status: "approved" })}>
-                      <CheckCircle2 className="h-4 w-4 mr-1.5" /> {t("common.approve")}
+                      <CheckCircle2 className="h-4 w-4 me-1.5" /> {t("common.approve")}
                     </Button>
                   </div>
                 )}
@@ -911,7 +911,7 @@ export default function DriverDetail() {
               onClick={() => deleteMutation.mutate()}
               disabled={deleteMutation.isPending}
             >
-              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              <Trash2 className="h-3.5 w-3.5 me-1.5" />
               {deleteMutation.isPending ? t("common.loading") : t("driverDetail.deleteAccount")}
             </Button>
           </DialogFooter>

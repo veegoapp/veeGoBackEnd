@@ -127,7 +127,7 @@ export default function Drivers() {
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button className="shadow-sm">
-              <Plus className="mr-2 h-4 w-4" /> {t("drivers.addDriver")}
+              <Plus className="me-2 h-4 w-4" /> {t("drivers.addDriver")}
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -228,7 +228,7 @@ export default function Drivers() {
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            className="pl-9"
+            className="ps-9"
             placeholder={t("drivers.searchDrivers")}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
@@ -260,7 +260,7 @@ export default function Drivers() {
               <TableHead>{t("drivers.rating")}</TableHead>
               <TableHead>{t("drivers.assignment", "Assignment")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
-              <TableHead className="text-right pr-6"></TableHead>
+              <TableHead className="text-end pe-6"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -272,7 +272,7 @@ export default function Drivers() {
                   <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                  <TableCell className="text-end"><Skeleton className="h-8 w-16 ms-auto" /></TableCell>
                 </TableRow>
               ))
             ) : filtered.length === 0 ? (
@@ -323,7 +323,7 @@ export default function Drivers() {
                       <Badge variant="outline" className="bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">{t("drivers.offDuty", "Off Duty")}</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right pr-6">
+                  <TableCell className="text-end pe-6">
                     <Link
                       href={`/drivers/${driver.id}`}
                       className="text-sm text-primary hover:underline font-medium"

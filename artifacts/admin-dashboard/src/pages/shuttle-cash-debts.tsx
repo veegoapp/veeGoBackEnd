@@ -66,7 +66,7 @@ export default function ShuttleCashDebts() {
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+          <RefreshCw className="h-4 w-4 me-2" />
           Refresh
         </Button>
       </div>
@@ -126,7 +126,7 @@ export default function ShuttleCashDebts() {
                   <TableHead>Debt Amount</TableHead>
                   <TableHead>No-Show Count</TableHead>
                   <TableHead>Last Offence</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead className="text-end">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -148,7 +148,7 @@ export default function ShuttleCashDebts() {
                         ? new Date(row.lastOffenceDate).toLocaleString()
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <Button
                         size="sm"
                         variant="outline"

@@ -112,7 +112,7 @@ function PayoutsView() {
 
   function SortIcon({ field }: { field: keyof DriverPayout }) {
     if (sortField !== field) return null;
-    return sortDir === "asc" ? <ChevronUp className="h-3 w-3 ml-1 inline" /> : <ChevronDown className="h-3 w-3 ml-1 inline" />;
+    return sortDir === "asc" ? <ChevronUp className="h-3 w-3 ms-1 inline" /> : <ChevronDown className="h-3 w-3 ms-1 inline" />;
   }
 
   const totalGross = rows.reduce((s, r) => s + r.gross_amount, 0);
@@ -194,27 +194,27 @@ function PayoutsView() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
-                      <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Driver</th>
+                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">Driver</th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("total_trips")}
                       >
                         Trips<SortIcon field="total_trips" />
                       </th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("gross_amount")}
                       >
                         Gross<SortIcon field="gross_amount" />
                       </th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("commission_amount")}
                       >
                         Commission<SortIcon field="commission_amount" />
                       </th>
                       <th
-                        className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
+                        className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("driver_share")}
                       >
                         Driver Share<SortIcon field="driver_share" />
@@ -237,16 +237,16 @@ function PayoutsView() {
                                 <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                                 {(row.rating ?? 0).toFixed(1)}
                                 {row.last_earning_date && (
-                                  <span className="ml-1">· Last: {format(new Date(row.last_earning_date), "MMM d")}</span>
+                                  <span className="ms-1">· Last: {format(new Date(row.last_earning_date), "MMM d")}</span>
                                 )}
                               </div>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-right font-medium">{row.total_trips}</td>
-                        <td className="px-4 py-3 text-right font-medium">${row.gross_amount.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-amber-600 font-medium">${row.commission_amount.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right text-green-600 font-bold">${row.driver_share.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-end font-medium">{row.total_trips}</td>
+                        <td className="px-4 py-3 text-end font-medium">${row.gross_amount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-end text-amber-600 font-medium">${row.commission_amount.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-end text-green-600 font-bold">${row.driver_share.toFixed(2)}</td>
                         <td className="px-4 py-3 text-center">
                           <Badge variant="outline" className={`text-xs gap-1 ${statusColor(row.payout_status)}`}>
                             {statusIcon(row.payout_status)}
@@ -261,7 +261,7 @@ function PayoutsView() {
                               disabled={confirmMutation.isPending}
                               onClick={() => confirmMutation.mutate(row.driver_id)}
                             >
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              <CheckCircle2 className="h-3 w-3 me-1" />
                               Confirm
                             </Button>
                           ) : (
@@ -353,7 +353,7 @@ function CommissionView() {
         </div>
         {!editing && (
           <Button variant="outline" size="sm" onClick={startEdit} disabled={isLoading}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Edit Settings
+            <RefreshCw className="h-4 w-4 me-2" /> Edit Settings
           </Button>
         )}
       </div>
@@ -485,7 +485,7 @@ function CommissionView() {
                     <p className="text-sm font-medium">Trip #{earning.tripId} · Driver #{earning.driverId}</p>
                     <p className="text-xs text-muted-foreground">{format(new Date(earning.date), "MMM d, yyyy HH:mm")}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-end">
                     <p className="text-sm text-muted-foreground">Driver: EGP {earning.amount.toFixed(2)}</p>
                     <p className="text-xs font-bold text-amber-600">
                       Platform: EGP {(earning.amount * ((settings?.appCommission ?? 15) / 100)).toFixed(2)}
@@ -657,7 +657,7 @@ function PaymentLedgerView() {
           </Button>
         )}
         {data && (
-          <span className="text-xs text-muted-foreground ml-auto">{data.total} records</span>
+          <span className="text-xs text-muted-foreground ms-auto">{data.total} records</span>
         )}
       </div>
 
@@ -677,7 +677,7 @@ function PaymentLedgerView() {
                   <TableHead>Reference</TableHead>
                   <TableHead>Method</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-end">Amount</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
@@ -705,7 +705,7 @@ function PaymentLedgerView() {
                         {p.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className={`text-right font-bold text-sm ${p.status === "refunded" ? "text-blue-600" : p.status === "completed" ? "text-green-600" : ""}`}>
+                    <TableCell className={`text-end font-bold text-sm ${p.status === "refunded" ? "text-blue-600" : p.status === "completed" ? "text-green-600" : ""}`}>
                       {p.status === "refunded" ? "-" : ""}{formatEGP(parseFloat(p.amount))}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
@@ -758,7 +758,7 @@ function PaymentLedgerView() {
               ].map((row) => (
                 <div key={row.label} className="flex items-start justify-between gap-4 py-1 border-b border-border last:border-0">
                   <span className="text-muted-foreground text-xs w-32 shrink-0">{row.label}</span>
-                  <span className="text-xs text-right">{row.value}</span>
+                  <span className="text-xs text-end">{row.value}</span>
                 </div>
               ))}
             </div>
@@ -770,7 +770,7 @@ function PaymentLedgerView() {
                 </Button>
                 <Button size="sm" className="flex-1" disabled={updateMutation.isPending}
                   onClick={() => updateMutation.mutate({ id: selected.id, status: "completed" })}>
-                  <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" /> Mark Completed
+                  <CheckCircle2 className="h-3.5 w-3.5 me-1.5" /> Mark Completed
                 </Button>
               </div>
             )}

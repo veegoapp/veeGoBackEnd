@@ -77,7 +77,7 @@ export default function FinanceCommission() {
         </div>
         {!editing && (
           <Button variant="outline" size="sm" onClick={startEdit} disabled={isLoading}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Edit Settings
+            <RefreshCw className="h-4 w-4 me-2" /> Edit Settings
           </Button>
         )}
       </div>
@@ -209,7 +209,7 @@ export default function FinanceCommission() {
                     <p className="text-sm font-medium">Trip #{earning.tripId} · Driver #{earning.driverId}</p>
                     <p className="text-xs text-muted-foreground">{format(new Date(earning.date), "MMM d, yyyy HH:mm")}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-end">
                     <p className="text-sm text-muted-foreground">Driver: EGP {earning.amount.toFixed(2)}</p>
                     <p className="text-xs font-bold text-amber-600">
                       Platform: EGP {(earning.amount * ((settings?.appCommission ?? 15) / 100)).toFixed(2)}

@@ -261,7 +261,7 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
                       </div>
                       <div className="flex items-center gap-3 mt-1.5">
                         <Progress value={p} className="flex-1 h-2" />
-                        <span className="text-xs font-bold shrink-0 w-10 text-right">{p}%</span>
+                        <span className="text-xs font-bold shrink-0 w-10 text-end">{p}%</span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {target.targetType === "ride_count"
@@ -381,7 +381,7 @@ export default function BonusTargets() {
                 <TableHead>Window</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Enrolled</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-end">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -430,7 +430,7 @@ export default function BonusTargets() {
                         </span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-end">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost" size="icon" className="h-7 w-7"

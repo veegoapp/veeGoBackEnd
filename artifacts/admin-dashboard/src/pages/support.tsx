@@ -157,7 +157,7 @@ export default function Support() {
         <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input placeholder={t("support.searchTickets")} className="pl-9 w-48"
+            <Input placeholder={t("support.searchTickets")} className="ps-9 w-48"
               value={searchInput} onChange={(e) => setSearchInput(e.target.value)} />
           </div>
           <Button type="submit" variant="secondary" size="sm">{t("common.search")}</Button>
@@ -249,7 +249,7 @@ export default function Support() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge variant={cfg.variant} className="text-xs">
-                    <Icon className="h-3 w-3 mr-1" />{cfg.label}
+                    <Icon className="h-3 w-3 me-1" />{cfg.label}
                   </Badge>
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -280,8 +280,8 @@ export default function Support() {
       <Dialog open={!!selectedTicket} onOpenChange={(open) => !open && setSelectedTicket(null)}>
         <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-start gap-3 pr-8">
-              <span className="flex-1 text-left">{selectedTicket?.subject}</span>
+            <DialogTitle className="flex items-start gap-3 pe-8">
+              <span className="flex-1 text-start">{selectedTicket?.subject}</span>
               <Badge variant={statusConfig[selectedTicket?.status || "open"]?.variant} className="shrink-0">
                 {statusConfig[selectedTicket?.status || "open"]?.label}
               </Badge>
@@ -289,7 +289,7 @@ export default function Support() {
           </DialogHeader>
 
           {selectedTicket && (
-            <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+            <div className="flex-1 overflow-y-auto space-y-4 pe-1">
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span>#{selectedTicket.id}</span>
                 <span>·</span>
@@ -323,7 +323,7 @@ export default function Support() {
                       </div>
                       <div className={`flex-1 rounded-lg p-3 text-sm ${
                         msg.senderType === "admin"
-                          ? "bg-primary/10 text-right"
+                          ? "bg-primary/10 text-end"
                           : "bg-muted"
                       }`}>
                         <p>{msg.message}</p>
@@ -352,7 +352,7 @@ export default function Support() {
                 <Button size="sm" variant="outline"
                   disabled={newStatus === selectedTicket.status || updateMutation.isPending}
                   onClick={() => updateMutation.mutate({ id: selectedTicket.id, data: { status: newStatus } })}>
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> {t("common.update")}
+                  <RefreshCw className="h-3.5 w-3.5 me-1.5" /> {t("common.update")}
                 </Button>
               </div>
 
@@ -369,7 +369,7 @@ export default function Support() {
                   disabled={!replyText.trim() || replyMutation.isPending}
                   onClick={() => replyMutation.mutate({ id: selectedTicket.id, message: replyText })}
                 >
-                  <Send className="h-4 w-4 mr-2" /> {t("support.sendReply", "Send Reply")}
+                  <Send className="h-4 w-4 me-2" /> {t("support.sendReply", "Send Reply")}
                 </Button>
               </div>
             </div>
