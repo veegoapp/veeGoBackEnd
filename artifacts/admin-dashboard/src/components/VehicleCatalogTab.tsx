@@ -23,9 +23,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Plus, Edit, Trash2, Tag, Palette, ChevronRight, Car, Calendar,
-  Layers, ArrowLeft, Home, Check, Zap,
+  Layers, ArrowLeft, Home, Check, Zap, Upload, Loader2, Copy, CheckCheck, AlertTriangle,
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -346,6 +347,169 @@ function ColorDialog({
   );
 }
 
+// ─── Bulk Import Dialog ───────────────────────────────────────────────────────
+
+type CatalogEntry = { brandName: string; models: string[] };
+
+const BULK_TEMPLATE: CatalogEntry[] = [
+  { brandName: "Yamaha",  models: ["NMAX 155", "XMAX 300", "Aerox 155"] },
+  { brandName: "Honda",   models: ["PCX 160", "FORZA 350"] },
+  { brandName: "Suzuki",  models: ["Burgman 400"] },
+];
+
+function BulkImportDialog({
+  open, onClose, serviceType, onImport, importing,
+}: {
+  open: boolean;
+  onClose: () => void;
+  serviceType: string;
+  onImport: (catalogData: CatalogEntry[]) => void;
+  importing: boolean;
+}) {
+  const [raw, setRaw] = React.useState("");
+  const [parseError, setParseError] = React.useState<string | null>(null);
+  const [copied, setCopied] = React.useState(false);
+
+  const TEMPLATE = JSON.stringify(BULK_TEMPLATE, null, 2);
+
+  React.useEffect(() => {
+    if (open) { setRaw(""); setParseError(null); setCopied(false); }
+  }, [open]);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(TEMPLATE);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleProcess = () => {
+    if (!raw.trim()) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      setParseError("Invalid JSON — please check syntax and try again.");
+      return;
+    }
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      setParseError("Input must be a non-empty JSON array.");
+      return;
+    }
+    for (let i = 0; i < parsed.length; i++) {
+      const entry = parsed[i];
+      if (typeof entry.brandName !== "string" || !entry.brandName.trim()) {
+        setParseError(`Entry #${i + 1}: "brandName" must be a non-empty string.`);
+        return;
+      }
+      if (!Array.isArray(entry.models)) {
+        setParseError(`Entry #${i + 1}: "models" must be an array of strings.`);
+        return;
+      }
+      for (const m of entry.models) {
+        if (typeof m !== "string" || !m.trim()) {
+          setParseError(`Entry #${i + 1} (${entry.brandName}): all model names must be non-empty strings.`);
+          return;
+        }
+      }
+    }
+    setParseError(null);
+    onImport(parsed.map((e: any) => ({
+      brandName: e.brandName.trim(),
+      models: (e.models as string[]).map((m) => m.trim()).filter(Boolean),
+    })));
+  };
+
+  const brandCount = React.useMemo(() => {
+    if (!raw.trim()) return null;
+    try { const p = JSON.parse(raw); return Array.isArray(p) ? p.length : null; } catch { return null; }
+  }, [raw]);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && !importing && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Upload className="h-4 w-4 text-primary" />
+            Bulk Import Catalog for{" "}
+            <span className="capitalize text-primary font-semibold">{serviceType}</span>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Template */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-muted-foreground">
+                JSON template — copy, edit, then paste below
+              </Label>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 transition-colors"
+              >
+                {copied
+                  ? <><CheckCheck className="h-3 w-3" /> Copied!</>
+                  : <><Copy className="h-3 w-3" /> Copy template</>}
+              </button>
+            </div>
+            <pre className="rounded-md border border-border bg-muted/50 px-3 py-2.5 text-[11px] font-mono leading-relaxed overflow-auto max-h-36 text-muted-foreground select-all cursor-text">
+              {TEMPLATE}
+            </pre>
+          </div>
+
+          {/* Input area */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Paste your catalog JSON here</Label>
+              {brandCount !== null && (
+                <span className="text-xs text-muted-foreground">
+                  {brandCount} brand{brandCount !== 1 ? "s" : ""} detected
+                </span>
+              )}
+            </div>
+            <Textarea
+              value={raw}
+              onChange={(e) => { setRaw(e.target.value); setParseError(null); }}
+              placeholder={`[{"brandName": "Yamaha", "models": ["NMAX 155", "XMAX 300"]}]`}
+              className="font-mono text-xs min-h-[160px] resize-y"
+              spellCheck={false}
+              disabled={importing}
+            />
+            {parseError && (
+              <p className="flex items-start gap-1.5 text-xs text-destructive mt-0.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                {parseError}
+              </p>
+            )}
+          </div>
+
+          {/* Info note */}
+          <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 leading-relaxed">
+            <strong>Note:</strong> Existing brands and models for <span className="capitalize font-medium">{serviceType}</span> will be
+            skipped — only new entries are inserted. All models default to year range 2015 – present and can be
+            adjusted individually after import.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={importing}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleProcess}
+            disabled={!raw.trim() || importing}
+            className="gap-1.5 min-w-[140px]"
+          >
+            {importing
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing…</>
+              : <><Upload className="h-3.5 w-3.5" /> Process Import</>}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Level 1: Brands View ─────────────────────────────────────────────────────
 
 function BrandsView({
@@ -363,6 +527,7 @@ function BrandsView({
   const [deleteBrand, setDeleteBrand] = useState<number | null>(null);
   const [colorDialog, setColorDialog] = useState<{ open: boolean; color?: VehicleColor }>({ open: false });
   const [deleteColor, setDeleteColor] = useState<number | null>(null);
+  const [bulkImportOpen, setBulkImportOpen] = useState(false);
 
   const brandsQuery = useQuery({
     queryKey: ["vehicle-catalog-brands", serviceType],
@@ -391,6 +556,24 @@ function BrandsView({
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setDeleteBrand(null); toast({ title: "Brand deleted" }); },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
+  const bulkImportMutation = useMutation({
+    mutationFn: (catalogData: CatalogEntry[]) =>
+      adminFetch<{ brandsCreated: number; brandsExisting: number; modelsCreated: number; modelsExisting: number }>(
+        "/admin/vehicle-catalog/bulk-import",
+        { method: "POST", body: JSON.stringify({ serviceType, catalogData }) },
+      ),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] });
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
+      setBulkImportOpen(false);
+      toast({
+        title: "Import complete!",
+        description: `${result.brandsCreated} brand${result.brandsCreated !== 1 ? "s" : ""} and ${result.modelsCreated} model${result.modelsCreated !== 1 ? "s" : ""} imported. ${result.brandsExisting + result.modelsExisting > 0 ? `(${result.brandsExisting + result.modelsExisting} duplicate${result.brandsExisting + result.modelsExisting !== 1 ? "s" : ""} skipped)` : ""}`.trim(),
+      });
+    },
+    onError: (e: any) => toast({ title: "Import failed", description: e?.message, variant: "destructive" }),
+  });
+
   const createColor = useMutation({
     mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/colors", { method: "POST", body: JSON.stringify(data) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: "Color added" }); },
@@ -418,9 +601,14 @@ function BrandsView({
             <h3 className="font-semibold text-sm">Approved Brands</h3>
             {!brandsQuery.isLoading && <Badge variant="secondary" className="text-xs">{brands.length}</Badge>}
           </div>
-          <Button size="sm" className="gap-1.5" onClick={() => setBrandDialog({ open: true })}>
-            <Plus className="h-3.5 w-3.5" /> Add Brand
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setBulkImportOpen(true)}>
+              <Upload className="h-3.5 w-3.5" /> Bulk Import
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setBrandDialog({ open: true })}>
+              <Plus className="h-3.5 w-3.5" /> Add Brand
+            </Button>
+          </div>
         </div>
 
         {brandsQuery.isLoading ? (
@@ -521,6 +709,13 @@ function BrandsView({
       </div>
 
       {/* Dialogs */}
+      <BulkImportDialog
+        open={bulkImportOpen}
+        onClose={() => setBulkImportOpen(false)}
+        serviceType={serviceType}
+        importing={bulkImportMutation.isPending}
+        onImport={(catalogData) => bulkImportMutation.mutate(catalogData)}
+      />
       <BrandDialog
         open={brandDialog.open} onClose={() => setBrandDialog({ open: false })} initial={brandDialog.brand}
         saving={createBrand.isPending || updateBrand.isPending}

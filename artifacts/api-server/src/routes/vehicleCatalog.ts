@@ -224,6 +224,77 @@ router.post("/admin/vehicle-brands/bulk-import", authenticate, requireRole("admi
   res.status(200).json({ brandsCreated, brandsUpdated, modelsCreated, modelsUpdated });
 });
 
+// ─── BULK IMPORT: brands + models by serviceType ─────────────────────────────
+
+const BulkImportCatalogBody = z.object({
+  serviceType: z.string().min(1),
+  catalogData: z.array(z.object({
+    brandName: z.string().min(1),
+    models:    z.array(z.string().min(1)).default([]),
+  })).min(1),
+});
+
+router.post("/admin/vehicle-catalog/bulk-import", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const parsed = BulkImportCatalogBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { serviceType, catalogData } = parsed.data;
+
+  let brandsCreated = 0;
+  let brandsExisting = 0;
+  let modelsCreated = 0;
+  let modelsExisting = 0;
+
+  await db.transaction(async (tx) => {
+    for (const { brandName, models } of catalogData) {
+      const [existingBrand] = await tx
+        .select({ id: vehicleBrandsTable.id })
+        .from(vehicleBrandsTable)
+        .where(and(
+          eq(vehicleBrandsTable.name, brandName),
+          eq(vehicleBrandsTable.serviceType, serviceType),
+        ));
+
+      let brandId: number;
+      if (existingBrand) {
+        brandId = existingBrand.id;
+        brandsExisting++;
+      } else {
+        const [created] = await tx
+          .insert(vehicleBrandsTable)
+          .values({ name: brandName, serviceType, isChinese: false, isActive: true })
+          .returning({ id: vehicleBrandsTable.id });
+        brandId = created.id;
+        brandsCreated++;
+      }
+
+      for (const modelName of models) {
+        const [existingModel] = await tx
+          .select({ id: vehicleModelsTable.id })
+          .from(vehicleModelsTable)
+          .where(and(
+            eq(vehicleModelsTable.brandId, brandId),
+            eq(vehicleModelsTable.name, modelName),
+          ));
+
+        if (existingModel) {
+          modelsExisting++;
+        } else {
+          await tx.insert(vehicleModelsTable).values({
+            brandId,
+            name:     modelName,
+            minYear:  2015,
+            isActive: true,
+          });
+          modelsCreated++;
+        }
+      }
+    }
+  });
+
+  res.status(200).json({ brandsCreated, brandsExisting, modelsCreated, modelsExisting });
+});
+
 router.patch("/admin/vehicle-catalog/brands/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const params = BrandIdParam.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: "Invalid brand id" }); return; }
