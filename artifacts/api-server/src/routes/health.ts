@@ -14,6 +14,9 @@ router.get("/healthz", (_req, res) => {
 
 router.get("/health/db", async (_req, res): Promise<void> => {
   const start = Date.now();
+  const connStr = process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL ?? "";
+  const isNeon = connStr.includes("neon.tech");
+  const provider = isNeon ? "Neon PostgreSQL" : connStr.includes("helium") ? "Local (Helium)" : "PostgreSQL";
   try {
     const client = await pool.connect();
     await client.query("SELECT 1");
@@ -23,7 +26,8 @@ router.get("/health/db", async (_req, res): Promise<void> => {
       status: "ok",
       database: "connected",
       latencyMs,
-      provider: "neon",
+      provider,
+      isNeon,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -31,6 +35,8 @@ router.get("/health/db", async (_req, res): Promise<void> => {
     res.status(503).json({
       status: "error",
       database: "disconnected",
+      provider,
+      isNeon,
       error: err instanceof Error ? err.message : String(err),
       timestamp: new Date().toISOString(),
     });

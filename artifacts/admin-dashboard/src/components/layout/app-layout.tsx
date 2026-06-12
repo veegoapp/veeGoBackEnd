@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { NotificationBell } from "@/components/NotificationBell";
+import { DbHealthIndicator } from "./db-health-indicator";
 
 interface NavItem {
   title: string;
@@ -338,7 +339,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         {!collapsed && user && (
-          <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-3 flex items-center gap-2">
+          <div className="border-t border-slate-100 dark:border-slate-800 px-3 pt-3 pb-1 flex items-center gap-2">
             <Avatar className="h-7 w-7 shrink-0">
               <AvatarFallback className="text-xs bg-primary/10 text-primary">
                 {(user as any).name?.charAt(0)?.toUpperCase() ?? "A"}
@@ -351,11 +352,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <ThemeToggle />
           </div>
         )}
-        {collapsed && (
-          <div className="border-t border-slate-100 dark:border-slate-800 py-2 flex flex-col items-center gap-1.5">
-            <ThemeToggle />
-          </div>
-        )}
+        <div className={collapsed ? "border-t border-slate-100 dark:border-slate-800 py-2 flex flex-col items-center gap-1.5" : "px-2 pb-2"}>
+          {collapsed && <ThemeToggle />}
+          <DbHealthIndicator collapsed={collapsed} />
+        </div>
       </aside>
 
       <main className="flex-1 flex flex-col min-h-0">
