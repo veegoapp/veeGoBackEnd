@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, driverDocumentsTable, driversTable } from "@workspace/db";
+import { db, driverDocumentsTable, driversTable, usersTable, notificationsTable } from "@workspace/db";
 import { eq, desc, and, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import path from "path";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import ws from "ws";
+import { getIO } from "../socket";
 
 const router = Router();
 
@@ -48,6 +49,18 @@ const UpdateDocumentBody = z.object({
   verificationStatus: z.enum(["pending", "approved", "rejected"]).optional(),
   adminNotes: z.string().optional(),
 });
+
+// Documents required for auto-activation (criminal_record is NOT required)
+const REQUIRED_DOCS_FOR_ACTIVATION = [
+  "national_id_front",
+  "national_id_back",
+  "driving_license_front",
+  "driving_license_back",
+  "vehicle_license_front",
+  "vehicle_license_back",
+  "profile_photo",
+  "vehicle_photo",
+] as const;
 
 router.get("/driver-documents", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = ListDocumentsQuery.safeParse(req.query);
@@ -155,6 +168,59 @@ router.patch("/driver-documents/:id", authenticate, requireRole("admin"), async 
 
   const [updated] = await db.update(driverDocumentsTable).set(parsed.data).where(eq(driverDocumentsTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "Document not found" }); return; }
+
+  // Auto-activation check: only trigger when a document is approved
+  if (parsed.data.verificationStatus === "approved") {
+    const driverId = updated.driverId;
+
+    // Fetch all documents for this driver
+    const allDocs = await db
+      .select({ type: driverDocumentsTable.type, verificationStatus: driverDocumentsTable.verificationStatus })
+      .from(driverDocumentsTable)
+      .where(eq(driverDocumentsTable.driverId, driverId));
+
+    // For each required type, check if at least one document of that type is approved
+    const approvedTypes = new Set(
+      allDocs
+        .filter(d => d.verificationStatus === "approved")
+        .map(d => d.type),
+    );
+
+    const allRequiredApproved = REQUIRED_DOCS_FOR_ACTIVATION.every(type => approvedTypes.has(type));
+
+    if (allRequiredApproved) {
+      // Fetch driver to get userId and current activation state
+      const [driver] = await db
+        .select({ id: driversTable.id, userId: driversTable.userId, isActive: driversTable.isActive })
+        .from(driversTable)
+        .where(eq(driversTable.id, driverId));
+
+      if (driver && !driver.isActive) {
+        // Activate driver account
+        await db.update(driversTable).set({ isActive: true }).where(eq(driversTable.id, driverId));
+        await db.update(usersTable).set({ isVerified: true }).where(eq(usersTable.id, driver.userId));
+
+        // Create activation notification
+        await db.insert(notificationsTable).values({
+          userId: driver.userId,
+          title: "Account Activated / تم تفعيل حسابك",
+          body: "Your account has been approved. You can now start working. / تمت الموافقة على حسابك. يمكنك الآن البدء في العمل.",
+        });
+
+        // Emit socket event to driver's personal room
+        const io = getIO();
+        if (io) {
+          io.to(`driver:${driver.userId}`).emit("driver:account:activated", {
+            driverId,
+            userId: driver.userId,
+            message: "Your account has been activated.",
+            activatedAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
+  }
+
   res.json(updated);
 });
 

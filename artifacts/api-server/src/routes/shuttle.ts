@@ -277,7 +277,7 @@ router.get("/shuttle/lines", authenticate, async (req, res): Promise<void> => {
 });
 
 // ─── GET /shuttle/assignments ──────────────────────────────────────────────────
-router.get("/shuttle/assignments", async (_req, res): Promise<void> => {
+router.get("/shuttle/assignments", authenticate, async (_req, res): Promise<void> => {
   const drivers = await db
     .select({
       driverId: driversTable.id,

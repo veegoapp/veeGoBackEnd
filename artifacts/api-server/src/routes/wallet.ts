@@ -8,6 +8,7 @@ import {
   AdminRefundBody,
 } from "@workspace/api-zod";
 import { z } from "zod";
+import { loadSetting, saveSetting } from "../lib/settings";
 
 const router = Router();
 
@@ -47,6 +48,45 @@ router.post("/wallet/topup", authenticate, async (req, res): Promise<void> => {
   }
   const { amount } = parsed.data;
 
+  // Read limits from settings table with fallbacks
+  const maxTopup = await loadSetting<number>("wallet_max_topup", 1000);
+  const dailyLimit = await loadSetting<number>("wallet_daily_topup_limit", 2000);
+
+  // Check per-request limit
+  if (amount > maxTopup) {
+    res.status(400).json({
+      error: `الحد الأقصى لعملية الشحن الواحدة هو ${maxTopup} جنيه / Maximum top-up per request is ${maxTopup} EGP`,
+    });
+    return;
+  }
+
+  // Check daily limit: sum all deposits for this user today
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const [dailyResult] = await db
+    .select({ total: sql<number>`coalesce(sum(${walletTransactionsTable.amount}::numeric), 0)::float` })
+    .from(walletTransactionsTable)
+    .where(
+      and(
+        eq(walletTransactionsTable.userId, req.user!.id),
+        eq(walletTransactionsTable.type, "deposit"),
+        gte(walletTransactionsTable.createdAt, startOfDay),
+        lte(walletTransactionsTable.createdAt, endOfDay),
+      ),
+    );
+
+  const todayTotal = dailyResult?.total ?? 0;
+  if (todayTotal + amount > dailyLimit) {
+    const remaining = Math.max(0, dailyLimit - todayTotal);
+    res.status(400).json({
+      error: `تجاوزت الحد اليومي للشحن (${dailyLimit} جنيه). المتبقي اليوم: ${remaining} جنيه / Daily top-up limit exceeded (${dailyLimit} EGP). Remaining today: ${remaining} EGP`,
+    });
+    return;
+  }
+
   await db.transaction(async (tx) => {
     await tx.update(usersTable).set({
       walletBalance: sql`wallet_balance + ${String(amount)}`,
@@ -69,6 +109,35 @@ router.post("/wallet/topup", authenticate, async (req, res): Promise<void> => {
       balance: user ? parseFloat(user.walletBalance) : 0,
     });
   });
+});
+
+const WalletLimitsBody = z.object({
+  wallet_max_topup: z.number().positive().optional(),
+  wallet_daily_topup_limit: z.number().positive().optional(),
+});
+
+// ─── PATCH /admin/settings/wallet-limits ──────────────────────────────────────
+router.patch("/admin/settings/wallet-limits", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const parsed = WalletLimitsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const updates: Record<string, number> = {};
+
+  if (parsed.data.wallet_max_topup !== undefined) {
+    await saveSetting("wallet_max_topup", parsed.data.wallet_max_topup);
+    updates.wallet_max_topup = parsed.data.wallet_max_topup;
+  }
+  if (parsed.data.wallet_daily_topup_limit !== undefined) {
+    await saveSetting("wallet_daily_topup_limit", parsed.data.wallet_daily_topup_limit);
+    updates.wallet_daily_topup_limit = parsed.data.wallet_daily_topup_limit;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "No limits provided to update" });
+    return;
+  }
+
+  res.json({ message: "Wallet limits updated successfully", updated: updates });
 });
 
 router.get("/admin/wallet/transactions", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
