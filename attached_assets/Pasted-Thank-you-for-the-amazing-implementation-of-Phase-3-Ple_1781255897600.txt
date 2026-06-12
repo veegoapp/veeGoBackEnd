@@ -1,0 +1,30 @@
+Thank you for the amazing implementation of Phase 3! Please decline the coverage map preview for now, as we want to stay focused on our core roadmap. Let's proceed immediately to Phase 4, the final phase, to implement Category-Based Pricing and the Centralised, Fully Activated Finance Module connected completely to the server.
+
+Please execute Phase 4 by following these exact steps:
+
+### STEP 1: Restructure Pricing Pages & Support Car Categories
+1. Apply dynamic pricing ONLY to Car (`/pricing/car`), Scooter (`/pricing/motorcycle`), and Delivery (`/pricing/delivery`). Exclude Shuttle Pricing entirely from this logic.
+2. At the top of the Car Pricing page (`artifacts/admin-dashboard/src/pages/pricing.tsx`), add a clean Category Selector (Tabs or Dropdown) for the 3 backend categories: **Economy, Economy Plus, and Comfort**.
+3. Make the page state reactive: choosing a category must fetch and display its specific base fare and zone-based pricing configuration.
+4. When saving Base Fare or adding a Zone Price via `POST` / `PATCH`, include the selected `category` and service type (`car`) in the API payload. Forms must accurately submit: Base Fare/Flat Fee, Per KM Rate, and Per Minute Rate.
+
+### STEP 2: Centralise Navigation under a Unified "Finance" Section
+1. Restructure the sidebar menu to create a single master group named "Finance" and move/route these pages under it:
+   - **User Wallets** (Route: `/finance/wallet` - Pulls data via `GET /admin/wallet/transactions` and handles manual refunds via `POST /wallet/refund`).
+   - **Driver Payouts** (Route: `/finance/payouts` - Newly activated).
+   - **Commission Rates** (Route: `/finance/commission` - Newly activated).
+   - **Shuttle No-Show Debits** (Route: `/finance/shuttle-cash-debts` - Moved completely out of the Shuttle menu group, handling data via `GET /admin/shuttle/cash-debts` and `PATCH /admin/shuttle/cash-debts/:userId/collect`).
+
+### STEP 3: Fully Build and Activate the "Driver Payouts" Screen
+1. Remove the "Soon" status / disabled flag from the Payouts sub-page and activate its view.
+2. Build dashboard summary cards at the top: Total Platform Revenue, Total Driver Earnings, Pending Payouts.
+3. Implement a dynamic data table displaying: Driver Name, Service Type, Total Current Balance, and a "Confirm Payout" action button.
+4. Add a reactive "Service Type" dropdown filter (All, Car, Scooter, Delivery, Shuttle) to instantly filter the drivers table. Connect the UI to `GET /admin/payouts` and `PATCH /admin/payouts/:driverId/confirm`.
+
+### STEP 4: Fully Build and Activate the "Commission Rates" Screen
+1. Remove the "Soon" status / disabled flag from the Commission sub-page and activate its view.
+2. Build form inputs allowing the admin to dynamically set, update, and view the application's commission percentage split grouped by service type (Car, Scooter, Delivery). Connect to `GET /admin/settings/commission` and `PATCH /admin/settings/commission`.
+
+---
+### REQUIRED OUTPUT FOR VERIFICATION:
+Provide a comprehensive verification checklist showing that Car Category pricing saves separate rates, all "Soon" financial screens are fully live under the "Finance" sidebar menu, filters are active, and all forms/tables are communicating perfectly with their backend server endpoints.

@@ -45,6 +45,8 @@ import ShuttleTrips from "@/pages/shuttle-trips";
 import ShuttleTripDetail from "@/pages/shuttle-trip-detail";
 import ShuttleCashDebts from "@/pages/shuttle-cash-debts";
 import ShuttleOffences from "@/pages/shuttle-offences";
+import FinancePayouts from "@/pages/finance-payouts";
+import FinanceCommission from "@/pages/finance-commission";
 
 const logoutRef = { current: () => {} };
 
@@ -145,6 +147,10 @@ function Router() {
         <Route path="/shuttle-trips/:id" component={() => <ProtectedRoute component={ShuttleTripDetail} />} />
         <Route path="/shuttle/cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
         <Route path="/shuttle/offences" component={() => <ProtectedRoute component={ShuttleOffences} />} />
+        <Route path="/finance/wallet" component={() => <ProtectedRoute component={Wallet} />} />
+        <Route path="/finance/payouts" component={() => <ProtectedRoute component={FinancePayouts} />} />
+        <Route path="/finance/commission" component={() => <ProtectedRoute component={FinanceCommission} />} />
+        <Route path="/finance/shuttle-cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
         <Route component={NotFound} />
       </Switch>
     </AppLayout>

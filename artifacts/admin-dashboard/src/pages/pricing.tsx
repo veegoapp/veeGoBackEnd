@@ -17,7 +17,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import {
   Car, Bike, Zap, PackageOpen, DollarSign, Pencil, Check, X,
-  Clock, Info, Plus, Trash2, MapPin, TrendingUp, Settings2,
+  Clock, Info, Plus, Trash2, MapPin, TrendingUp, Settings2, Layers,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -63,14 +63,242 @@ type SurgeSettings = {
   triggerThreshold: number;
 };
 
+// ─── Car Categories ───────────────────────────────────────────────────────────
+
+type CarCategory = {
+  id: number;
+  name: string;
+  displayName?: string;
+  baseFare: number;
+  perKmRate: number;
+  perMinuteRate: number;
+  minimumFare: number;
+};
+
+type CarCategoryForm = {
+  baseFare: string;
+  perKmRate: string;
+  perMinuteRate: string;
+  minimumFare: string;
+};
+
+const CAR_CATEGORY_DISPLAY: Record<string, { label: string; color: string; bg: string; desc: string }> = {
+  economy:      { label: "Economy",      color: "text-blue-600",   bg: "bg-blue-500/10",   desc: "Affordable everyday rides" },
+  economy_plus: { label: "Economy Plus", color: "text-indigo-600", bg: "bg-indigo-500/10", desc: "A step up in comfort at a reasonable fare" },
+  comfort:      { label: "Comfort",      color: "text-violet-600", bg: "bg-violet-500/10", desc: "Premium comfort for discerning passengers" },
+};
+
+function getDisplayName(cat: CarCategory): string {
+  const key = cat.name?.toLowerCase().replace(/\s+/g, "_") ?? "";
+  return CAR_CATEGORY_DISPLAY[key]?.label ?? cat.displayName ?? cat.name ?? "Unknown";
+}
+function getDisplayKey(cat: CarCategory): string {
+  return cat.name?.toLowerCase().replace(/\s+/g, "_") ?? "economy";
+}
+
+function CarCategoryEditor() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState<CarCategoryForm>({ baseFare: "", perKmRate: "", perMinuteRate: "", minimumFare: "" });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["car-categories"],
+    queryFn: () => adminFetch<{ data: CarCategory[] }>("/admin/car-categories"),
+  });
+
+  const categories = data?.data ?? [];
+  const selected = activeTab !== null ? categories.find((c) => c.id === activeTab) : categories[0] ?? null;
+
+  useEffect(() => {
+    if (categories.length > 0 && activeTab === null) setActiveTab(categories[0].id);
+  }, [categories, activeTab]);
+
+  useEffect(() => {
+    if (selected) {
+      setForm({
+        baseFare:      String(selected.baseFare),
+        perKmRate:     String(selected.perKmRate),
+        perMinuteRate: String(selected.perMinuteRate),
+        minimumFare:   String(selected.minimumFare),
+      });
+      setEditing(false);
+    }
+  }, [selected?.id]);
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, values }: { id: number; values: Record<string, number> }) =>
+      adminFetch(`/admin/car-categories/${id}`, { method: "PATCH", body: JSON.stringify({ ...values, serviceType: "car" }) }),
+    onSuccess: () => {
+      toast({ title: "Category pricing updated" });
+      queryClient.invalidateQueries({ queryKey: ["car-categories"] });
+      setEditing(false);
+    },
+    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+  });
+
+  const handleSave = () => {
+    if (!selected) return;
+    const values = {
+      baseFare:      parseFloat(form.baseFare),
+      perKmRate:     parseFloat(form.perKmRate),
+      perMinuteRate: parseFloat(form.perMinuteRate),
+      minimumFare:   parseFloat(form.minimumFare),
+    };
+    if (Object.values(values).some(isNaN)) {
+      toast({ title: "Invalid values", description: "All fields must be valid numbers.", variant: "destructive" });
+      return;
+    }
+    updateMutation.mutate({ id: selected.id, values });
+  };
+
+  const fields: { key: keyof CarCategoryForm; label: string; hint: string }[] = [
+    { key: "baseFare",      label: "Base Fare (EGP)",       hint: "Flat fee at the start of every ride" },
+    { key: "perKmRate",     label: "Per Km Rate (EGP)",     hint: "Amount charged per kilometer" },
+    { key: "perMinuteRate", label: "Per Minute Rate (EGP)", hint: "Amount charged per minute of duration" },
+    { key: "minimumFare",   label: "Minimum Fare (EGP)",    hint: "Minimum charge regardless of distance" },
+  ];
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="pt-6 space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (categories.length === 0) {
+    return (
+      <Card>
+        <CardContent className="pt-6 text-center text-sm text-muted-foreground py-10">
+          No car categories found. Seed the database to create Economy, Economy Plus, and Comfort categories.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const displayKey = selected ? getDisplayKey(selected) : "economy";
+  const displayMeta = CAR_CATEGORY_DISPLAY[displayKey] ?? { label: "Category", color: "text-primary", bg: "bg-primary/10" };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Layers className="h-4 w-4" /> Category-Based Pricing
+          </CardTitle>
+          {selected && !editing && (
+            <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
+              <Pencil className="h-3.5 w-3.5" /> Edit {getDisplayName(selected)}
+            </Button>
+          )}
+        </div>
+        <CardDescription className="text-xs">
+          Select a vehicle category to view or edit its fare configuration
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex gap-1 p-1 bg-muted/50 rounded-lg border border-border w-fit">
+          {categories.map((cat) => {
+            const key = getDisplayKey(cat);
+            const meta = CAR_CATEGORY_DISPLAY[key] ?? { label: cat.name, color: "text-primary", bg: "" };
+            const isActive = cat.id === (selected?.id ?? null);
+            return (
+              <button
+                key={cat.id}
+                onClick={() => { setActiveTab(cat.id); setEditing(false); }}
+                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  isActive
+                    ? `bg-white dark:bg-slate-900 shadow-sm border border-border ${meta.color}`
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {meta.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {selected && (
+          <>
+            <div className={`flex items-center gap-2.5 p-3 rounded-lg ${displayMeta.bg}`}>
+              <Car className={`h-5 w-5 ${displayMeta.color}`} />
+              <div>
+                <p className={`text-sm font-bold ${displayMeta.color}`}>{displayMeta.label}</p>
+                <p className="text-xs text-muted-foreground">{displayMeta.desc}</p>
+              </div>
+            </div>
+
+            <Separator />
+
+            {fields.map((field, i) => (
+              <React.Fragment key={field.key}>
+                {i > 0 && <Separator />}
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <Label className="text-sm font-medium">{field.label}</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">{field.hint}</p>
+                  </div>
+                  {editing ? (
+                    <Input
+                      type="number" step="0.01" min="0"
+                      value={form[field.key]}
+                      onChange={(e) => setForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      className="w-28 text-right"
+                    />
+                  ) : (
+                    <span className="text-lg font-bold w-28 text-right">
+                      EGP {parseFloat(form[field.key] || "0").toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              </React.Fragment>
+            ))}
+
+            {editing && (
+              <div className="flex items-center gap-2 pt-2">
+                <Button onClick={handleSave} disabled={updateMutation.isPending} className="gap-1.5">
+                  <Check className="h-3.5 w-3.5" />
+                  {updateMutation.isPending ? "Saving…" : "Save Changes"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setEditing(false);
+                    setForm({
+                      baseFare:      String(selected.baseFare),
+                      perKmRate:     String(selected.perKmRate),
+                      perMinuteRate: String(selected.perMinuteRate),
+                      minimumFare:   String(selected.minimumFare),
+                    });
+                  }}
+                  className="gap-1.5"
+                >
+                  <X className="h-3.5 w-3.5" /> Cancel
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── PRICING_META ─────────────────────────────────────────────────────────────
+
 const PRICING_META: Record<string, { icon: React.ElementType; label: string; color: string; bg: string; desc: string }> = {
-  car:  { icon: Car,  label: "Car Pricing",  color: "text-blue-600",  bg: "bg-blue-500/10",  desc: "Fare rates applied to on-demand car rides" },
-  bike: { icon: Bike, label: "Bike Pricing", color: "text-green-600", bg: "bg-green-500/10", desc: "Fare rates applied to on-demand bike rides" },
+  car:      { icon: Car,         label: "Car Pricing",      color: "text-blue-600",   bg: "bg-blue-500/10",   desc: "Fare rates applied to on-demand car rides" },
+  bike:     { icon: Bike,        label: "Scooter Pricing",  color: "text-green-600",  bg: "bg-green-500/10",  desc: "Fare rates applied to on-demand scooter rides" },
+  delivery: { icon: PackageOpen, label: "Delivery Pricing", color: "text-violet-600", bg: "bg-violet-500/10", desc: "Fare rates applied to on-demand delivery orders" },
 };
 
 // ─── Base Fare Editor ─────────────────────────────────────────────────────────
 
-function PricingEditor({ type }: { type: "car" | "bike" }) {
+function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
   const meta = PRICING_META[type];
   const Icon = meta.icon;
   const { toast } = useToast();
@@ -206,7 +434,7 @@ function PricingEditor({ type }: { type: "car" | "bike" }) {
 
 type ZonePricingRowForm = { baseFare: string; perKmRate: string; minimumFare: string; isActive: boolean };
 
-function ZonePricingTable({ type }: { type: "car" | "bike" }) {
+function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -429,9 +657,9 @@ function ZonePricingTable({ type }: { type: "car" | "bike" }) {
   );
 }
 
-// ─── Full Pricing View (car / bike) ──────────────────────────────────────────
+// ─── Full Pricing View (car / bike / delivery) ───────────────────────────────
 
-function PricingView({ type }: { type: "car" | "bike" }) {
+function PricingView({ type }: { type: "car" | "bike" | "delivery" }) {
   const meta = PRICING_META[type];
   const Icon = meta.icon;
 
@@ -447,7 +675,11 @@ function PricingView({ type }: { type: "car" | "bike" }) {
         </div>
       </div>
 
-      <PricingEditor type={type} />
+      {type === "car" ? (
+        <CarCategoryEditor />
+      ) : (
+        <PricingEditor type={type} />
+      )}
       <ZonePricingTable type={type} />
 
       <Card className="bg-muted/30 border-dashed">
@@ -721,24 +953,9 @@ export default function Pricing() {
   const [, params] = useRoute("/pricing/:type");
   const type = params?.type ?? "car";
 
-  if (type === "delivery") {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center">
-        <div className="p-5 rounded-2xl bg-violet-500/10 mb-5">
-          <PackageOpen className="h-10 w-10 text-violet-500" />
-        </div>
-        <span className="text-xs font-bold uppercase tracking-widest text-violet-500 bg-violet-500/10 px-3 py-1 rounded-full mb-4">
-          Coming Soon
-        </span>
-        <h2 className="text-2xl font-bold">Delivery Pricing</h2>
-        <p className="text-muted-foreground text-sm mt-2 max-w-sm">
-          Delivery pricing configuration is currently in development and will be available in a future release.
-        </p>
-      </div>
-    );
-  }
-
-  if (type === "surge") return <SurgePricingView />;
-  if (type === "car" || type === "bike") return <PricingView type={type} />;
+  if (type === "surge")                     return <SurgePricingView />;
+  if (type === "car")                        return <PricingView type="car" />;
+  if (type === "bike" || type === "motorcycle") return <PricingView type="bike" />;
+  if (type === "delivery")                   return <PricingView type="delivery" />;
   return <PricingView type="car" />;
 }

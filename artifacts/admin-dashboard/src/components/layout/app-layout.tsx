@@ -227,7 +227,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.vehicles"), href: "/vehicles/shuttle", icon: Bus },
             { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
             { title: t("nav.shuttleTrips"), href: "/shuttle-trips", icon: Navigation },
-            { title: "Cash Debts", href: "/shuttle/cash-debts", icon: Wallet },
             { title: "Offences", href: "/shuttle/offences", icon: Shield },
           ],
         },
@@ -258,15 +257,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     {
       label: t("nav.groupFinance"),
       items: [
-        {
-          title: t("nav.payments"), href: "/payments", icon: CreditCard,
-          subItems: [
-            { title: t("nav.transactions"), href: "/payments", icon: CreditCard },
-            { title: t("nav.wallets"), href: "/wallet", icon: Wallet },
-            { title: t("nav.payouts"), icon: ArrowUpRight, comingSoon: true },
-            { title: t("nav.commission"), icon: Percent, comingSoon: true },
-          ],
-        },
+        { title: t("nav.transactions"), href: "/payments",                  icon: CreditCard },
+        { title: t("nav.wallets"),      href: "/finance/wallet",            icon: Wallet },
+        { title: t("nav.payouts"),      href: "/finance/payouts",           icon: ArrowUpRight },
+        { title: t("nav.commission"),   href: "/finance/commission",        icon: Percent },
+        { title: "No-Show Debits",      href: "/finance/shuttle-cash-debts", icon: DollarSign },
       ],
     },
     {
