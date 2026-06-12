@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { db, routesTable, stationsTable, tripsTable, bookingsTable } from "@workspace/db";
-import { eq, ilike, and, inArray } from "drizzle-orm";
+import { eq, ilike, and, inArray, sql } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
   ListRoutesQueryParams,
@@ -54,7 +54,27 @@ function stationOut(s: any) {
 router.get("/routes", async (req, res): Promise<void> => {
   const search = req.query.search as string | undefined;
   const where = search ? ilike(routesTable.name, `%${search}%`) : undefined;
-  const data = await db.select().from(routesTable).where(where).orderBy(routesTable.createdAt);
+  const data = await db
+    .select({
+      id: routesTable.id,
+      name: routesTable.name,
+      nameAr: routesTable.nameAr,
+      fromLocation: routesTable.fromLocation,
+      fromLocationAr: routesTable.fromLocationAr,
+      toLocation: routesTable.toLocation,
+      toLocationAr: routesTable.toLocationAr,
+      estimatedDuration: routesTable.estimatedDuration,
+      basePrice: routesTable.basePrice,
+      isActive: routesTable.isActive,
+      createdAt: routesTable.createdAt,
+      updatedAt: routesTable.updatedAt,
+      stationCount: sql<number>`count(${stationsTable.id})::int`,
+    })
+    .from(routesTable)
+    .leftJoin(stationsTable, eq(stationsTable.routeId, routesTable.id))
+    .where(where)
+    .groupBy(routesTable.id)
+    .orderBy(routesTable.createdAt);
   res.json({
     data: data.map(r => ({ ...r, basePrice: parseFloat(r.basePrice) })),
     total: data.length,

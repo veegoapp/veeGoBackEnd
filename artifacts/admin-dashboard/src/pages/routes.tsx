@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Map, Plus, MoreHorizontal, Edit, Trash2, Search, ArrowRight, Route as RouteIcon, Clock, Banknote } from "lucide-react";
+import { Map, Plus, MoreHorizontal, Edit, Trash2, Search, ArrowRight, Route as RouteIcon, Clock, Banknote, MapPin } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -71,7 +71,8 @@ export default function RoutesList() {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isAr = i18n.language === "ar";
 
   const { data, isLoading } = useListRoutes({
     page,
@@ -354,6 +355,7 @@ export default function RoutesList() {
               <TableHead>{t("routes.path", "Path")}</TableHead>
               <TableHead>{t("routes.duration")}</TableHead>
               <TableHead>{t("routes.basePrice")}</TableHead>
+              <TableHead>{t("routeDetail.totalStops", "Stations")}</TableHead>
               <TableHead>{t("routes.activity", "Activity")}</TableHead>
               <TableHead>{t("routes.active")}</TableHead>
               <TableHead className="text-end">{t("common.actions")}</TableHead>
@@ -386,14 +388,25 @@ export default function RoutesList() {
                       <div className="h-8 w-8 rounded bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                         <Map className="h-4 w-4" />
                       </div>
-                      <span className="font-medium group-hover:text-primary group-hover:underline underline-offset-2 transition-colors">{route.name}</span>
+                      <div className="min-w-0">
+                        <span className="font-medium group-hover:text-primary group-hover:underline underline-offset-2 transition-colors">
+                          {isAr ? ((route as any).nameAr || route.name) : route.name}
+                        </span>
+                        {isAr && !(route as any).nameAr && (
+                          <span className="block text-[10px] text-muted-foreground">{route.name}</span>
+                        )}
+                      </div>
                     </Link>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 text-sm">
-                      <span className="font-medium">{route.fromLocation}</span>
+                      <span className="font-medium">
+                        {isAr ? ((route as any).fromLocationAr || route.fromLocation) : route.fromLocation}
+                      </span>
                       <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="font-medium">{route.toLocation}</span>
+                      <span className="font-medium">
+                        {isAr ? ((route as any).toLocationAr || route.toLocation) : route.toLocation}
+                      </span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -407,6 +420,12 @@ export default function RoutesList() {
                       <Banknote className="h-3 w-3 text-muted-foreground" />
                       <span>{formatEGP(route.basePrice)}</span>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Link href={`/routes/${route.id}`} className="flex items-center gap-1 text-sm text-primary hover:underline underline-offset-2">
+                      <MapPin className="h-3.5 w-3.5" />
+                      <span className="font-medium">{(route as any).stationCount ?? 0}</span>
+                    </Link>
                   </TableCell>
                   <TableCell>
                     <RouteActivityBadges stats={tripStats[route.id]} />
