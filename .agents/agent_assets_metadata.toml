@@ -108,3 +108,9 @@ id = "SirxI99B93HflCnYNE8GK"
 uri = "file://zones-audit-report.md"
 type = "text"
 title = "Zones Technical Audit Report"
+
+[[outputs]]
+id = "TMZLkqpRWZE7HkP7gvKhi"
+uri = "file://veego-frontend-audit.md"
+type = "text"
+title = "VeeGo Admin Dashboard — Backend vs. Frontend Audit Report"
