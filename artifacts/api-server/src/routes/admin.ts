@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable, sosEventsTable, ridesTable, driverDuplicateAlertsTable, driverDocumentsTable } from "@workspace/db";
+import { db, usersTable, tripsTable, bookingsTable, busesTable, driversTable, walletTransactionsTable, driverEarningsTable, tripEventsTable, routesTable, notificationsTable, promoCodesTable, sosEventsTable, ridesTable, driverDuplicateAlertsTable, driverDocumentsTable, carCategoriesTable, settingsTable } from "@workspace/db";
 import { checkCriminalRecordThreshold } from "../lib/criminal-record";
 import { loadSetting, saveSetting } from "../lib/settings";
 import { cancelBookingsForTrip } from "../lib/shuttle-job";
@@ -1644,6 +1644,102 @@ router.post("/admin/drivers/:id/check-criminal-record", authenticate, requireRol
   } catch {
     res.status(500).json({ error: "Failed to run criminal record check" });
   }
+});
+
+// ─── Car Categories ────────────────────────────────────────────────────────────
+
+const CarCategoryCreateBody = z.object({
+  name:          z.string().min(1),
+  slug:          z.string().min(1).regex(/^[a-z0-9_]+$/),
+  minYear:       z.number().int().min(1900),
+  maxYear:       z.number().int().optional(),
+  baseFare:      z.number().positive(),
+  perKmRate:     z.number().nonnegative(),
+  perMinuteRate: z.number().nonnegative(),
+  minimumFare:   z.number().positive(),
+  isActive:      z.boolean().default(true),
+  sortOrder:     z.number().int().default(0),
+});
+
+const CarCategoryPatchBody = CarCategoryCreateBody.partial().omit({ slug: true });
+
+router.get("/admin/car-categories", authenticate, requireRole("admin"), async (_req, res): Promise<void> => {
+  const cats = await db.select().from(carCategoriesTable).orderBy(asc(carCategoriesTable.sortOrder));
+  res.json({ data: cats });
+});
+
+router.post("/admin/car-categories", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const parsed = CarCategoryCreateBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { baseFare, perKmRate, perMinuteRate, minimumFare, ...rest } = parsed.data;
+  const [cat] = await db.insert(carCategoriesTable).values({
+    ...rest,
+    baseFare:      baseFare.toString(),
+    perKmRate:     perKmRate.toString(),
+    perMinuteRate: perMinuteRate.toString(),
+    minimumFare:   minimumFare.toString(),
+  }).returning();
+  res.status(201).json(cat);
+});
+
+router.patch("/admin/car-categories/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const parsed = CarCategoryPatchBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const updates: Record<string, unknown> = {};
+  if (parsed.data.name          !== undefined) updates.name          = parsed.data.name;
+  if (parsed.data.minYear       !== undefined) updates.minYear       = parsed.data.minYear;
+  if ("maxYear"     in parsed.data)             updates.maxYear       = parsed.data.maxYear;
+  if (parsed.data.baseFare      !== undefined) updates.baseFare      = parsed.data.baseFare.toString();
+  if (parsed.data.perKmRate     !== undefined) updates.perKmRate     = parsed.data.perKmRate.toString();
+  if (parsed.data.perMinuteRate !== undefined) updates.perMinuteRate = parsed.data.perMinuteRate.toString();
+  if (parsed.data.minimumFare   !== undefined) updates.minimumFare   = parsed.data.minimumFare.toString();
+  if (parsed.data.isActive      !== undefined) updates.isActive      = parsed.data.isActive;
+  if (parsed.data.sortOrder     !== undefined) updates.sortOrder     = parsed.data.sortOrder;
+  if (Object.keys(updates).length === 0) { res.status(400).json({ error: "No fields to update" }); return; }
+  const [updated] = await db.update(carCategoriesTable).set(updates as Parameters<typeof db.update>[0]).where(eq(carCategoriesTable.id, id)).returning();
+  if (!updated) { res.status(404).json({ error: "Category not found" }); return; }
+  res.json(updated);
+});
+
+router.delete("/admin/car-categories/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id as string);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [deleted] = await db.delete(carCategoriesTable).where(eq(carCategoriesTable.id, id)).returning();
+  if (!deleted) { res.status(404).json({ error: "Category not found" }); return; }
+  res.sendStatus(204);
+});
+
+// ─── Unified settings (raw key/value) ────────────────────────────────────────
+
+const RawSettingBody = z.object({
+  key:   z.string().min(1),
+  value: z.string(),
+});
+
+router.get("/admin/settings", authenticate, requireRole("admin"), async (_req, res): Promise<void> => {
+  const rows = await db.select().from(settingsTable).orderBy(asc(settingsTable.key));
+  res.json({ data: rows });
+});
+
+router.patch("/admin/settings", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const parsed = RawSettingBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { key, value } = parsed.data;
+  const [row] = await db
+    .insert(settingsTable)
+    .values({ key, value })
+    .onConflictDoUpdate({ target: settingsTable.key, set: { value } })
+    .returning();
+  res.json(row);
+});
+
+router.get("/admin/settings/:key", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const key = req.params.key as string;
+  const [row] = await db.select().from(settingsTable).where(eq(settingsTable.key, key));
+  if (!row) { res.status(404).json({ error: "Setting not found" }); return; }
+  res.json(row);
 });
 
 export default router;

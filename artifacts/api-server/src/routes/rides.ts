@@ -18,8 +18,7 @@ import {
   sosEventsTable,
   rideShareTokensTable,
   serviceControlsTable,
-  serviceSettingsTable,
-  driverDocumentsTable,
+  carCategoriesTable,
 } from "@workspace/db";
 import crypto from "crypto";
 import { jobQueue } from "../lib/jobQueue";
@@ -28,7 +27,8 @@ import { startWaitingTimer, stopWaitingTimer } from "../lib/waiting-timer";
 import { startNoShowTimer, stopNoShowTimer } from "../lib/no-show-monitor";
 import { isCurrentlyPeakHour } from "../lib/peak-hours";
 import { checkCriminalRecordThreshold } from "../lib/criminal-record";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, asc } from "drizzle-orm";
+import { getAllowedDriverCategorySlugs } from "../lib/car-category";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO, clearDeviationState } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
@@ -117,8 +117,8 @@ const UpdatePricingBody = z.object({
 router.patch("/admin/rides/pricing/:vehicleType", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   try {
     const vehicleType = req.params.vehicleType as string;
-    if (!["car", "bike", "delivery"].includes(vehicleType)) {
-      res.status(400).json({ error: "vehicleType must be 'car', 'bike', or 'delivery'" });
+    if (!["car", "bike", "delivery", "scooter"].includes(vehicleType)) {
+      res.status(400).json({ error: "vehicleType must be 'car', 'bike', 'delivery', or 'scooter'" });
       return;
     }
     const parsed = UpdatePricingBody.safeParse(req.body);
@@ -262,7 +262,7 @@ router.get("/admin/rides/:id", authenticate, requireRole("admin"), async (req, r
 // ─── PASSENGER: ESTIMATE ─────────────────────────────────────────────────────
 
 const EstimateBody = z.object({
-  vehicleType: z.enum(["car", "bike", "delivery"]),
+  vehicleType: z.enum(["car", "bike", "delivery", "scooter"]),
   pickupLatitude: z.number().min(-90).max(90),
   pickupLongitude: z.number().min(-180).max(180),
   dropoffLatitude: z.number().min(-90).max(90),
@@ -338,6 +338,39 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
     const isSurge = surge.isActive;
     if (isSurge) estimatedPrice = estimatedPrice * surgeMultiplier;
 
+    // For car rides, also include per-category pricing
+    let categories: Array<{
+      slug: string; name: string; estimatedPrice: number;
+      baseFare: number; perKmRate: number; perMinuteRate: number; minimumFare: number;
+    }> | undefined;
+    if (vehicleType === "car") {
+      const carCats = await db
+        .select()
+        .from(carCategoriesTable)
+        .where(eq(carCategoriesTable.isActive, true))
+        .orderBy(asc(carCategoriesTable.sortOrder));
+      if (carCats.length > 0) {
+        categories = carCats.map((cat) => {
+          let catPrice = calcPrice(
+            parseFloat(cat.baseFare),
+            parseFloat(cat.perKmRate),
+            parseFloat(cat.minimumFare),
+            distanceKm,
+          );
+          if (isSurge) catPrice *= surgeMultiplier;
+          return {
+            slug: cat.slug,
+            name: cat.name,
+            estimatedPrice: parseFloat(catPrice.toFixed(2)),
+            baseFare: parseFloat(cat.baseFare),
+            perKmRate: parseFloat(cat.perKmRate),
+            perMinuteRate: parseFloat(cat.perMinuteRate),
+            minimumFare: parseFloat(cat.minimumFare),
+          };
+        });
+      }
+    }
+
     res.json({
       data: {
         distanceKm:             parseFloat(distanceKm.toFixed(3)),
@@ -346,6 +379,7 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
         surgeActive:            isSurge,
         surgeMultiplier:        isSurge ? surgeMultiplier : 1,
         pricingSource,
+        ...(categories ? { categories } : {}),
       },
     });
   } catch {
@@ -356,7 +390,7 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
 // ─── PASSENGER: REQUEST ───────────────────────────────────────────────────────
 
 const RequestRideBody = z.object({
-  vehicleType: z.enum(["car", "bike", "delivery"]),
+  vehicleType: z.enum(["car", "bike", "delivery", "scooter"]),
   pickupLatitude: z.number().min(-90).max(90),
   pickupLongitude: z.number().min(-180).max(180),
   pickupAddress: z.string().min(1),
@@ -364,6 +398,7 @@ const RequestRideBody = z.object({
   dropoffLongitude: z.number().min(-180).max(180),
   dropoffAddress: z.string().min(1),
   promoCode: z.string().optional(),
+  categorySlug: z.string().optional(),
   recipientName: z.string().min(1).optional(),
   recipientPhone: z.string().min(1).optional(),
 }).superRefine((data, ctx) => {
@@ -389,6 +424,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       dropoffLongitude,
       dropoffAddress,
       promoCode,
+      categorySlug,
       recipientName,
       recipientPhone,
     } = parsed.data;
@@ -396,7 +432,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
 
     // ── Service availability enforcement ─────────────────────────────────────
     const serviceTypeMap: Record<string, "car" | "motorcycle" | "delivery" | "shuttle"> = {
-      car: "car", bike: "car", motorcycle: "motorcycle", delivery: "delivery",
+      car: "car", bike: "car", motorcycle: "motorcycle", delivery: "delivery", scooter: "motorcycle",
     };
     const serviceType = serviceTypeMap[vehicleType];
     if (serviceType) {
@@ -573,6 +609,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         .values({
           passengerId: userId,
           vehicleType,
+          requestedCategory: vehicleType === "car" && categorySlug ? categorySlug : null,
           pickupLatitude,
           pickupLongitude,
           pickupAddress,
@@ -619,12 +656,17 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
       },
     });
 
+    const dispatchVehicleType = vehicleType === "scooter" ? "motorcycle" : vehicleType;
+    const dispatchCategorySlugs = vehicleType === "car" && categorySlug
+      ? getAllowedDriverCategorySlugs(categorySlug)
+      : undefined;
+
     dispatchManager.startDispatch(
       ride.id,
       userId,
       pickupLatitude,
       pickupLongitude,
-      vehicleType,
+      dispatchVehicleType,
       {
         rideId:         ride.id,
         vehicleType,
@@ -633,6 +675,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         distanceKm:     parseFloat(distanceKm.toFixed(3)),
         estimatedPrice: discountedPrice,
       },
+      dispatchCategorySlugs,
     ).catch((err) => console.error("Dispatch start error", err));
 
     res.status(201).json({ data: parseRide(ride as unknown as Record<string, unknown>) });
@@ -991,7 +1034,9 @@ router.get("/driver/rides/available", authenticate, requireRole("driver"), async
     }
 
     const conditions: ReturnType<typeof eq>[] = [eq(ridesTable.status, "searching")];
-    if (driver.vehicleType) {
+    if (driver.vehicleType === "motorcycle") {
+      conditions.push(sql`${ridesTable.vehicleType} IN ('motorcycle', 'scooter')` as unknown as ReturnType<typeof eq>);
+    } else if (driver.vehicleType) {
       conditions.push(eq(ridesTable.vehicleType, driver.vehicleType));
     }
 
@@ -1033,83 +1078,6 @@ router.patch("/driver/rides/:id/accept", authenticate, requireRole("driver"), as
       return;
     }
 
-    // ── Driver requirements enforcement ──────────────────────────────────────
-    const svcTypeMap: Record<string, "car" | "motorcycle" | "delivery" | "shuttle"> = {
-      car: "car", bike: "car", motorcycle: "motorcycle", delivery: "delivery",
-    };
-    const rideSvcType = svcTypeMap[ride.vehicleType ?? ""];
-    if (rideSvcType) {
-      const [settings] = await db
-        .select()
-        .from(serviceSettingsTable)
-        .where(eq(serviceSettingsTable.serviceType, rideSvcType));
-
-      if (settings) {
-        const driverRating = parseFloat(driver.rating as string);
-        const minRating = parseFloat(settings.minDriverRating as string);
-        if (driverRating < minRating) {
-          res.status(403).json({
-            error: `Your rating (${driverRating.toFixed(1)}) is below the minimum required (${minRating.toFixed(1)}) for this service.`,
-            code: "DRIVER_RATING_TOO_LOW",
-          });
-          return;
-        }
-
-        if (settings.requireInsurance) {
-          const [insuranceDoc] = await db
-            .select({ id: driverDocumentsTable.id })
-            .from(driverDocumentsTable)
-            .where(and(
-              eq(driverDocumentsTable.driverId, driver.id),
-              eq(driverDocumentsTable.type, "vehicle_license_front"),
-              eq(driverDocumentsTable.verificationStatus, "approved"),
-            ));
-          if (!insuranceDoc) {
-            res.status(403).json({
-              error: "This service requires an approved vehicle insurance document.",
-              code: "INSURANCE_REQUIRED",
-            });
-            return;
-          }
-        }
-
-        if (settings.requireBackgroundCheck) {
-          const [bgDoc] = await db
-            .select({ id: driverDocumentsTable.id })
-            .from(driverDocumentsTable)
-            .where(and(
-              eq(driverDocumentsTable.driverId, driver.id),
-              eq(driverDocumentsTable.type, "criminal_record"),
-              eq(driverDocumentsTable.verificationStatus, "approved"),
-            ));
-          if (!bgDoc) {
-            res.status(403).json({
-              error: "This service requires an approved background check.",
-              code: "BACKGROUND_CHECK_REQUIRED",
-            });
-            return;
-          }
-        }
-
-        if (settings.maxActiveRidesPerDriver > 0) {
-          const [countRow] = await db
-            .select({ count: sql<number>`count(*)::int` })
-            .from(ridesTable)
-            .where(and(
-              eq(ridesTable.driverId, driver.id),
-              sql`${ridesTable.status} IN ('driver_assigned', 'accepted', 'arrived', 'in_progress')`,
-            ));
-          if ((countRow?.count ?? 0) >= settings.maxActiveRidesPerDriver) {
-            res.status(409).json({
-              error: `You have reached the maximum active rides limit (${settings.maxActiveRidesPerDriver}) for this service.`,
-              code: "MAX_ACTIVE_RIDES_REACHED",
-            });
-            return;
-          }
-        }
-      }
-    }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const [updated] = await db
       .update(ridesTable)
@@ -1808,12 +1776,13 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
       estimatedPrice: Number(ride.estimatedPrice ?? 0),
     };
 
+    const restartVehicleType = ride.vehicleType === "scooter" ? "motorcycle" : ride.vehicleType;
     await dispatchManager.restartDispatch(
       rideId,
       ride.passengerId,
       ride.pickupLatitude,
       ride.pickupLongitude,
-      ride.vehicleType,
+      restartVehicleType,
       offerPayload,
     );
 

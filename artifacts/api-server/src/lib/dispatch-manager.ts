@@ -1,4 +1,4 @@
-import { db, ridesTable, driversTable, rideEventsTable, rideDispatchStateTable, usersTable, walletTransactionsTable } from "@workspace/db";
+import { db, ridesTable, driversTable, rideEventsTable, rideDispatchStateTable, usersTable, walletTransactionsTable, vehiclesTable, carCategoriesTable } from "@workspace/db";
 import { eq, and, sql, not, inArray } from "drizzle-orm";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "./socket-events";
@@ -117,6 +117,15 @@ interface DriverCandidate {
  *   distanceScore is normalised against the actual radiusKm used so scores
  *   stay in [0,1] regardless of which radius tier is active.
  */
+function allowedSlugsForCategory(categorySlug: string): string[] {
+  switch (categorySlug) {
+    case "economy":      return ["economy", "economy_plus", "comfort"];
+    case "economy_plus": return ["economy_plus", "comfort"];
+    case "comfort":      return ["comfort"];
+    default:             return [];
+  }
+}
+
 async function findNextBatch(
   vehicleType: string,
   pickupLat: number,
@@ -124,6 +133,7 @@ async function findNextBatch(
   excludeDriverIds: number[],
   radiusKm: number,
   batchSize: number,
+  allowedCategorySlugs?: string[],
 ): Promise<DriverCandidate[]> {
   const stalenessCutoff = new Date(Date.now() - LOCATION_STALENESS_MINUTES * 60 * 1000);
   const distanceExpr    = haversineKmSql(pickupLat, pickupLng, driversTable.currentLatitude, driversTable.currentLongitude);
@@ -160,9 +170,22 @@ async function findNextBatch(
     sql`(${driversTable.cooldownUntil} IS NULL OR ${driversTable.cooldownUntil} <= NOW())`,
   );
 
-  const conditions = excludeDriverIds.length > 0
+  let conditions = excludeDriverIds.length > 0
     ? and(baseConditions, not(inArray(driversTable.id, excludeDriverIds)))
     : baseConditions;
+
+  if (allowedCategorySlugs && allowedCategorySlugs.length > 0) {
+    const categorySubq = db
+      .select({ driverId: vehiclesTable.driverId })
+      .from(vehiclesTable)
+      .innerJoin(carCategoriesTable, eq(carCategoriesTable.id, vehiclesTable.categoryId))
+      .where(and(
+        eq(vehiclesTable.status, "verified"),
+        eq(vehiclesTable.isActive, true),
+        inArray(carCategoriesTable.slug, allowedCategorySlugs),
+      ));
+    conditions = and(conditions, inArray(driversTable.id, categorySubq));
+  }
 
   const rows = await db
     .select({
@@ -199,9 +222,10 @@ async function findNextBatchWithExpansion(
   excludeDriverIds: number[],
   radiusSteps: number[],
   batchSize: number,
+  allowedCategorySlugs?: string[],
 ): Promise<{ drivers: DriverCandidate[]; radiusUsedKm: number }> {
   for (const radiusKm of radiusSteps) {
-    const drivers = await findNextBatch(vehicleType, pickupLat, pickupLng, excludeDriverIds, radiusKm, batchSize);
+    const drivers = await findNextBatch(vehicleType, pickupLat, pickupLng, excludeDriverIds, radiusKm, batchSize, allowedCategorySlugs);
     if (drivers.length > 0) {
       if (radiusKm > radiusSteps[0]) {
         logger.info({ radiusKm, driverCount: drivers.length }, "Dispatch radius expanded — drivers found beyond first radius step");
@@ -359,6 +383,7 @@ export async function startDispatch(
   pickupLng:   number,
   vehicleType: string,
   offerPayload: Record<string, unknown>,
+  allowedCategorySlugs?: string[],
 ): Promise<void> {
   await db.insert(rideDispatchStateTable).values({
     rideId,
@@ -370,7 +395,7 @@ export async function startDispatch(
   });
 
   const { batchSize, radiusSteps, isPeak } = await getDispatchSettings();
-  const { drivers: batch, radiusUsedKm }   = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, [], radiusSteps, batchSize);
+  const { drivers: batch, radiusUsedKm }   = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, [], radiusSteps, batchSize, allowedCategorySlugs);
 
   if (batch.length === 0) {
     await cancelRideNoDrivers(rideId, passengerId);
@@ -391,7 +416,7 @@ export async function startDispatch(
  */
 export async function advanceRound(rideId: number): Promise<void> {
   const [ride] = await db
-    .select({ id: ridesTable.id, status: ridesTable.status, passengerId: ridesTable.passengerId, vehicleType: ridesTable.vehicleType, pickupLatitude: ridesTable.pickupLatitude, pickupLongitude: ridesTable.pickupLongitude, pickupAddress: ridesTable.pickupAddress, dropoffAddress: ridesTable.dropoffAddress, distanceKm: ridesTable.distanceKm, estimatedPrice: ridesTable.estimatedPrice })
+    .select({ id: ridesTable.id, status: ridesTable.status, passengerId: ridesTable.passengerId, vehicleType: ridesTable.vehicleType, requestedCategory: ridesTable.requestedCategory, pickupLatitude: ridesTable.pickupLatitude, pickupLongitude: ridesTable.pickupLongitude, pickupAddress: ridesTable.pickupAddress, dropoffAddress: ridesTable.dropoffAddress, distanceKm: ridesTable.distanceKm, estimatedPrice: ridesTable.estimatedPrice })
     .from(ridesTable)
     .where(eq(ridesTable.id, rideId));
 
@@ -449,9 +474,10 @@ export async function advanceRound(rideId: number): Promise<void> {
   };
 
   const { batchSize, radiusSteps, isPeak } = await getDispatchSettings();
+  const allowedCategorySlugs = ride.requestedCategory ? allowedSlugsForCategory(ride.requestedCategory) : undefined;
 
   let notifiedIds = state.notifiedIds as number[];
-  let { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, notifiedIds, radiusSteps, batchSize);
+  let { drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, notifiedIds, radiusSteps, batchSize, allowedCategorySlugs);
 
   if (batch.length === 0 && notifiedIds.length > 0) {
     logger.info({ rideId }, "Dispatch exhaustion — restarting cycle from beginning");
@@ -462,7 +488,7 @@ export async function advanceRound(rideId: number): Promise<void> {
       .set({ notifiedIds: [] })
       .where(eq(rideDispatchStateTable.rideId, rideId));
 
-    ({ drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, [], radiusSteps, batchSize));
+    ({ drivers: batch, radiusUsedKm } = await findNextBatchWithExpansion(ride.vehicleType, ride.pickupLatitude, ride.pickupLongitude, [], radiusSteps, batchSize, allowedCategorySlugs));
   }
 
   if (batch.length === 0) {
@@ -536,6 +562,7 @@ export async function restartDispatch(
   pickupLng:    number,
   vehicleType:  string,
   offerPayload: Record<string, unknown>,
+  allowedCategorySlugs?: string[],
 ): Promise<void> {
   cancelTimer(rideId);
 
@@ -564,7 +591,7 @@ export async function restartDispatch(
     });
 
   const { batchSize, radiusSteps, isPeak } = await getDispatchSettings();
-  const { drivers: batch, radiusUsedKm }   = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, [], radiusSteps, batchSize);
+  const { drivers: batch, radiusUsedKm }   = await findNextBatchWithExpansion(vehicleType, pickupLat, pickupLng, [], radiusSteps, batchSize, allowedCategorySlugs);
 
   if (batch.length === 0) {
     await cancelRideNoDrivers(rideId, passengerId);

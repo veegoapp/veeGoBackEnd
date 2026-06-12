@@ -3,6 +3,7 @@ import { db, vehiclesTable, driversTable } from "@workspace/db";
 import { eq, sql, ilike, and, type SQL } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { writeAuditLog, getClientIp } from "../lib/auditLog";
+import { resolveCarCategory } from "../lib/car-category";
 import { z } from "zod";
 
 const router = Router();
@@ -18,27 +19,42 @@ const ListVehiclesQuery = z.object({
 const VehicleIdParam = z.object({ id: z.coerce.number().int() });
 
 const CreateVehicleBody = z.object({
-  driverId: z.number().int(),
+  driverId:    z.number().int(),
   plateNumber: z.string().min(1),
-  make: z.string().min(1),
-  model: z.string().min(1),
-  year: z.number().int().min(1900).max(new Date().getFullYear() + 1),
-  color: z.string().min(1),
+  make:        z.string().min(1),
+  model:       z.string().min(1),
+  year:        z.number().int().min(1900).max(new Date().getFullYear() + 1),
+  color:       z.string().min(1),
   vehicleType: z.enum(["car", "motorcycle", "van", "minibus"]),
-  status: z.enum(["pending", "verified", "rejected", "suspended"]).optional(),
-  isActive: z.boolean().optional(),
+  status:      z.enum(["pending", "verified", "rejected", "suspended"]).optional(),
+  isActive:    z.boolean().optional(),
+  brandId:     z.number().int().optional(),
+  modelId:     z.number().int().optional(),
+  colorId:     z.number().int().optional(),
 });
 
 const UpdateVehicleBody = z.object({
   plateNumber: z.string().min(1).optional(),
-  make: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-  year: z.number().int().min(1900).optional(),
-  color: z.string().min(1).optional(),
+  make:        z.string().min(1).optional(),
+  model:       z.string().min(1).optional(),
+  year:        z.number().int().min(1900).optional(),
+  color:       z.string().min(1).optional(),
   vehicleType: z.enum(["car", "motorcycle", "van", "minibus"]).optional(),
-  status: z.enum(["pending", "verified", "rejected", "suspended"]).optional(),
-  isActive: z.boolean().optional(),
+  status:      z.enum(["pending", "verified", "rejected", "suspended"]).optional(),
+  isActive:    z.boolean().optional(),
+  brandId:     z.number().int().nullable().optional(),
+  modelId:     z.number().int().nullable().optional(),
+  colorId:     z.number().int().nullable().optional(),
 });
+
+async function resolveCategoryId(year: number, brandId?: number | null): Promise<number | null> {
+  try {
+    const result = await resolveCarCategory(year, brandId ?? undefined);
+    return result.categoryId;
+  } catch {
+    return null;
+  }
+}
 
 router.get("/vehicles", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = ListVehiclesQuery.safeParse(req.query);
@@ -93,7 +109,16 @@ router.get("/vehicles", authenticate, requireRole("admin"), async (req, res): Pr
 router.post("/vehicles", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
   const parsed = CreateVehicleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const [vehicle] = await db.insert(vehiclesTable).values(parsed.data).returning();
+
+  let categoryId: number | null = null;
+  if (parsed.data.vehicleType === "car") {
+    categoryId = await resolveCategoryId(parsed.data.year, parsed.data.brandId);
+  }
+
+  const [vehicle] = await db.insert(vehiclesTable).values({
+    ...parsed.data,
+    ...(categoryId !== null ? { categoryId } : {}),
+  }).returning();
   void writeAuditLog({
     userId: req.user?.id,
     action: "CREATE",
@@ -140,9 +165,20 @@ router.patch("/vehicles/:id", authenticate, requireRole("admin"), async (req, re
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const [existing] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, params.data.id));
   if (!existing) { res.status(404).json({ error: "Vehicle not found" }); return; }
+
+  const effectiveVehicleType = parsed.data.vehicleType ?? existing.vehicleType;
+  const effectiveYear        = parsed.data.year        ?? existing.year;
+  let categoryId: number | null | undefined;
+  if (effectiveVehicleType === "car" && (parsed.data.vehicleType !== undefined || parsed.data.year !== undefined || parsed.data.brandId !== undefined)) {
+    categoryId = await resolveCategoryId(effectiveYear, parsed.data.brandId !== undefined ? parsed.data.brandId : existing.brandId);
+  }
+
   const [updated] = await db
     .update(vehiclesTable)
-    .set(parsed.data)
+    .set({
+      ...parsed.data,
+      ...(categoryId !== undefined ? { categoryId } : {}),
+    })
     .where(eq(vehiclesTable.id, params.data.id))
     .returning();
   void writeAuditLog({

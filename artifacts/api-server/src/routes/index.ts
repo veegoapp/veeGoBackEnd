@@ -35,6 +35,7 @@ import trackRouter from "./track";
 import schedulesRouter from "./schedules";
 import shuttleTripsAdminRouter from "./shuttleTripsAdmin";
 import shuttleVehicleTypesRouter from "./shuttleVehicleTypes";
+import vehicleCatalogRouter from "./vehicleCatalog";
 
 const router: IRouter = Router();
 
@@ -74,5 +75,6 @@ router.use(trackRouter);
 router.use(schedulesRouter);
 router.use(shuttleTripsAdminRouter);
 router.use(shuttleVehicleTypesRouter);
+router.use(vehicleCatalogRouter);
 
 export default router;

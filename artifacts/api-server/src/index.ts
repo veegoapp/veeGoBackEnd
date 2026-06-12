@@ -2,7 +2,7 @@ import http from "http";
 import app from "./app";
 import { initSocket } from "./socket";
 import { logger } from "./lib/logger";
-import { pool, db, ridePricingTable } from "@workspace/db";
+import { pool, db, ridePricingTable, vehicleColorsTable, carCategoriesTable, settingsTable } from "@workspace/db";
 import { startRideTimeoutJob } from "./lib/ride-timeout";
 import { startCheckinMonitor } from "./lib/checkin-monitor";
 import { startShuttleJob } from "./lib/shuttle-job";
@@ -91,7 +91,7 @@ async function main() {
   await verifyDatabaseConnection();
   await verifyCoreTables();
   await seedSuperAdmin();
-  // Fix 4: Seed default delivery pricing if not already present
+  // Seed default delivery pricing if not already present
   try {
     await db.insert(ridePricingTable).values({
       vehicleType: "delivery",
@@ -104,6 +104,64 @@ async function main() {
   } catch (_seedErr) {
     // Non-fatal if delivery pricing already exists
   }
+
+  // Seed scooter pricing (Fix 3)
+  try {
+    await db.insert(ridePricingTable).values({
+      vehicleType: "scooter",
+      baseFare: "3.00",
+      perKmRate: "2.00",
+      perMinuteRate: "0.30",
+      minimumFare: "8.00",
+      isActive: true,
+    }).onConflictDoNothing();
+  } catch (_seedErr) { /* non-fatal */ }
+
+  // Seed car categories (Fix 2)
+  try {
+    const CAR_CATEGORIES = [
+      { slug: "economy",      name: "Economy",      minYear: 2000, maxYear: 2007, baseFare: "10.00", perKmRate: "3.50", perMinuteRate: "0.50", minimumFare: "15.00", isActive: true, sortOrder: 1 },
+      { slug: "economy_plus", name: "Economy Plus", minYear: 2008, maxYear: 2019, baseFare: "12.00", perKmRate: "4.00", perMinuteRate: "0.75", minimumFare: "20.00", isActive: true, sortOrder: 2 },
+      { slug: "comfort",      name: "Comfort",      minYear: 2020, maxYear: null, baseFare: "15.00", perKmRate: "5.00", perMinuteRate: "1.00", minimumFare: "25.00", isActive: true, sortOrder: 3 },
+    ] as const;
+    for (const cat of CAR_CATEGORIES) {
+      await db.insert(carCategoriesTable).values(cat).onConflictDoNothing();
+    }
+  } catch (_seedErr) { /* non-fatal */ }
+
+  // Seed vehicle colors
+  try {
+    const COLORS = [
+      { nameAr: "أبيض", nameEn: "White",  hexCode: "#FFFFFF" },
+      { nameAr: "أسود", nameEn: "Black",  hexCode: "#000000" },
+      { nameAr: "رمادي", nameEn: "Gray",  hexCode: "#808080" },
+      { nameAr: "فضي",  nameEn: "Silver", hexCode: "#C0C0C0" },
+      { nameAr: "أحمر", nameEn: "Red",    hexCode: "#FF0000" },
+      { nameAr: "أزرق", nameEn: "Blue",   hexCode: "#0000FF" },
+      { nameAr: "أخضر", nameEn: "Green",  hexCode: "#008000" },
+      { nameAr: "بني",  nameEn: "Brown",  hexCode: "#8B4513" },
+      { nameAr: "بيج",  nameEn: "Beige",  hexCode: "#F5F5DC" },
+      { nameAr: "ذهبي", nameEn: "Gold",   hexCode: "#FFD700" },
+    ];
+    for (const c of COLORS) {
+      await db.insert(vehicleColorsTable).values(c).onConflictDoNothing();
+    }
+  } catch (_seedErr) { /* non-fatal */ }
+
+  // Seed default settings keys (Fix 4)
+  try {
+    const DEFAULT_SETTINGS = [
+      { key: "commission_rate",               value: "15" },
+      { key: "dispatch_radius_km",            value: "5"  },
+      { key: "dispatch_max_radius_km",        value: "7"  },
+      { key: "dispatch_offer_timeout_seconds",value: "15" },
+      { key: "no_show_fee_egp",               value: "15" },
+      { key: "cancellation_grace_hours",      value: "10" },
+    ];
+    for (const s of DEFAULT_SETTINGS) {
+      await db.insert(settingsTable).values(s).onConflictDoNothing();
+    }
+  } catch (_seedErr) { /* non-fatal */ }
   await registerDefaultHandlers();
   // Seed in-memory surge map from DB before the socket server starts accepting
   // connections — passengers receive an accurate snapshot immediately on connect.

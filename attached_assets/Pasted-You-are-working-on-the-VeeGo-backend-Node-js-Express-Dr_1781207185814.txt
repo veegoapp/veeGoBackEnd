@@ -1,0 +1,324 @@
+You are working on the VeeGo backend (Node.js + Express + Drizzle ORM + PostgreSQL).
+
+You have ONE job: complete 4 fixes in order. Do not move to the next fix 
+until the current one is fully done and tested.
+
+After ALL 4 fixes, generate a file called `phase3_report.md`.
+
+---
+
+## FIX 1 — Vehicle Brand / Model / Color Database System
+
+**Problem:**
+There is no structured system for vehicle brands, models, and colors in the 
+backend. We need to build this system so that:
+- Admin adds all brands, models, and colors from the admin dashboard
+- Driver app fetches them and shows dropdowns for the driver to select from
+
+**What to do:**
+
+1. Create table `vehicleBrands`:
+   - `id` (serial, PK)
+   - `name` (text, unique) — e.g. "Toyota", "Kia", "BYD"
+   - `isChinese` (boolean, default false)
+   - `isActive` (boolean, default true)
+   - `createdAt` (timestamp)
+
+2. Create table `vehicleModels`:
+   - `id` (serial, PK)
+   - `brandId` (FK → vehicleBrands.id, cascade delete)
+   - `name` (text) — e.g. "Corolla", "Cerato"
+   - `minYear` (integer) — first production year for this model
+   - `maxYear` (integer, nullable) — last production year, null = still produced
+   - `isActive` (boolean, default true)
+   - `createdAt` (timestamp)
+
+3. Create table `vehicleColors`:
+   - `id` (serial, PK)
+   - `nameAr` (text) — e.g. "أبيض"
+   - `nameEn` (text) — e.g. "White"
+   - `hexCode` (text, nullable)
+   - `isActive` (boolean, default true)
+
+4. Seed default colors immediately:
+   - أبيض / White — #FFFFFF
+   - أسود / Black — #000000
+   - فضي / Silver — #C0C0C0
+   - رمادي / Gray — #808080
+   - أحمر / Red — #FF0000
+   - أزرق / Blue — #0000FF
+   - أزرق غامق / Dark Blue — #00008B
+   - بيج / Beige — #F5F5DC
+   - بني / Brown — #8B4513
+   - ذهبي / Golden — #FFD700
+   - أخضر / Green — #008000
+   - برتقالي / Orange — #FFA500
+   - أصفر / Yellow — #FFFF00
+   - أبيض لؤلؤي / Pearl White — #F8F8FF
+   - شامبين / Champagne — #F7E7CE
+
+   Use `onConflictDoNothing()` — idempotent seed.
+
+5. Add 3 new nullable FK columns to existing `vehicles` table:
+   - `brandId` (FK → vehicleBrands.id, nullable)
+   - `modelId` (FK → vehicleModels.id, nullable)
+   - `colorId` (FK → vehicleColors.id, nullable)
+   - Do NOT remove existing `make`, `model`, `color` text columns
+
+6. Admin CRUD endpoints:
+
+   Brands:
+   - `GET /api/admin/vehicle-brands` — list all (?isActive filter)
+   - `POST /api/admin/vehicle-brands` — create
+   - `PATCH /api/admin/vehicle-brands/:id` — update (name, isChinese, isActive)
+   - `DELETE /api/admin/vehicle-brands/:id` — soft delete (isActive = false)
+
+   Models:
+   - `GET /api/admin/vehicle-models` — list all (?brandId, ?isActive filters)
+   - `POST /api/admin/vehicle-models` — create
+   - `PATCH /api/admin/vehicle-models/:id` — update
+   - `DELETE /api/admin/vehicle-models/:id` — soft delete
+
+   Colors:
+   - `GET /api/admin/vehicle-colors` — list all
+   - `POST /api/admin/vehicle-colors` — create
+   - `PATCH /api/admin/vehicle-colors/:id` — update
+   - `DELETE /api/admin/vehicle-colors/:id` — soft delete
+
+7. Bulk import endpoint (critical — we will use this to import all brands 
+   and models from a JSON file):
+   - `POST /api/admin/vehicle-brands/bulk-import`
+   - Accepts:
+```json
+   {
+     "brands": [
+       {
+         "name": "Toyota",
+         "isChinese": false,
+         "models": [
+           { "name": "Corolla", "minYear": 1966, "maxYear": null },
+           { "name": "Camry", "minYear": 1982, "maxYear": null }
+         ]
+       }
+     ]
+   }
+```
+   - Use upsert for brands (ON CONFLICT name DO UPDATE)
+   - Use upsert for models (ON CONFLICT brandId + name DO UPDATE)
+   - Run in single DB transaction
+   - Return: `{ brandsCreated, brandsUpdated, modelsCreated, modelsUpdated }`
+
+8. Public endpoints for driver app (authenticated, any role):
+   - `GET /api/vehicles/brands` 
+     → all active brands (id, name, isChinese)
+   - `GET /api/vehicles/brands/:brandId/models` 
+     → active models for this brand (id, name, minYear, maxYear)
+   - `GET /api/vehicles/models/:modelId/years` 
+     → array of valid years [minYear ... min(maxYear, currentYear)]
+   - `GET /api/vehicles/colors` 
+     → all active colors (id, nameAr, nameEn, hexCode)
+
+**Test:**
+- `GET /api/vehicles/brands` → empty (no brands yet — correct)
+- `POST /api/admin/vehicle-brands/bulk-import` with Toyota example
+  → { brandsCreated: 1, modelsCreated: 2 }
+- `GET /api/vehicles/brands` → returns Toyota
+- `GET /api/vehicles/brands/1/models` → returns Corolla, Camry
+- `GET /api/vehicles/models/1/years` → [1966, 1967, ..., 2026]
+- `GET /api/vehicles/colors` → returns 15 colors
+- Run same bulk import again → { brandsCreated: 0, brandsUpdated: 1, 
+  modelsCreated: 0, modelsUpdated: 2 } — no duplicates
+
+---
+
+## FIX 2 — Car Service Category System (Economy / Economy Plus / Comfort)
+
+**Problem:**
+The Car service currently uses a generic `vehicleType: "car"` with no category 
+distinction. The spec requires 3 categories based on vehicle manufacture year,
+with special rules for Chinese brands.
+
+**Category Rules (default — must be configurable from admin):**
+
+Default year ranges:
+- Economy:       year 2000 → 2007
+- Economy Plus:  year 2008 → 2019
+- Comfort:       year 2020 → current year
+
+Chinese brands exception:
+- Economy Plus starts from 2014 (not 2008) for Chinese brands
+- Chinese brand is determined by `isChinese = true` in `vehicleBrands` table
+  (already built in FIX 1 — do not create a separate chineseBrands table)
+
+Cross-category rules:
+- Comfort driver → can accept Economy, Economy Plus, Comfort rides
+- Economy Plus driver → can accept Economy, Economy Plus rides
+- Economy driver → can ONLY accept Economy rides
+
+**What to do:**
+
+1. Create table `carCategories`:
+   - `id` (serial, PK)
+   - `name` (text) — "Economy", "Economy Plus", "Comfort"
+   - `slug` (text, unique) — "economy", "economy_plus", "comfort"
+   - `minYear` (integer)
+   - `maxYear` (integer, nullable — null = current year)
+   - `baseFare` (numeric 10,2)
+   - `perKmRate` (numeric 10,2)
+   - `perMinuteRate` (numeric 10,2)
+   - `minimumFare` (numeric 10,2)
+   - `isActive` (boolean, default true)
+   - `sortOrder` (integer)
+   - `createdAt` (timestamp)
+
+2. Seed 3 categories:
+   - Economy:      minYear=2000, maxYear=2007, baseFare=8,  perKm=4,   perMin=0.5, minFare=15, sortOrder=1
+   - Economy Plus: minYear=2008, maxYear=2019, baseFare=12, perKm=5.5, perMin=0.7, minFare=20, sortOrder=2
+   - Comfort:      minYear=2020, maxYear=null,  baseFare=18, perKm=7,   perMin=1.0, minFare=30, sortOrder=3
+
+3. Add column `categoryId` (FK → carCategories, nullable) to `vehicles` table
+
+4. Create helper function `resolveCarCategory(brandId: number, year: number)`:
+   - Lookup brand in `vehicleBrands` to get `isChinese`
+   - If isChinese = true:
+     - year < 2014 → Economy
+     - year 2014-2019 → Economy Plus
+     - year >= 2020 → Comfort
+   - If isChinese = false: use standard ranges from `carCategories` table
+   - If year < 2000 → throw error "Vehicle year not accepted"
+   - Returns `{ categoryId, slug, name }`
+
+5. Auto-resolve and save categoryId:
+   - In `POST /api/vehicles`: call resolveCarCategory(brandId, year)
+   - In `PATCH /api/vehicles/:id`: re-resolve if brandId or year changed
+   - In driver registration vehicle step: resolve and save
+
+6. Update `POST /api/rides/request`:
+   - Accept optional `categorySlug`
+   - If not provided → default to "economy"
+   - Dispatch based on cross-category rules above
+   - Save `requestedCategory` on ride (add nullable text column to rides table)
+
+7. Update `POST /api/rides/estimate`:
+   - If no categorySlug → return all 3 active categories with pricing as array
+   - If categorySlug → return that category pricing only
+
+8. Admin endpoints:
+   - `GET /api/admin/car-categories` — list all
+   - `PATCH /api/admin/car-categories/:id` — update any field
+
+9. Public endpoint:
+   - `GET /api/car/categories` — active categories sorted by sortOrder
+
+**Test:**
+- Vehicle: brandId=Toyota(non-Chinese), year=2005 → Economy
+- Vehicle: brandId=Toyota, year=2015 → Economy Plus
+- Vehicle: brandId=Toyota, year=2022 → Comfort
+- Vehicle: brandId=BYD(isChinese=true), year=2012 → Economy
+- Vehicle: brandId=BYD, year=2016 → Economy Plus
+- `POST /api/rides/estimate` no slug → returns 3 categories
+- `POST /api/rides/request` slug="economy" → dispatches Economy+EcoPlus+Comfort drivers
+- `POST /api/rides/request` slug="comfort" → Comfort drivers only
+
+---
+
+## FIX 3 — Scooter Pricing Separation
+
+**Problem:**
+Scooter shares pricing with "bike". Needs its own entry.
+
+**What to do:**
+
+1. Add "scooter" to vehicleType enum in `lib/db/src/schema/ridePricing.ts`
+
+2. Seed scooter pricing on server startup:
+   `{ vehicleType: "scooter", baseFare: 6, perKmRate: 3.5, 
+     perMinuteRate: 0.5, minimumFare: 12, isActive: true }`
+   Use `onConflictDoNothing()`
+
+3. In `artifacts/api-server/src/routes/rides.ts`:
+   - Add "scooter" to valid vehicleTypes in EstimateBody and RequestRideBody
+   - Dispatch for scooter: match drivers with vehicleType "scooter" or "motorcycle"
+
+4. In `PATCH /api/admin/rides/pricing/:vehicleType`:
+   - Add "scooter" as valid type
+
+**Test:**
+- `POST /api/rides/estimate` vehicleType="scooter" → scooter pricing
+- `POST /api/rides/request` vehicleType="scooter" → dispatches to scooter drivers
+- `PATCH /api/admin/rides/pricing/scooter` → updates correctly
+
+---
+
+## FIX 4 — Unified Settings System
+
+**Problem:**
+Two competing settings systems exist simultaneously:
+1. Key-value `settings` table
+2. Structured `serviceSettings` table
+
+**What to do:**
+
+1. Keep `settings` key-value table as single source of truth
+2. Remove all reads/writes to `serviceSettings` table from all routes
+3. Create unified endpoints:
+   - `GET /api/admin/settings` — all settings grouped by prefix:
+     wallet_* / criminal_record_* / shuttle_* / dispatch_* / pricing_*
+   - `PATCH /api/admin/settings` — `{ key, value }` upsert
+   - `GET /api/admin/settings/:key` — single key lookup
+
+4. Migrate scattered endpoints:
+   - `PATCH /api/admin/settings/commission` → key `commission_rate`
+   - Keep `PATCH /api/admin/surge-settings` as-is (complex logic)
+
+5. Seed these default keys if missing:
+   - `commission_rate` → "15"
+   - `dispatch_radius_km` → "5"
+   - `dispatch_max_radius_km` → "7"
+   - `dispatch_offer_timeout_seconds` → "15"
+   - `no_show_fee_egp` → "15"
+   - `cancellation_grace_hours` → "10"
+
+**Test:**
+- `GET /api/admin/settings` → all settings grouped
+- `PATCH /api/admin/settings` `{ key: "no_show_fee_egp", value: "20" }` → updated
+- `GET /api/admin/settings/commission_rate` → "15"
+- No route reads from `serviceSettings` table anymore
+
+---
+
+## REPORT
+
+Generate `phase3_report.md`:
+
+# VeeGo Backend — Phase 3 Report
+
+## Fix 1 — Vehicle Brand/Model/Color System
+- Tables created + fields
+- Bulk import logic
+- Public endpoints for driver app
+- Test results
+
+## Fix 2 — Car Category System
+- Tables created + fields
+- resolveCarCategory logic
+- Cross-category dispatch rules
+- Admin + public endpoints
+- Test results
+
+## Fix 3 — Scooter Pricing
+- Files changed + lines
+- New pricing entry
+- Test results
+
+## Fix 4 — Unified Settings
+- What was removed
+- New endpoints
+- Default keys seeded
+- Test results
+
+## All New / Modified Endpoints Summary
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+
+Be specific. Include file names and line numbers for every change.

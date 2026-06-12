@@ -1,7 +1,8 @@
 import { Router } from "express";
-import { db, serviceControlsTable, serviceControlLogsTable, serviceSettingsTable } from "@workspace/db";
+import { db, serviceControlsTable, serviceControlLogsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
+import { loadSetting, saveSetting } from "../lib/settings";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
 import {
@@ -49,9 +50,17 @@ const DEFAULT_CONTROL = {
   maxActiveRides: null,
 };
 
-const DEFAULT_SETTINGS = {
-  minDriverRating: "0.0",
-  requiredLicenseTypes: [] as string[],
+type ServiceRequirements = {
+  minDriverRating: number;
+  requiredLicenseTypes: string[];
+  requireInsurance: boolean;
+  requireBackgroundCheck: boolean;
+  maxActiveRidesPerDriver: number;
+};
+
+const DEFAULT_SERVICE_REQUIREMENTS: ServiceRequirements = {
+  minDriverRating: 0,
+  requiredLicenseTypes: [],
   requireInsurance: false,
   requireBackgroundCheck: false,
   maxActiveRidesPerDriver: 1,
@@ -72,20 +81,6 @@ async function ensureServiceControl(type: InternalServiceType) {
   return created;
 }
 
-async function ensureServiceSettings(type: InternalServiceType) {
-  const [existing] = await db
-    .select()
-    .from(serviceSettingsTable)
-    .where(eq(serviceSettingsTable.serviceType, type));
-
-  if (existing) return existing;
-
-  const [created] = await db
-    .insert(serviceSettingsTable)
-    .values({ serviceType: type, ...DEFAULT_SETTINGS })
-    .returning();
-  return created;
-}
 
 async function getLastLogs(type: InternalServiceType, limit = 10) {
   return db
@@ -125,13 +120,6 @@ function mapControl(row: Record<string, unknown>) {
   };
 }
 
-/** Map a raw DB settings row to the public-facing shape. */
-function mapSettings(row: Record<string, unknown>) {
-  return {
-    ...row,
-    serviceType: toPublic(row.serviceType as string),
-  };
-}
 
 // ─── ADMIN: SERVICE CONTROL endpoints ────────────────────────────────────────
 
@@ -266,11 +254,8 @@ router.get("/admin/services/:type/settings", authenticate, requireRole("admin"),
   const internalType = toInternal(params.data.type)!;
 
   try {
-    const settings = await ensureServiceSettings(internalType);
-    res.json({
-      ...mapSettings(settings as unknown as Record<string, unknown>),
-      minDriverRating: parseFloat(settings.minDriverRating as string),
-    });
+    const settings = await loadSetting<ServiceRequirements>(`service_req:${internalType}`, DEFAULT_SERVICE_REQUIREMENTS);
+    res.json({ serviceType: toPublic(internalType), ...settings });
   } catch {
     res.status(500).json({ error: "Failed to fetch service settings" });
   }
@@ -286,30 +271,22 @@ router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"
   const internalType = toInternal(params.data.type)!;
 
   try {
-    await ensureServiceSettings(internalType);
-
-    const updateData: Record<string, unknown> = { updatedBy: req.user?.id ?? null, updatedAt: new Date() };
-    if (parsed.data.minDriverRating !== undefined) updateData.minDriverRating = parsed.data.minDriverRating.toFixed(1);
-    if (parsed.data.requiredLicenseTypes !== undefined) updateData.requiredLicenseTypes = parsed.data.requiredLicenseTypes;
-    if (parsed.data.requireInsurance !== undefined) updateData.requireInsurance = parsed.data.requireInsurance;
-    if (parsed.data.requireBackgroundCheck !== undefined) updateData.requireBackgroundCheck = parsed.data.requireBackgroundCheck;
-    if (parsed.data.maxActiveRidesPerDriver !== undefined) updateData.maxActiveRidesPerDriver = parsed.data.maxActiveRidesPerDriver;
-
-    const [updated] = await db
-      .update(serviceSettingsTable)
-      .set(updateData as Partial<typeof serviceSettingsTable.$inferInsert>)
-      .where(eq(serviceSettingsTable.serviceType, internalType))
-      .returning();
+    const current = await loadSetting<ServiceRequirements>(`service_req:${internalType}`, DEFAULT_SERVICE_REQUIREMENTS);
+    const updated: ServiceRequirements = {
+      ...current,
+      ...(parsed.data.minDriverRating !== undefined ? { minDriverRating: parsed.data.minDriverRating } : {}),
+      ...(parsed.data.requiredLicenseTypes !== undefined ? { requiredLicenseTypes: parsed.data.requiredLicenseTypes } : {}),
+      ...(parsed.data.requireInsurance !== undefined ? { requireInsurance: parsed.data.requireInsurance } : {}),
+      ...(parsed.data.requireBackgroundCheck !== undefined ? { requireBackgroundCheck: parsed.data.requireBackgroundCheck } : {}),
+      ...(parsed.data.maxActiveRidesPerDriver !== undefined ? { maxActiveRidesPerDriver: parsed.data.maxActiveRidesPerDriver } : {}),
+    };
+    await saveSetting(`service_req:${internalType}`, updated);
 
     const io = getIO();
     if (io) {
       const broadcastPayload = {
-        serviceType: toPublic(updated.serviceType),
-        minDriverRating: parseFloat(updated.minDriverRating as string),
-        requiredLicenseTypes: updated.requiredLicenseTypes,
-        requireInsurance: updated.requireInsurance,
-        requireBackgroundCheck: updated.requireBackgroundCheck,
-        maxActiveRidesPerDriver: updated.maxActiveRidesPerDriver,
+        serviceType: toPublic(internalType),
+        ...updated,
         changedBy: req.user?.id ?? null,
         changedAt: new Date().toISOString(),
       };
@@ -317,10 +294,7 @@ router.patch("/admin/services/:type/settings", authenticate, requireRole("admin"
       io.emit(SOCKET_EVENTS.SERVICE_SETTINGS_CHANGED, broadcastPayload);
     }
 
-    res.json({
-      ...mapSettings(updated as unknown as Record<string, unknown>),
-      minDriverRating: parseFloat(updated.minDriverRating as string),
-    });
+    res.json({ serviceType: toPublic(internalType), ...updated });
   } catch {
     res.status(500).json({ error: "Failed to update service settings" });
   }
@@ -398,15 +372,8 @@ router.get("/services/:type/settings", authenticate, async (req, res): Promise<v
   const internalType = toInternal(params.data.type)!;
 
   try {
-    const settings = await ensureServiceSettings(internalType);
-    res.json(mapSettings({
-      serviceType: settings.serviceType,
-      minDriverRating: parseFloat(settings.minDriverRating as string),
-      requiredLicenseTypes: settings.requiredLicenseTypes,
-      requireInsurance: settings.requireInsurance,
-      requireBackgroundCheck: settings.requireBackgroundCheck,
-      maxActiveRidesPerDriver: settings.maxActiveRidesPerDriver,
-    }));
+    const settings = await loadSetting<ServiceRequirements>(`service_req:${internalType}`, DEFAULT_SERVICE_REQUIREMENTS);
+    res.json({ serviceType: toPublic(internalType), ...settings });
   } catch {
     res.status(500).json({ error: "Failed to fetch service settings" });
   }

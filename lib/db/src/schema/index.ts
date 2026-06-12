@@ -38,3 +38,7 @@ export * from "./shuttleOffences";
 export * from "./shuttleRatings";
 export * from "./shuttleVehicleTypes";
 export * from "./driverDuplicateAlerts";
+export * from "./vehicleBrands";
+export * from "./vehicleModels";
+export * from "./vehicleColors";
+export * from "./carCategories";

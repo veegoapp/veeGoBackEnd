@@ -9,6 +9,7 @@ export const ridesTable = pgTable("rides", {
   passengerId: integer("passenger_id").notNull().references(() => usersTable.id),
   driverId: integer("driver_id").references(() => driversTable.id),
   vehicleType: text("vehicle_type").notNull(),
+  requestedCategory: text("requested_category"),
   pickupLatitude: real("pickup_latitude").notNull(),
   pickupLongitude: real("pickup_longitude").notNull(),
   pickupAddress: text("pickup_address").notNull(),
