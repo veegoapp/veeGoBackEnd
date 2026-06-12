@@ -15,7 +15,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Bus, Plus, Edit, Trash2, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Bus, Plus, Edit, Trash2, Search, List, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { VehicleCatalogTab } from "@/components/VehicleCatalogTab";
 
 const busSchema = z.object({
   plateNumber: z.string().min(1, "Plate number is required"),
@@ -89,62 +91,36 @@ function BusFormDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="plateNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Plate Number</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. ABC-1234" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="model"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Model</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Hyundai H350" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="capacity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Seat Capacity</FormLabel>
-                  <FormControl>
-                    <Input type="number" min={1} max={100} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="isActive"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-3">
-                  <FormLabel className="mt-0">Active</FormLabel>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            <FormField control={form.control} name="plateNumber" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Plate Number</FormLabel>
+                <FormControl><Input placeholder="e.g. ABC-1234" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="model" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Model</FormLabel>
+                <FormControl><Input placeholder="e.g. Hyundai H350" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="capacity" render={({ field }) => (
+              <FormItem>
+                <FormLabel>Seat Capacity</FormLabel>
+                <FormControl><Input type="number" min={1} max={100} {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="isActive" render={({ field }) => (
+              <FormItem className="flex items-center gap-3">
+                <FormLabel className="mt-0">Active</FormLabel>
+                <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+              </FormItem>
+            )} />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Saving..." : "Save"}
-              </Button>
+              <Button type="submit" disabled={isLoading}>{isLoading ? "Saving..." : "Save"}</Button>
             </DialogFooter>
           </form>
         </Form>
@@ -153,7 +129,9 @@ function BusFormDialog({
   );
 }
 
-export default function Buses() {
+// ─── Registered Fleet Tab ─────────────────────────────────────────────────────
+
+function RegisteredFleetTab() {
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -212,22 +190,7 @@ export default function Buses() {
     : buses;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-amber-500/10">
-            <Bus className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold">Buses</h1>
-            <p className="text-sm text-muted-foreground">Manage shuttle fleet</p>
-          </div>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 mr-1.5" /> Add Bus
-        </Button>
-      </div>
-
+    <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-5">
@@ -253,22 +216,27 @@ export default function Buses() {
         </Card>
       </div>
 
-      <div className="flex gap-2">
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-8"
-            placeholder="Search by plate or model..."
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") { setSearch(searchInput); setPage(1); }
-            }}
-          />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex gap-2">
+          <div className="relative max-w-xs">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-8 w-56"
+              placeholder="Search by plate or model..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { setSearch(searchInput); setPage(1); }
+              }}
+            />
+          </div>
+          {search && (
+            <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>Clear</Button>
+          )}
         </div>
-        {search && (
-          <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>Clear</Button>
-        )}
+        <Button onClick={() => setIsCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-1.5" /> Add Bus
+        </Button>
       </div>
 
       <div className="rounded-lg border overflow-hidden">
@@ -278,7 +246,7 @@ export default function Buses() {
               <TableHead className="w-12">#</TableHead>
               <TableHead>Plate Number</TableHead>
               <TableHead>Model</TableHead>
-              <TableHead className="text-center">Capacity</TableHead>
+              <TableHead className="text-center">Seat Capacity</TableHead>
               <TableHead className="text-center">Status</TableHead>
               <TableHead>Added</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -322,20 +290,10 @@ export default function Buses() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={() => setEditBus(bus)}
-                      >
+                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditBus(bus)}>
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(bus.id)}
-                      >
+                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteId(bus.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -354,9 +312,7 @@ export default function Buses() {
               <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} aria-disabled={page === 1} />
             </PaginationItem>
             <PaginationItem>
-              <span className="text-sm px-3 py-1 text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
+              <span className="text-sm px-3 py-1 text-muted-foreground">Page {page} of {totalPages}</span>
             </PaginationItem>
             <PaginationItem>
               <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-disabled={page === totalPages} />
@@ -408,6 +364,45 @@ export default function Buses() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function Buses() {
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-amber-500/10">
+          <Bus className="h-5 w-5 text-amber-600" />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">Shuttle Vehicles</h1>
+          <p className="text-sm text-muted-foreground">Fleet and allowed catalog management for the Shuttle service</p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="fleet">
+        <TabsList className="mb-2">
+          <TabsTrigger value="fleet" className="gap-2">
+            <List className="h-3.5 w-3.5" />
+            Registered Fleet
+          </TabsTrigger>
+          <TabsTrigger value="catalog" className="gap-2">
+            <BookOpen className="h-3.5 w-3.5" />
+            Allowed Catalog
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="fleet">
+          <RegisteredFleetTab />
+        </TabsContent>
+
+        <TabsContent value="catalog">
+          <VehicleCatalogTab isShuttle={true} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

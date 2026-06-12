@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import {
   useListVehicles,
   useCreateVehicle,
@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Car, Bike, PackageOpen, Plus, Edit, Trash2, Search } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Car, Bike, PackageOpen, Plus, Edit, Trash2, Search, List, BookOpen } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { VehicleCatalogTab } from "@/components/VehicleCatalogTab";
 
 const STATUS_COLORS: Record<string, string> = {
   verified:  "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
@@ -245,12 +247,10 @@ function VehicleFormDialog({
   );
 }
 
-export default function Vehicles() {
-  const params = useParams<{ serviceType?: string }>();
-  const serviceType = params.serviceType ?? "car";
-  const config = SERVICE_CONFIGS[serviceType] ?? SERVICE_CONFIGS.car;
-  const { Icon, title, subtitle, color, bg, allowedTypes, defaultType, fixedType } = config;
+// ─── Registered Fleet Tab ─────────────────────────────────────────────────────
 
+function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; serviceType: string }) {
+  const { Icon, allowedTypes, defaultType, fixedType } = config;
   const [page, setPage]               = useState(1);
   const [search, setSearch]           = useState("");
   const [searchInput, setSearchInput] = useState("");
@@ -259,14 +259,6 @@ export default function Vehicles() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [editVehicle, setEditVehicle] = useState<any | null>(null);
   const [deleteId, setDeleteId]       = useState<number | null>(null);
-
-  React.useEffect(() => {
-    setPage(1);
-    setSearch("");
-    setSearchInput("");
-    setStatusFilter("all");
-    setTypeFilter(config.defaultType);
-  }, [serviceType]);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -315,24 +307,16 @@ export default function Vehicles() {
   const totalPages = data ? Math.ceil(data.total / data.limit) : 0;
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${bg}`}>
-            <Icon className={`h-5 w-5 ${color}`} />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold">{title}</h1>
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
-          </div>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {data ? `${data.total} vehicles registered` : "Loading…"}
+        </p>
         <Button onClick={() => setIsCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-1.5" /> Add Vehicle
         </Button>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -345,9 +329,7 @@ export default function Vehicles() {
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
+          <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="pending">Pending</SelectItem>
@@ -358,9 +340,7 @@ export default function Vehicles() {
         </Select>
         {!fixedType && (
           <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
+            <SelectTrigger className="w-32"><SelectValue placeholder="Type" /></SelectTrigger>
             <SelectContent>
               {allowedTypes.map((t) => (
                 <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
@@ -373,7 +353,6 @@ export default function Vehicles() {
         )}
       </div>
 
-      {/* Table */}
       <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader>
@@ -449,7 +428,6 @@ export default function Vehicles() {
         </Table>
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <Pagination>
           <PaginationContent>
@@ -466,7 +444,6 @@ export default function Vehicles() {
         </Pagination>
       )}
 
-      {/* Create dialog */}
       <VehicleFormDialog
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
@@ -476,7 +453,6 @@ export default function Vehicles() {
         onSubmit={(values) => createMutation.mutate({ data: values })}
       />
 
-      {/* Edit dialog */}
       {editVehicle && (
         <VehicleFormDialog
           open={!!editVehicle}
@@ -499,7 +475,6 @@ export default function Vehicles() {
         />
       )}
 
-      {/* Delete confirm */}
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -519,6 +494,50 @@ export default function Vehicles() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function Vehicles() {
+  const params = useParams<{ serviceType?: string }>();
+  const serviceType = params.serviceType ?? "car";
+  const config = SERVICE_CONFIGS[serviceType] ?? SERVICE_CONFIGS.car;
+  const { Icon, title, subtitle, color, bg } = config;
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className={`p-2 rounded-lg ${bg}`}>
+          <Icon className={`h-5 w-5 ${color}`} />
+        </div>
+        <div>
+          <h1 className="text-xl font-semibold">{title}</h1>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+
+      <Tabs defaultValue="fleet">
+        <TabsList className="mb-2">
+          <TabsTrigger value="fleet" className="gap-2">
+            <List className="h-3.5 w-3.5" />
+            Registered Fleet
+          </TabsTrigger>
+          <TabsTrigger value="catalog" className="gap-2">
+            <BookOpen className="h-3.5 w-3.5" />
+            Allowed Catalog
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="fleet">
+          <RegisteredFleetTab config={config} serviceType={serviceType} />
+        </TabsContent>
+
+        <TabsContent value="catalog">
+          <VehicleCatalogTab isShuttle={false} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
