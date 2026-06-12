@@ -77,7 +77,7 @@ function NavItemRow({
     <div
       className={cn(
         "flex h-8 items-center justify-between rounded-md px-2.5 text-sm transition-colors cursor-pointer select-none",
-        isSubItem ? "pl-7 text-xs" : "font-medium",
+        isSubItem ? "ps-7 text-xs" : "font-medium",
         highlighted
           ? "bg-primary/10 text-primary font-semibold"
           : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
@@ -96,7 +96,7 @@ function NavItemRow({
           <span className="truncate">{item.title}</span>
         )}
         {!collapsed && item.comingSoon && (
-          <span className="ml-1 shrink-0 text-[9px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
+          <span className="ms-1 shrink-0 text-[9px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
             {t("common.soon")}
           </span>
         )}
@@ -138,7 +138,7 @@ function NavItemRow({
     <div>
       {tooltipWrapped}
       {hasSubItems && isOpen && !collapsed && (
-        <div className="mt-0.5 border-l border-slate-200 dark:border-slate-700 ml-[18px]">
+        <div className="mt-0.5 border-s border-slate-200 dark:border-slate-700 ms-[18px]">
           {item.subItems!.map((sub, i) => (
             <NavItemRow
               key={sub.href ?? sub.title ?? i}
@@ -310,7 +310,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950">
       <aside
         className={cn(
-          "flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-full transition-all duration-200 shrink-0",
+          "flex flex-col border-e border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 h-full transition-all duration-200 shrink-0",
           collapsed ? "w-14" : "w-56",
         )}
       >
