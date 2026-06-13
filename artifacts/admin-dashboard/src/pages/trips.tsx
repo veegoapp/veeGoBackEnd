@@ -309,6 +309,7 @@ export default function Trips() {
   const [editTrip, setEditTrip] = useState<any | null>(null);
   const [deleteTrip, setDeleteTrip] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmCreate, setConfirmCreate] = useState<TripFormValues | null>(null);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -371,15 +372,35 @@ export default function Trips() {
   });
 
   const onSubmitCreate = (data: TripFormValues) => {
-    createMutation.mutate({ data: data as any }, {
+    setConfirmCreate(data);
+  };
+
+  const handleConfirmCreate = () => {
+    if (!confirmCreate) return;
+    createMutation.mutate({ data: confirmCreate as any }, {
       onSuccess: () => {
         toast({ title: t("trips.tripScheduled") });
         setIsCreateOpen(false);
+        setConfirmCreate(null);
         createForm.reset(defaultValues);
         queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
       },
-      onError: () => toast({ title: t("trips.scheduleFailed"), variant: "destructive" })
+      onError: () => {
+        setConfirmCreate(null);
+        toast({ title: t("trips.scheduleFailed"), variant: "destructive" });
+      }
     });
+  };
+
+  const fmtCairoPreview = (dt: string) => {
+    if (!dt) return "";
+    try {
+      return new Date(dt).toLocaleString("ar-EG", {
+        timeZone: "Africa/Cairo",
+        weekday: "long", year: "numeric", month: "long",
+        day: "numeric", hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return dt; }
   };
 
   const onSubmitEdit = (data: TripFormValues) => {
@@ -537,6 +558,44 @@ export default function Trips() {
             </Button>
             <Button variant="destructive" onClick={handleDeleteTrip} disabled={isDeleting}>
               {isDeleting ? t("trips.deleting") : t("trips.deleteTrip")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!confirmCreate} onOpenChange={(open) => !open && setConfirmCreate(null)}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>تأكيد إنشاء الرحلة</DialogTitle>
+            <DialogDescription>تأكد من التوقيت قبل الحفظ</DialogDescription>
+          </DialogHeader>
+          {confirmCreate && (
+            <div className="space-y-3 py-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">وقت المغادرة</span>
+                  <span className="font-semibold text-foreground">
+                    {fmtCairoPreview(confirmCreate.departureTime)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">وقت الوصول</span>
+                  <span className="font-medium text-foreground">
+                    {fmtCairoPreview(confirmCreate.arrivalTime)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                جميع الأوقات بتوقيت القاهرة 🇪🇬
+              </p>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmCreate(null)} disabled={createMutation.isPending}>
+              {t("common.cancel")}
+            </Button>
+            <Button onClick={handleConfirmCreate} disabled={createMutation.isPending}>
+              {createMutation.isPending ? "جارٍ الحفظ..." : "تأكيد وحفظ"}
             </Button>
           </DialogFooter>
         </DialogContent>
