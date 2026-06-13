@@ -35,6 +35,7 @@ SUPABASE_URL = "https://kefoiokfzygggetpsxmm.supabase.co"
 SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtlZm9pb2tmenlnZ2dldHBzeG1tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MDQ0NTg1MiwiZXhwIjoyMDk2MDIxODUyfQ.caG0LKiLMprpNBcp6DhodBEHnimZcQS_jeE3hLUkq-E"
 SUPABASE_BUCKET = "uploads"
 NEON_DATABASE_URL = "postgresql://neondb_owner:npg_z4kFTR3CUOSE@ep-young-band-aqtvj4to-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&channel_binding=require"
+REFRESH_SECRET = "a9690cd5aebc2a8cb072644b4e4fbec2c94b4aa630f61edff37df735b85b3b2d4dca1ac30618c9029e5dbe2088aee980"
 
 [workflows]
 runButton = "Project"
