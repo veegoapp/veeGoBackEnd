@@ -21,6 +21,7 @@ import {
   rideShareTokensTable,
   serviceControlsTable,
   carCategoriesTable,
+  vehiclesTable,
 } from "@workspace/db";
 import { loadSetting } from "../lib/settings";
 import { updateBonusProgressAfterRide } from "../lib/bonus-targets";
@@ -874,27 +875,64 @@ router.get("/rides/my", authenticate, requireRole("user"), async (req, res): Pro
 router.get("/rides/:id", authenticate, async (req, res): Promise<void> => {
   try {
     const id = parseInt(req.params.id as string);
+    if (isNaN(id)) {
+      res.status(400).json({ error: "Invalid ride ID", code: "INVALID_REQUEST" });
+      return;
+    }
     const userId = req.user!.id;
-    const role = req.user!.role;
+    const role   = req.user!.role;
 
+    // ── Main ride row — joins passenger, driver, promo code, vehicle ─────────
     const [row] = await db
       .select({
         ride: ridesTable,
-        passenger: { id: usersTable.id, name: usersTable.name, phone: usersTable.phone },
-        driver: { id: driversTable.id, name: driversTable.name, phone: driversTable.phone },
+        passenger: {
+          id:    usersTable.id,
+          name:  usersTable.name,
+          phone: usersTable.phone,
+        },
+        driver: {
+          id:                driversTable.id,
+          name:              driversTable.name,
+          phone:             driversTable.phone,
+          rating:            driversTable.rating,
+          vehicleType:       driversTable.vehicleType,
+          currentLatitude:   driversTable.currentLatitude,
+          currentLongitude:  driversTable.currentLongitude,
+          currentHeading:    driversTable.currentHeading,
+          locationUpdatedAt: driversTable.locationUpdatedAt,
+        },
+        vehicle: {
+          plateNumber: vehiclesTable.plateNumber,
+          make:        vehiclesTable.make,
+          model:       vehiclesTable.model,
+          year:        vehiclesTable.year,
+          color:       vehiclesTable.color,
+        },
+        promo: {
+          code:          promoCodesTable.code,
+          discountType:  promoCodesTable.discountType,
+          discountValue: promoCodesTable.discountValue,
+        },
       })
       .from(ridesTable)
-      .leftJoin(usersTable, eq(ridesTable.passengerId, usersTable.id))
-      .leftJoin(driversTable, eq(ridesTable.driverId, driversTable.id))
+      .leftJoin(usersTable,      eq(ridesTable.passengerId, usersTable.id))
+      .leftJoin(driversTable,    eq(ridesTable.driverId,    driversTable.id))
+      .leftJoin(vehiclesTable,   and(
+        eq(vehiclesTable.driverId, driversTable.id),
+        eq(vehiclesTable.isActive, true),
+      ))
+      .leftJoin(promoCodesTable, eq(ridesTable.promoCodeId, promoCodesTable.id))
       .where(eq(ridesTable.id, id));
 
     if (!row) {
-      res.status(404).json({ error: "Ride not found" });
+      res.status(404).json({ error: "Ride not found", code: "RIDE_NOT_FOUND" });
       return;
     }
 
+    // ── Access control ────────────────────────────────────────────────────────
     if (role === "user" && row.ride.passengerId !== userId) {
-      res.status(403).json({ error: "Forbidden" });
+      res.status(403).json({ error: "Forbidden", code: "FORBIDDEN" });
       return;
     }
 
@@ -904,20 +942,105 @@ router.get("/rides/:id", authenticate, async (req, res): Promise<void> => {
         .from(driversTable)
         .where(eq(driversTable.userId, userId));
       if (!driver || row.ride.driverId !== driver.id) {
-        res.status(403).json({ error: "Forbidden" });
+        res.status(403).json({ error: "Forbidden", code: "FORBIDDEN" });
         return;
       }
     }
 
+    // ── Fetch events + passenger rating in parallel ───────────────────────────
+    const [events, ratingRow] = await Promise.all([
+      db
+        .select({
+          id:        rideEventsTable.id,
+          type:      rideEventsTable.type,
+          metadata:  rideEventsTable.metadata,
+          createdAt: rideEventsTable.createdAt,
+        })
+        .from(rideEventsTable)
+        .where(eq(rideEventsTable.rideId, id))
+        .orderBy(rideEventsTable.createdAt),
+      db
+        .select({
+          id:        ratingsTable.id,
+          score:     ratingsTable.score,
+          comment:   ratingsTable.comment,
+          createdAt: ratingsTable.createdAt,
+        })
+        .from(ratingsTable)
+        .where(and(eq(ratingsTable.rideId, id), eq(ratingsTable.raterId, row.ride.passengerId)))
+        .limit(1),
+    ]);
+
+    const rideBase = parseRide(row.ride as unknown as Record<string, unknown>);
+
     res.json({
       data: {
-        ...parseRide(row.ride as unknown as Record<string, unknown>),
-        passenger: row.passenger,
-        driver: row.driver,
+        ...rideBase,
+
+        // ── Passenger ──────────────────────────────────────────────────────
+        passenger: row.passenger ?? null,
+
+        // ── Driver (null until assigned) ───────────────────────────────────
+        driver: row.driver?.id != null
+          ? {
+              id:           row.driver.id,
+              name:         row.driver.name,
+              phone:        row.driver.phone,
+              rating:       row.driver.rating != null ? parseFloat(row.driver.rating as string) : null,
+              vehicleType:  row.driver.vehicleType ?? null,
+              location:     row.driver.currentLatitude != null
+                ? {
+                    lat:              row.driver.currentLatitude,
+                    lng:              row.driver.currentLongitude,
+                    heading:          row.driver.currentHeading ?? null,
+                    updatedAt:        row.driver.locationUpdatedAt ?? null,
+                  }
+                : null,
+            }
+          : null,
+
+        // ── Vehicle (null until driver assigned and vehicle registered) ────
+        vehicle: row.vehicle?.plateNumber != null
+          ? {
+              plateNumber: row.vehicle.plateNumber,
+              make:        row.vehicle.make,
+              model:       row.vehicle.model,
+              year:        row.vehicle.year,
+              color:       row.vehicle.color,
+            }
+          : null,
+
+        // ── Applied promo code ─────────────────────────────────────────────
+        promoCode: row.promo?.code != null
+          ? {
+              code:          row.promo.code,
+              discountType:  row.promo.discountType,
+              discountValue: row.promo.discountValue != null
+                ? parseFloat(row.promo.discountValue as string)
+                : null,
+            }
+          : null,
+
+        // ── Timeline events ────────────────────────────────────────────────
+        events: events.map((e) => ({
+          id:        e.id,
+          type:      e.type,
+          metadata:  e.metadata ?? null,
+          createdAt: e.createdAt,
+        })),
+
+        // ── Passenger rating for this ride (null if not rated yet) ─────────
+        rating: ratingRow[0]
+          ? {
+              score:     parseFloat(ratingRow[0].score as string),
+              comment:   ratingRow[0].comment ?? null,
+              createdAt: ratingRow[0].createdAt,
+            }
+          : null,
       },
     });
   } catch {
-    res.status(500).json({ error: "Failed to fetch ride" });
+    res.status(500).json({ error: "Failed to fetch ride", code: "INTERNAL_ERROR" });
   }
 });
 
