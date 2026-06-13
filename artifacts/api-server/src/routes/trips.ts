@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { db, tripsTable, busesTable, routesTable, driversTable, bookingsTable, usersTable, walletTransactionsTable, notificationsTable } from "@workspace/db";
-import { eq, sql, and, inArray } from "drizzle-orm";
+import { eq, sql, and, inArray, gte, lte } from "drizzle-orm";
+import { z } from "zod/v4";
 import { authenticate, requireRole } from "../middlewares/auth";
 import {
   ListTripsQueryParams,
@@ -162,6 +163,96 @@ router.patch("/trips/:id/cancel", authenticate, requireRole("admin"), async (req
   if (updatedTrip) {
     res.json(updatedTrip);
   }
+});
+
+const BulkCreateTripsBody = z.object({
+  routeId:       z.number().int().positive(),
+  busId:         z.number().int().positive(),
+  driverId:      z.number().int().positive().optional(),
+  departureHHMM: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM"),
+  arrivalHHMM:   z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM"),
+  price:         z.number().min(0),
+  vehicleType:   z.enum(["hiace", "minibus"]).default("hiace"),
+  startDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
+  endDate:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
+  daysOfWeek:    z.array(z.number().int().min(0).max(6)),
+  skipExisting:  z.boolean().default(true),
+});
+
+router.post("/admin/trips/bulk", authenticate, requireRole("admin"), async (req, res): Promise<void> => {
+  const parsed = BulkCreateTripsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const { routeId, busId, driverId, departureHHMM, arrivalHHMM, price, vehicleType, startDate, endDate, daysOfWeek, skipExisting } = parsed.data;
+
+  const [bus] = await db.select({ capacity: busesTable.capacity }).from(busesTable).where(eq(busesTable.id, busId));
+  if (!bus) { res.status(404).json({ error: "Bus not found" }); return; }
+
+  const rangeStart = new Date(startDate + "T00:00:00Z");
+  const rangeEnd   = new Date(endDate   + "T00:00:00Z");
+  if (rangeStart > rangeEnd) { res.status(400).json({ error: "startDate must be on or before endDate" }); return; }
+
+  const daysDiff = Math.round((rangeEnd.getTime() - rangeStart.getTime()) / 86_400_000);
+  if (daysDiff > 365) { res.status(400).json({ error: "Date range cannot exceed 365 days" }); return; }
+
+  // Build list of (departureTime, arrivalTime) pairs — all Cairo times (UTC+3)
+  const toInsert: { departureTime: Date; arrivalTime: Date }[] = [];
+  const cur = new Date(rangeStart);
+  while (cur <= rangeEnd) {
+    const dow = cur.getUTCDay(); // 0=Sun … 6=Sat
+    if (daysOfWeek.length === 0 || daysOfWeek.includes(dow)) {
+      const dateStr = cur.toISOString().slice(0, 10);
+      const dep = new Date(`${dateStr}T${departureHHMM}:00+03:00`);
+      const arr = new Date(`${dateStr}T${arrivalHHMM}:00+03:00`);
+      // If arrival ≤ departure it crosses midnight — shift arrival to next day
+      const finalArr = arr <= dep ? new Date(arr.getTime() + 86_400_000) : arr;
+      toInsert.push({ departureTime: dep, arrivalTime: finalArr });
+    }
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+
+  if (toInsert.length === 0) { res.json({ created: 0, skipped: 0 }); return; }
+
+  let toCreate = toInsert;
+  let skipped  = 0;
+
+  if (skipExisting) {
+    const existing = await db
+      .select({ departureTime: tripsTable.departureTime })
+      .from(tripsTable)
+      .where(and(
+        eq(tripsTable.routeId, routeId),
+        gte(tripsTable.departureTime, toInsert[0]!.departureTime),
+        lte(tripsTable.departureTime, toInsert[toInsert.length - 1]!.departureTime),
+      ));
+    const existingSet = new Set(existing.map(e => e.departureTime.toISOString()));
+    toCreate = toInsert.filter(t => !existingSet.has(t.departureTime.toISOString()));
+    skipped  = toInsert.length - toCreate.length;
+  }
+
+  if (toCreate.length === 0) { res.json({ created: 0, skipped }); return; }
+
+  const BATCH = 50;
+  for (let i = 0; i < toCreate.length; i += BATCH) {
+    const chunk = toCreate.slice(i, i + BATCH);
+    await db.insert(tripsTable).values(
+      chunk.map(({ departureTime, arrivalTime }) => ({
+        routeId,
+        busId,
+        ...(driverId ? { driverId } : {}),
+        departureTime,
+        arrivalTime,
+        price: String(price),
+        totalSeats: bus.capacity,
+        availableSeats: bus.capacity,
+        vehicleType,
+        status: "scheduled" as const,
+        recurringType: "one_time" as const,
+      })),
+    );
+  }
+
+  res.json({ created: toCreate.length, skipped });
 });
 
 router.delete("/trips/:id", authenticate, requireRole("admin"), async (req, res): Promise<void> => {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { BulkTripDialog } from "@/components/BulkTripDialog";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
@@ -46,7 +47,7 @@ import {
   Clock, Banknote, Navigation, CalendarClock, UserCircle, Bus,
   TrendingUp, BarChart3, CheckCircle2, XCircle, AlertCircle,
   Repeat, Minus, ArrowRight, Users, Copy, Ban, RefreshCw, Download,
-  MoveRight, MoveLeft,
+  MoveRight, MoveLeft, CalendarRange,
 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { exportCSV, exportExcel, todayStr } from "@/lib/export";
@@ -568,6 +569,7 @@ function DirectionTab({
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [editStation, setEditStation] = useState<any | null>(null);
   const [isCreateTripOpen, setIsCreateTripOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
 
   const addStationMutation = useAddStation();
   const updateStationMutation = useUpdateStation();
@@ -847,20 +849,34 @@ function DirectionTab({
                 : t("routeDetail.noScheduleYet", "No recurring schedules set up yet")}
             </CardDescription>
           </div>
-          <Dialog open={isCreateTripOpen} onOpenChange={setIsCreateTripOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <Plus className="me-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>{t("trips.scheduleNewTrip", "Schedule New Trip")}</DialogTitle>
-                <DialogDescription>{t("routeDetail.scheduleNewTripDesc", "Add a new trip or recurring schedule to this route.")}</DialogDescription>
-              </DialogHeader>
-              <TripForm form={tripForm} onSubmit={onCreateTrip} isPending={createMutation.isPending} submitLabel={t("trips.scheduleTrip", "Schedule Trip")} route={route} allBuses={allBuses} allDrivers={allDrivers} />
-            </DialogContent>
-          </Dialog>
+          <div className="flex items-center gap-2">
+            <Dialog open={isCreateTripOpen} onOpenChange={setIsCreateTripOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Plus className="me-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>{t("trips.scheduleNewTrip", "Schedule New Trip")}</DialogTitle>
+                  <DialogDescription>{t("routeDetail.scheduleNewTripDesc", "Add a new trip or recurring schedule to this route.")}</DialogDescription>
+                </DialogHeader>
+                <TripForm form={tripForm} onSubmit={onCreateTrip} isPending={createMutation.isPending} submitLabel={t("trips.scheduleTrip", "Schedule Trip")} route={route} allBuses={allBuses} allDrivers={allDrivers} />
+              </DialogContent>
+            </Dialog>
+            <Button size="sm" variant="outline" onClick={() => setIsBulkOpen(true)}>
+              <CalendarRange className="me-2 h-4 w-4" />Bulk Schedule
+            </Button>
+          </div>
+          <BulkTripDialog
+            routeId={routeId}
+            estimatedDurationMinutes={route?.estimatedDuration ?? 60}
+            allBuses={allBuses}
+            allDrivers={allDrivers}
+            open={isBulkOpen}
+            onOpenChange={setIsBulkOpen}
+            onSuccess={() => queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() })}
+          />
         </CardHeader>
         <CardContent className="p-0">
           {timeSlots.length === 0 ? (
@@ -911,6 +927,7 @@ function SchedulesTab({
 }) {
   const { t } = useTranslation();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isBulkOpen2, setIsBulkOpen2] = useState(false);
   const [editTrip, setEditTrip] = useState<any | null>(null);
 
   const createMutation = useCreateTrip();
@@ -1001,19 +1018,33 @@ function SchedulesTab({
           <h3 className="text-base font-semibold">{t("routeDetail.scheduleManagement", "Schedule Management")}</h3>
           <p className="text-sm text-muted-foreground">{t("routeDetail.scheduleManagementDesc", "Create, edit, and manage trips and recurring schedules for this route.")}</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm"><Plus className="me-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}</Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{t("trips.scheduleNewTrip", "Schedule New Trip")}</DialogTitle>
-              <DialogDescription>{t("routeDetail.scheduleNewTripDesc", "Add a new trip or recurring schedule to this route.")}</DialogDescription>
-            </DialogHeader>
-            <TripForm form={createForm} onSubmit={onSubmitCreate} isPending={createMutation.isPending} submitLabel={t("trips.scheduleTrip", "Schedule Trip")} route={route} allBuses={allBuses} allDrivers={allDrivers} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm"><Plus className="me-2 h-4 w-4" />{t("trips.scheduleTrip", "Schedule Trip")}</Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{t("trips.scheduleNewTrip", "Schedule New Trip")}</DialogTitle>
+                <DialogDescription>{t("routeDetail.scheduleNewTripDesc", "Add a new trip or recurring schedule to this route.")}</DialogDescription>
+              </DialogHeader>
+              <TripForm form={createForm} onSubmit={onSubmitCreate} isPending={createMutation.isPending} submitLabel={t("trips.scheduleTrip", "Schedule Trip")} route={route} allBuses={allBuses} allDrivers={allDrivers} />
+            </DialogContent>
+          </Dialog>
+          <Button size="sm" variant="outline" onClick={() => setIsBulkOpen2(true)}>
+            <CalendarRange className="me-2 h-4 w-4" />Bulk Schedule
+          </Button>
+        </div>
       </div>
+      <BulkTripDialog
+        routeId={routeId}
+        estimatedDurationMinutes={route?.estimatedDuration ?? 60}
+        allBuses={allBuses}
+        allDrivers={allDrivers}
+        open={isBulkOpen2}
+        onOpenChange={setIsBulkOpen2}
+        onSuccess={() => queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() })}
+      />
 
       <Dialog open={!!editTrip} onOpenChange={open => !open && setEditTrip(null)}>
         <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
