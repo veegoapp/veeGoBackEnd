@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,8 +93,9 @@ function Breadcrumb({
   viewState: ViewState;
   onNavigate: (v: ViewState) => void;
 }) {
+  const { t } = useTranslation();
   const segments: { label: string; action: ViewState | null }[] = [
-    { label: "Vehicle Catalog", action: { level: "brands" } },
+    { label: t("vehicleCatalog.title"), action: { level: "brands" } },
   ];
   if (viewState.level === "models" || viewState.level === "years") {
     segments.push({ label: viewState.brand.name, action: { level: "models", brand: viewState.brand } });
@@ -139,6 +141,7 @@ function BrandDialog({
   onSave: (data: { name: string; isChinese: boolean; isActive: boolean }) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial?.name ?? "");
   const [isChinese, setIsChinese] = useState(initial?.isChinese ?? false);
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
@@ -148,22 +151,22 @@ function BrandDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{initial?.id ? "Edit Brand" : "Add Brand"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{initial?.id ? t("vehicleCatalog.editBrand") : t("vehicleCatalog.addBrand")}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5"><Label>Brand Name</Label>
+          <div className="space-y-1.5"><Label>{t("vehicleCatalog.brandName")}</Label>
             <Input placeholder="e.g. Toyota" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="flex items-center justify-between"><Label>Chinese Brand</Label>
+          <div className="flex items-center justify-between"><Label>{t("vehicleCatalog.chineseBrand")}</Label>
             <Switch checked={isChinese} onCheckedChange={setIsChinese} />
           </div>
-          <div className="flex items-center justify-between"><Label>Active</Label>
+          <div className="flex items-center justify-between"><Label>{t("vehicleCatalog.active")}</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("vehicleCatalog.cancel")}</Button>
           <Button disabled={!name.trim() || saving} onClick={() => onSave({ name: name.trim(), isChinese, isActive })}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("vehicleCatalog.saving") : t("vehicleCatalog.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -183,6 +186,7 @@ function ModelDialog({
   onSave: (data: { brandId: number; name: string; minYear: number; maxYear: number | null; isActive: boolean; seatCapacity?: number | null }) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
   const [name, setName] = useState(initial?.name ?? "");
   const [minYear, setMinYear] = useState(initial?.minYear ?? 2015);
@@ -199,40 +203,40 @@ function ModelDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{initial?.id ? "Edit Model" : "Add Model"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{initial?.id ? t("vehicleCatalog.editModel") : t("vehicleCatalog.addModel")}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5"><Label>Model Name</Label>
+          <div className="space-y-1.5"><Label>{t("vehicleCatalog.modelName")}</Label>
             <Input placeholder="e.g. Corolla" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5"><Label>Min Year</Label>
+            <div className="space-y-1.5"><Label>{t("vehicleCatalog.minYear")}</Label>
               <Input type="number" min={1900} max={currentYear + 2} value={minYear}
                 onChange={(e) => setMinYear(Number(e.target.value))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Max Year <span className="text-muted-foreground text-xs">(optional)</span></Label>
-              <Input type="number" min={1900} max={currentYear + 2} placeholder="No limit" value={maxYear}
+              <Label>{t("vehicleCatalog.maxYearOptional")}</Label>
+              <Input type="number" min={1900} max={currentYear + 2} placeholder={t("vehicleCatalog.noYearLimit")} value={maxYear}
                 onChange={(e) => setMaxYear(e.target.value === "" ? "" : Number(e.target.value))} />
             </div>
           </div>
           {isShuttle && (
-            <div className="space-y-1.5"><Label>Seat Capacity</Label>
+            <div className="space-y-1.5"><Label>{t("vehicleCatalog.seatCapacity")}</Label>
               <Input type="number" min={1} max={100} placeholder="e.g. 14" value={seatCapacity}
                 onChange={(e) => setSeatCapacity(e.target.value === "" ? "" : Number(e.target.value))} />
             </div>
           )}
-          <div className="flex items-center justify-between"><Label>Active</Label>
+          <div className="flex items-center justify-between"><Label>{t("vehicleCatalog.active")}</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("vehicleCatalog.cancel")}</Button>
           <Button disabled={!name.trim() || saving} onClick={() => onSave({
             brandId, name: name.trim(), minYear,
             maxYear: maxYear === "" ? null : Number(maxYear), isActive,
             ...(isShuttle ? { seatCapacity: seatCapacity === "" ? null : Number(seatCapacity) } : {}),
           })}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("vehicleCatalog.saving") : t("vehicleCatalog.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -250,6 +254,7 @@ function YearDialog({
   onSave: (data: { year: number; pricingCategories: string[]; isActive: boolean }) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState<number>(currentYear);
   const [selected, setSelected] = useState<Set<string>>(new Set(["Economy"]));
@@ -271,18 +276,15 @@ function YearDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Register Manufacturing Year</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{t("vehicleCatalog.registerYear")}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label>Year of Manufacture</Label>
+            <Label>{t("vehicleCatalog.yearOfManufacture")}</Label>
             <Input type="number" min={1990} max={currentYear + 2} value={year}
               onChange={(e) => setYear(Number(e.target.value))} />
           </div>
           <div className="space-y-2">
-            <Label>
-              Pricing Tiers
-              <span className="ms-1.5 text-xs font-normal text-muted-foreground">(اختر واحد أو أكتر)</span>
-            </Label>
+            <Label>{t("vehicleCatalog.pricingTiers")}</Label>
             <div className="space-y-2">
               {PRICING_CATEGORIES.map((c) => {
                 const checked = selected.has(c.value);
@@ -309,25 +311,25 @@ function YearDialog({
               })}
             </div>
             {selected.size === 0 && (
-              <p className="text-xs text-destructive">Select at least one pricing tier.</p>
+              <p className="text-xs text-destructive">{t("vehicleCatalog.selectOneTier")}</p>
             )}
           </div>
           <div className="flex items-center justify-between">
-            <Label>Active</Label>
+            <Label>{t("vehicleCatalog.active")}</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("vehicleCatalog.cancel")}</Button>
           <Button
             disabled={!year || selected.size === 0 || saving}
             onClick={() => onSave({ year, pricingCategories: Array.from(selected), isActive })}
           >
             {saving
-              ? "Saving…"
+              ? t("vehicleCatalog.saving")
               : selected.size > 1
-                ? `Register Year (${selected.size} tiers)`
-                : "Register Year"}
+                ? t("vehicleCatalog.registerYearMultiBtn", { count: selected.size })
+                : t("vehicleCatalog.registerYearBtn")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -345,6 +347,7 @@ function ColorDialog({
   onSave: (data: { hexCode: string; nameEn: string; nameAr: string; isActive: boolean }) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation();
   const [hexCode, setHexCode] = React.useState(initial?.hexCode ?? "#000000");
   const [nameEn, setNameEn] = React.useState(initial?.nameEn ?? "");
   const [nameAr, setNameAr] = React.useState(initial?.nameAr ?? "");
@@ -355,9 +358,9 @@ function ColorDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>{initial?.id ? "Edit Color" : "Add Color"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{initial?.id ? t("vehicleCatalog.editColor") : t("vehicleCatalog.addColor")}</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5"><Label>Color Swatch</Label>
+          <div className="space-y-1.5"><Label>{t("vehicleCatalog.colorSwatch")}</Label>
             <div className="flex items-center gap-3">
               <input type="color" value={hexCode} onChange={(e) => setHexCode(e.target.value)}
                 className="h-10 w-12 rounded-md cursor-pointer border border-border bg-transparent p-0.5" />
@@ -365,22 +368,22 @@ function ColorDialog({
                 className="font-mono text-sm flex-1" />
             </div>
           </div>
-          <div className="space-y-1.5"><Label>English Name</Label>
+          <div className="space-y-1.5"><Label>{t("vehicleCatalog.englishName")}</Label>
             <Input placeholder="e.g. Pearl White" value={nameEn} onChange={(e) => setNameEn(e.target.value)} />
           </div>
-          <div className="space-y-1.5"><Label>Arabic Name</Label>
+          <div className="space-y-1.5"><Label>{t("vehicleCatalog.arabicName")}</Label>
             <Input placeholder="e.g. أبيض لؤلؤي" value={nameAr} onChange={(e) => setNameAr(e.target.value)}
               dir="rtl" className="text-end" />
           </div>
-          <div className="flex items-center justify-between"><Label>Active</Label>
+          <div className="flex items-center justify-between"><Label>{t("vehicleCatalog.active")}</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("vehicleCatalog.cancel")}</Button>
           <Button disabled={!nameEn.trim() || !hexCode || saving}
             onClick={() => onSave({ hexCode, nameEn: nameEn.trim(), nameAr: nameAr.trim(), isActive })}>
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("vehicleCatalog.saving") : t("vehicleCatalog.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -407,6 +410,7 @@ function BulkImportDialog({
   onImport: (catalogData: CatalogEntry[]) => void;
   importing: boolean;
 }) {
+  const { t } = useTranslation();
   const [raw, setRaw] = React.useState("");
   const [parseError, setParseError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
@@ -471,17 +475,16 @@ function BulkImportDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-4 w-4 text-primary" />
-            Bulk Import Catalog for{" "}
+            {t("vehicleCatalog.bulkImportTitle")}{" "}
             <span className="capitalize text-primary font-semibold">{serviceType}</span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-1">
-          {/* Template */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-xs text-muted-foreground">
-                JSON template — copy, edit, then paste below
+                {t("vehicleCatalog.jsonTemplate")}
               </Label>
               <button
                 type="button"
@@ -489,8 +492,8 @@ function BulkImportDialog({
                 className="flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2 transition-colors"
               >
                 {copied
-                  ? <><CheckCheck className="h-3 w-3" /> Copied!</>
-                  : <><Copy className="h-3 w-3" /> Copy template</>}
+                  ? <><CheckCheck className="h-3 w-3" /> {t("vehicleCatalog.copied")}</>
+                  : <><Copy className="h-3 w-3" /> {t("vehicleCatalog.copyTemplate")}</>}
               </button>
             </div>
             <pre className="rounded-md border border-border bg-muted/50 px-3 py-2.5 text-[11px] font-mono leading-relaxed overflow-auto max-h-36 text-muted-foreground select-all cursor-text">
@@ -498,13 +501,12 @@ function BulkImportDialog({
             </pre>
           </div>
 
-          {/* Input area */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label>Paste your catalog JSON here</Label>
+              <Label>{t("vehicleCatalog.pasteHere")}</Label>
               {brandCount !== null && (
                 <span className="text-xs text-muted-foreground">
-                  {brandCount} brand{brandCount !== 1 ? "s" : ""} detected
+                  {t("vehicleCatalog.brandsDetected", { count: brandCount })}
                 </span>
               )}
             </div>
@@ -524,17 +526,14 @@ function BulkImportDialog({
             )}
           </div>
 
-          {/* Info note */}
           <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 leading-relaxed">
-            <strong>Note:</strong> Existing brands and models for <span className="capitalize font-medium">{serviceType}</span> will be
-            skipped — only new entries are inserted. All models default to year range 2015 – present and can be
-            adjusted individually after import.
+            {t("vehicleCatalog.importNote")}
           </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={importing}>
-            Cancel
+            {t("vehicleCatalog.cancel")}
           </Button>
           <Button
             onClick={handleProcess}
@@ -542,8 +541,8 @@ function BulkImportDialog({
             className="gap-1.5 min-w-[140px]"
           >
             {importing
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Processing…</>
-              : <><Upload className="h-3.5 w-3.5" /> Process Import</>}
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("vehicleCatalog.processing")}</>
+              : <><Upload className="h-3.5 w-3.5" /> {t("vehicleCatalog.processImport")}</>}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -562,6 +561,7 @@ function BrandsView({
   isShuttle: boolean;
   serviceType: string;
 }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [brandDialog, setBrandDialog] = useState<{ open: boolean; brand?: VehicleBrand }>({ open: false });
@@ -584,18 +584,18 @@ function BrandsView({
 
   const createBrand = useMutation({
     mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify({ ...data, serviceType }) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setBrandDialog({ open: false }); toast({ title: "Brand added" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setBrandDialog({ open: false }); toast({ title: t("vehicleCatalog.brandAdded") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const updateBrand = useMutation({
     mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setBrandDialog({ open: false }); toast({ title: "Brand updated" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setBrandDialog({ open: false }); toast({ title: t("vehicleCatalog.brandUpdated") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const deleteBrandMutation = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/brands/${id}`, { method: "DELETE" }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setDeleteBrand(null); toast({ title: "Brand deleted" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-brands", serviceType] }); setDeleteBrand(null); toast({ title: t("vehicleCatalog.brandDeleted") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const bulkImportMutation = useMutation({
     mutationFn: (catalogData: CatalogEntry[]) =>
@@ -608,27 +608,27 @@ function BrandsView({
       queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models"] });
       setBulkImportOpen(false);
       toast({
-        title: "Import complete!",
-        description: `${result.brandsCreated} brand${result.brandsCreated !== 1 ? "s" : ""} and ${result.modelsCreated} model${result.modelsCreated !== 1 ? "s" : ""} imported. ${result.brandsExisting + result.modelsExisting > 0 ? `(${result.brandsExisting + result.modelsExisting} duplicate${result.brandsExisting + result.modelsExisting !== 1 ? "s" : ""} skipped)` : ""}`.trim(),
+        title: t("vehicleCatalog.importComplete"),
+        description: `${result.brandsCreated} brand${result.brandsCreated !== 1 ? "s" : ""} and ${result.modelsCreated} model${result.modelsCreated !== 1 ? "s" : ""} imported.${result.brandsExisting + result.modelsExisting > 0 ? ` (${result.brandsExisting + result.modelsExisting} duplicate${result.brandsExisting + result.modelsExisting !== 1 ? "s" : ""} skipped)` : ""}`.trim(),
       });
     },
-    onError: (e: any) => toast({ title: "Import failed", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("vehicleCatalog.importFailed"), description: e?.message, variant: "destructive" }),
   });
 
   const createColor = useMutation({
     mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/colors", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: "Color added" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: t("vehicleCatalog.colorAdded") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const updateColor = useMutation({
     mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: "Color updated" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setColorDialog({ open: false }); toast({ title: t("vehicleCatalog.colorUpdated") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const deleteColorMutation = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/colors/${id}`, { method: "DELETE" }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setDeleteColor(null); toast({ title: "Color deleted" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-colors"] }); setDeleteColor(null); toast({ title: t("vehicleCatalog.colorDeleted") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
 
   return (
@@ -639,15 +639,15 @@ function BrandsView({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Tag className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-semibold text-sm">Approved Brands</h3>
+            <h3 className="font-semibold text-sm">{t("vehicleCatalog.approvedBrands")}</h3>
             {!brandsQuery.isLoading && <Badge variant="secondary" className="text-xs">{brands.length}</Badge>}
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setBulkImportOpen(true)}>
-              <Upload className="h-3.5 w-3.5" /> Bulk Import
+              <Upload className="h-3.5 w-3.5" /> {t("vehicleCatalog.bulkImport")}
             </Button>
             <Button size="sm" className="gap-1.5" onClick={() => setBrandDialog({ open: true })}>
-              <Plus className="h-3.5 w-3.5" /> Add Brand
+              <Plus className="h-3.5 w-3.5" /> {t("vehicleCatalog.addBrand")}
             </Button>
           </div>
         </div>
@@ -659,7 +659,7 @@ function BrandsView({
         ) : brands.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border py-12 text-center text-muted-foreground text-sm">
             <Car className="h-7 w-7 mx-auto mb-2 opacity-30" />
-            No brands defined yet. Add the first one.
+            {t("vehicleCatalog.noBrands")}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -691,10 +691,10 @@ function BrandsView({
                 <p className="font-semibold text-sm truncate">{brand.name}</p>
                 <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                   {brand.isChinese && (
-                    <Badge variant="outline" className="text-[10px] border-red-200 text-red-600 bg-red-50 dark:bg-red-950 px-1.5">Chinese</Badge>
+                    <Badge variant="outline" className="text-[10px] border-red-200 text-red-600 bg-red-50 dark:bg-red-950 px-1.5">{t("vehicleCatalog.chineseBadge")}</Badge>
                   )}
                   <Badge variant="outline" className={`text-[10px] px-1.5 ${brand.isActive ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950" : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900"}`}>
-                    {brand.isActive ? "Active" : "Inactive"}
+                    {brand.isActive ? t("vehicleCatalog.active") : t("common.inactive")}
                   </Badge>
                 </div>
                 <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -711,11 +711,11 @@ function BrandsView({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Palette className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-semibold text-sm">Approved Colors</h3>
+            <h3 className="font-semibold text-sm">{t("vehicleCatalog.approvedColors")}</h3>
             {!colorsQuery.isLoading && <Badge variant="secondary" className="text-xs">{colors.length}</Badge>}
           </div>
           <Button size="sm" className="gap-1.5" onClick={() => setColorDialog({ open: true })}>
-            <Plus className="h-3.5 w-3.5" /> Add Color
+            <Plus className="h-3.5 w-3.5" /> {t("vehicleCatalog.addColor")}
           </Button>
         </div>
 
@@ -726,7 +726,7 @@ function BrandsView({
         ) : colors.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border py-10 text-center text-muted-foreground text-sm">
             <Palette className="h-7 w-7 mx-auto mb-2 opacity-30" />
-            No colors defined yet.
+            {t("vehicleCatalog.noColors")}
           </div>
         ) : (
           <div className="flex flex-wrap gap-2">
@@ -770,14 +770,14 @@ function BrandsView({
       <AlertDialog open={deleteBrand !== null} onOpenChange={(v) => !v && setDeleteBrand(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Brand?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently remove the brand and all its models from the catalog.</AlertDialogDescription>
+            <AlertDialogTitle>{t("vehicleCatalog.deleteBrandTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("vehicleCatalog.deleteBrandDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("vehicleCatalog.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteBrand !== null && deleteBrandMutation.mutate(deleteBrand)}>
-              {deleteBrandMutation.isPending ? "Deleting…" : "Delete"}
+              {deleteBrandMutation.isPending ? t("vehicleCatalog.deleting") : t("vehicleCatalog.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -785,14 +785,14 @@ function BrandsView({
       <AlertDialog open={deleteColor !== null} onOpenChange={(v) => !v && setDeleteColor(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Color?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently remove this color from the catalog.</AlertDialogDescription>
+            <AlertDialogTitle>{t("vehicleCatalog.deleteColorTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("vehicleCatalog.deleteColorDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("vehicleCatalog.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteColor !== null && deleteColorMutation.mutate(deleteColor)}>
-              {deleteColorMutation.isPending ? "Deleting…" : "Delete"}
+              {deleteColorMutation.isPending ? t("vehicleCatalog.deleting") : t("vehicleCatalog.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -812,6 +812,7 @@ function ModelsView({
   onSelectModel: (model: VehicleModel) => void;
   isShuttle: boolean;
 }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [modelDialog, setModelDialog] = useState<{ open: boolean; model?: VehicleModel }>({ open: false });
@@ -825,18 +826,18 @@ function ModelsView({
 
   const createModel = useMutation({
     mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/models", { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setModelDialog({ open: false }); toast({ title: "Model added" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setModelDialog({ open: false }); toast({ title: t("vehicleCatalog.modelAdded") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const updateModel = useMutation({
     mutationFn: ({ id, data }: { id: number; data: object }) => adminFetch(`/admin/vehicle-catalog/models/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setModelDialog({ open: false }); toast({ title: "Model updated" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setModelDialog({ open: false }); toast({ title: t("vehicleCatalog.modelUpdated") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
   const deleteModelMutation = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/vehicle-catalog/models/${id}`, { method: "DELETE" }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setDeleteModel(null); toast({ title: "Model deleted" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-models", brand.id] }); setDeleteModel(null); toast({ title: t("vehicleCatalog.modelDeleted") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
 
   return (
@@ -850,8 +851,8 @@ function ModelsView({
           <div>
             <p className="font-semibold">{brand.name}</p>
             <div className="flex items-center gap-2 mt-0.5">
-              {brand.isChinese && <Badge variant="outline" className="text-[10px] border-red-200 text-red-600 bg-red-50 dark:bg-red-950 px-1.5">Chinese Brand</Badge>}
-              <span className="text-xs text-muted-foreground">{models.length} model{models.length !== 1 ? "s" : ""} registered</span>
+              {brand.isChinese && <Badge variant="outline" className="text-[10px] border-red-200 text-red-600 bg-red-50 dark:bg-red-950 px-1.5">{t("vehicleCatalog.chineseBrandBadge")}</Badge>}
+              <span className="text-xs text-muted-foreground">{t("vehicleCatalog.modelsRegistered", { count: models.length })}</span>
             </div>
           </div>
         </CardContent>
@@ -861,11 +862,11 @@ function ModelsView({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm">{brand.name} Approved Models</h3>
+          <h3 className="font-semibold text-sm">{brand.name} {t("vehicleCatalog.approvedModels")}</h3>
           {!modelsQuery.isLoading && <Badge variant="secondary" className="text-xs">{models.length}</Badge>}
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setModelDialog({ open: true })}>
-          <Plus className="h-3.5 w-3.5" /> Add New Model
+          <Plus className="h-3.5 w-3.5" /> {t("vehicleCatalog.addNewModel")}
         </Button>
       </div>
 
@@ -874,11 +875,11 @@ function ModelsView({
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">#</TableHead>
-              <TableHead>Model Name</TableHead>
-              <TableHead className="text-center">Year Range</TableHead>
-              {isShuttle && <TableHead className="text-center">Seats</TableHead>}
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-end">Actions</TableHead>
+              <TableHead>{t("vehicleCatalog.modelName")}</TableHead>
+              <TableHead className="text-center">{t("vehicleCatalog.yearRange")}</TableHead>
+              {isShuttle && <TableHead className="text-center">{t("vehicleCatalog.seats")}</TableHead>}
+              <TableHead className="text-center">{t("vehicleCatalog.status")}</TableHead>
+              <TableHead className="text-end">{t("vehicleCatalog.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -894,7 +895,7 @@ function ModelsView({
               <TableRow>
                 <TableCell colSpan={isShuttle ? 6 : 5} className="text-center py-12 text-muted-foreground text-sm">
                   <Layers className="h-7 w-7 mx-auto mb-2 opacity-30" />
-                  No models for {brand.name} yet. Add the first one.
+                  {t("vehicleCatalog.noModels", { brand: brand.name })}
                 </TableCell>
               </TableRow>
             ) : (
@@ -913,14 +914,14 @@ function ModelsView({
                   </TableCell>
                   <TableCell className="text-center text-sm">
                     {model.minYear}
-                    {model.maxYear ? ` – ${model.maxYear}` : " – present"}
+                    {model.maxYear ? ` – ${model.maxYear}` : ` – ${t("vehicleCatalog.present")}`}
                   </TableCell>
                   {isShuttle && (
                     <TableCell className="text-center text-sm">{model.seatCapacity ?? "—"}</TableCell>
                   )}
                   <TableCell className="text-center">
                     <Badge variant="outline" className={`text-xs ${model.isActive ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950" : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900"}`}>
-                      {model.isActive ? "Active" : "Inactive"}
+                      {model.isActive ? t("vehicleCatalog.active") : t("common.inactive")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-end" onClick={(e) => e.stopPropagation()}>
@@ -949,14 +950,14 @@ function ModelsView({
       <AlertDialog open={deleteModel !== null} onOpenChange={(v) => !v && setDeleteModel(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Model?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently remove this model and all its registered years.</AlertDialogDescription>
+            <AlertDialogTitle>{t("vehicleCatalog.deleteModelTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("vehicleCatalog.deleteModelDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("vehicleCatalog.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteModel !== null && deleteModelMutation.mutate(deleteModel)}>
-              {deleteModelMutation.isPending ? "Deleting…" : "Delete"}
+              {deleteModelMutation.isPending ? t("vehicleCatalog.deleting") : t("vehicleCatalog.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -974,6 +975,7 @@ function YearsView({
   brand: VehicleBrand;
   model: VehicleModel;
 }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [yearDialog, setYearDialog] = useState(false);
@@ -999,13 +1001,13 @@ function YearsView({
       queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] });
       setYearDialog(false);
       toast({
-        title: "Year registered",
+        title: t("vehicleCatalog.yearRegistered"),
         description: vars.pricingCategories.length > 1
           ? `${vars.year} added for ${vars.pricingCategories.length} pricing tiers`
           : undefined,
       });
     },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
 
   const updateYearCategory = useMutation({
@@ -1016,22 +1018,22 @@ function YearsView({
       setUpdatingId(null);
       queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] });
       const cat = pricingMeta(pricingCategory);
-      toast({ title: "Pricing category updated", description: cat ? `Set to ${cat.label} (${cat.labelAr})` : undefined });
+      toast({ title: t("vehicleCatalog.pricingCategoryUpdated"), description: cat ? `Set to ${cat.label} (${cat.labelAr})` : undefined });
     },
-    onError: (e: any) => { setUpdatingId(null); toast({ title: "Failed to update", description: e?.message, variant: "destructive" }); },
+    onError: (e: any) => { setUpdatingId(null); toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }); },
   });
 
   const deleteYearMutation = useMutation({
     mutationFn: (yearId: number) => adminFetch(`/admin/vehicle-catalog/models/${model.id}/years/${yearId}`, { method: "DELETE" }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); setDeleteYear(null); toast({ title: "Year removed" }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); setDeleteYear(null); toast({ title: t("vehicleCatalog.yearRemoved") }); },
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
 
   const updateYearStatus = useMutation({
     mutationFn: ({ yearId, isActive }: { yearId: number; isActive: boolean }) =>
       adminFetch(`/admin/vehicle-catalog/models/${model.id}/years/${yearId}`, { method: "PATCH", body: JSON.stringify({ isActive }) }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); },
-    onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+    onError: (e: any) => toast({ title: t("vehicleCatalog.errorTitle"), description: e?.message, variant: "destructive" }),
   });
 
   return (
@@ -1045,7 +1047,11 @@ function YearsView({
           <div className="flex-1 min-w-0">
             <p className="font-semibold">{brand.name} {model.name}</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Model year range: {model.minYear}–{model.maxYear ?? "present"} · {years.length} year{years.length !== 1 ? "s" : ""} registered
+              {t("vehicleCatalog.modelYearRange", {
+                min: model.minYear,
+                max: model.maxYear ?? t("vehicleCatalog.present"),
+                count: years.length,
+              })}
             </p>
           </div>
         </CardContent>
@@ -1055,7 +1061,7 @@ function YearsView({
       <div className="flex items-center gap-2 flex-wrap">
         <div className="flex items-center gap-1.5">
           <Zap className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium text-muted-foreground">Pricing Tiers:</span>
+          <span className="text-xs font-medium text-muted-foreground">{t("vehicleCatalog.pricingTiersLabel")}</span>
         </div>
         {PRICING_CATEGORIES.map((c) => (
           <Badge key={c.value} variant="outline" className={`text-xs gap-1 ${c.color}`}>
@@ -1068,11 +1074,11 @@ function YearsView({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Calendar className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm">{model.name} — Manufacturing Years</h3>
+          <h3 className="font-semibold text-sm">{model.name} — {t("vehicleCatalog.manufacturingYears")}</h3>
           {!yearsQuery.isLoading && <Badge variant="secondary" className="text-xs">{years.length}</Badge>}
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setYearDialog(true)}>
-          <Plus className="h-3.5 w-3.5" /> Add Year
+          <Plus className="h-3.5 w-3.5" /> {t("vehicleCatalog.addYear")}
         </Button>
       </div>
 
@@ -1080,10 +1086,10 @@ function YearsView({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-24">Year</TableHead>
-              <TableHead>Pricing Category</TableHead>
-              <TableHead className="text-center w-28">Status</TableHead>
-              <TableHead className="text-end w-20">Actions</TableHead>
+              <TableHead className="w-24">{t("vehicleCatalog.yearCol")}</TableHead>
+              <TableHead>{t("vehicleCatalog.pricingCategory")}</TableHead>
+              <TableHead className="text-center w-28">{t("vehicleCatalog.status")}</TableHead>
+              <TableHead className="text-end w-20">{t("vehicleCatalog.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1097,7 +1103,7 @@ function YearsView({
               <TableRow>
                 <TableCell colSpan={4} className="text-center py-12 text-muted-foreground text-sm">
                   <Calendar className="h-7 w-7 mx-auto mb-2 opacity-30" />
-                  No manufacturing years registered yet. Click "Add Year" to start.
+                  {t("vehicleCatalog.noYears")}
                 </TableCell>
               </TableRow>
             ) : (
@@ -1117,7 +1123,7 @@ function YearsView({
                           onValueChange={(value) => updateYearCategory.mutate({ yearId: yr.id, pricingCategory: value })}
                         >
                           <SelectTrigger className="w-52 h-8 text-sm">
-                            <SelectValue placeholder="— No category assigned —" />
+                            <SelectValue placeholder={t("vehicleCatalog.noCategoryAssigned")} />
                           </SelectTrigger>
                           <SelectContent>
                             {PRICING_CATEGORIES.map((c) => (
@@ -1136,7 +1142,7 @@ function YearsView({
                           </Badge>
                         )}
                         {isUpdating && (
-                          <span className="text-xs text-muted-foreground animate-pulse">Saving…</span>
+                          <span className="text-xs text-muted-foreground animate-pulse">{t("vehicleCatalog.saving")}</span>
                         )}
                       </div>
                     </TableCell>
@@ -1168,14 +1174,14 @@ function YearsView({
       <AlertDialog open={deleteYear !== null} onOpenChange={(v) => !v && setDeleteYear(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Year?</AlertDialogTitle>
-            <AlertDialogDescription>This will remove this manufacturing year entry from the catalog.</AlertDialogDescription>
+            <AlertDialogTitle>{t("vehicleCatalog.deleteYearTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("vehicleCatalog.deleteYearDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("vehicleCatalog.cancel")}</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteYear !== null && deleteYearMutation.mutate(deleteYear)}>
-              {deleteYearMutation.isPending ? "Removing…" : "Remove"}
+              {deleteYearMutation.isPending ? t("vehicleCatalog.removing") : t("vehicleCatalog.remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1193,6 +1199,7 @@ export function VehicleCatalogTab({
   isShuttle?: boolean;
   serviceType?: string;
 }) {
+  const { t } = useTranslation();
   const [viewState, setViewState] = useState<ViewState>({ level: "brands" });
 
   return (
@@ -1211,7 +1218,7 @@ export function VehicleCatalogTab({
             }}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {t("vehicleCatalog.back")}
           </Button>
         )}
       </div>
