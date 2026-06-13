@@ -51,10 +51,16 @@ router.post("/trips", authenticate, requireRole("admin"), async (req, res): Prom
   const bus = await db.select({ capacity: busesTable.capacity }).from(busesTable).where(eq(busesTable.id, parsed.data.busId));
   if (!bus[0]) { res.status(404).json({ error: "Bus not found" }); return; }
 
+  // Treat naive datetime strings (no timezone offset) as Cairo time (UTC+3)
+  const parseCairoTime = (dt: string) => {
+    if (/[Z+\-]\d{2}:?\d{2}$/.test(dt) || dt.endsWith("Z")) return new Date(dt);
+    return new Date(`${dt}:00+03:00`.replace(/:00:00\+/, ":00+"));
+  };
+
   const [trip] = await db.insert(tripsTable).values({
     ...parsed.data,
-    departureTime: new Date(parsed.data.departureTime),
-    arrivalTime: new Date(parsed.data.arrivalTime),
+    departureTime: parseCairoTime(parsed.data.departureTime),
+    arrivalTime: parseCairoTime(parsed.data.arrivalTime),
     price: String(parsed.data.price),
     totalSeats: bus[0].capacity,
     availableSeats: bus[0].capacity,
@@ -77,9 +83,14 @@ router.patch("/trips/:id", authenticate, requireRole("admin"), async (req, res):
   const parsed = UpdateTripBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const parseCairoTime = (dt: string) => {
+    if (/[Z+\-]\d{2}:?\d{2}$/.test(dt) || dt.endsWith("Z")) return new Date(dt);
+    return new Date(`${dt}:00+03:00`.replace(/:00:00\+/, ":00+"));
+  };
+
   const updateData: Record<string, unknown> = { ...parsed.data };
-  if (parsed.data.departureTime) updateData.departureTime = new Date(parsed.data.departureTime);
-  if (parsed.data.arrivalTime) updateData.arrivalTime = new Date(parsed.data.arrivalTime);
+  if (parsed.data.departureTime) updateData.departureTime = parseCairoTime(parsed.data.departureTime);
+  if (parsed.data.arrivalTime) updateData.arrivalTime = parseCairoTime(parsed.data.arrivalTime);
   if (parsed.data.price !== undefined) updateData.price = String(parsed.data.price);
 
   const [updated] = await db.update(tripsTable).set(updateData).where(eq(tripsTable.id, params.data.id)).returning();

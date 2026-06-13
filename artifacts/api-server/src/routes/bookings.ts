@@ -103,7 +103,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     const tripRow = tripResult.rows[0] as TripRow | undefined;
 
     if (!tripRow) return { error: "Trip not found", code: "TRIP_NOT_FOUND", status: 404 };
-    const BOOKABLE_STATUSES = ["scheduled", "active", "waiting_driver"];
+    const BOOKABLE_STATUSES = ["scheduled", "active", "waiting_driver", "driver_assigned", "boarding"];
     if (!BOOKABLE_STATUSES.includes(tripRow.status)) {
       return { error: "Trip is not available for booking", code: "TRIP_UNAVAILABLE", status: 400 };
     }
