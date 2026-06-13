@@ -247,46 +247,87 @@ function YearDialog({
 }: {
   open: boolean; onClose: () => void;
   modelId: number;
-  onSave: (data: { year: number; pricingCategory: string | null; isActive: boolean }) => void;
+  onSave: (data: { year: number; pricingCategories: string[]; isActive: boolean }) => void;
   saving: boolean;
 }) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState<number>(currentYear);
-  const [pricingCategory, setPricingCategory] = useState<string>("Economy");
+  const [selected, setSelected] = useState<Set<string>>(new Set(["Economy"]));
   const [isActive, setIsActive] = useState(true);
+
   React.useEffect(() => {
-    if (open) { setYear(currentYear); setPricingCategory("Economy"); setIsActive(true); }
+    if (open) { setYear(currentYear); setSelected(new Set(["Economy"])); setIsActive(true); }
   }, [open]);
+
+  const toggle = (value: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader><DialogTitle>Register Manufacturing Year</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
-          <div className="space-y-1.5"><Label>Year of Manufacture</Label>
+          <div className="space-y-1.5">
+            <Label>Year of Manufacture</Label>
             <Input type="number" min={1990} max={currentYear + 2} value={year}
               onChange={(e) => setYear(Number(e.target.value))} />
           </div>
-          <div className="space-y-1.5">
-            <Label>Pricing Category</Label>
-            <Select value={pricingCategory} onValueChange={setPricingCategory}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PRICING_CATEGORIES.map((c) => (
-                  <SelectItem key={c.value} value={c.value}>
-                    {c.label} <span className="text-muted-foreground">({c.labelAr})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="space-y-2">
+            <Label>
+              Pricing Tiers
+              <span className="ms-1.5 text-xs font-normal text-muted-foreground">(اختر واحد أو أكتر)</span>
+            </Label>
+            <div className="space-y-2">
+              {PRICING_CATEGORIES.map((c) => {
+                const checked = selected.has(c.value);
+                return (
+                  <label
+                    key={c.value}
+                    className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors select-none ${
+                      checked ? `${c.color} border-current` : "border-border hover:bg-muted/40"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(c.value)}
+                      className="h-4 w-4 shrink-0 rounded accent-current"
+                    />
+                    <div className="flex-1">
+                      <span className="font-medium text-sm">{c.label}</span>
+                      <span className="ms-2 text-xs opacity-70">{c.labelAr}</span>
+                    </div>
+                    {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
+                  </label>
+                );
+              })}
+            </div>
+            {selected.size === 0 && (
+              <p className="text-xs text-destructive">Select at least one pricing tier.</p>
+            )}
           </div>
-          <div className="flex items-center justify-between"><Label>Active</Label>
+          <div className="flex items-center justify-between">
+            <Label>Active</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={!year || saving} onClick={() => onSave({ year, pricingCategory, isActive })}>
-            {saving ? "Saving…" : "Register Year"}
+          <Button
+            disabled={!year || selected.size === 0 || saving}
+            onClick={() => onSave({ year, pricingCategories: Array.from(selected), isActive })}
+          >
+            {saving
+              ? "Saving…"
+              : selected.size > 1
+                ? `Register Year (${selected.size} tiers)`
+                : "Register Year"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -539,7 +580,17 @@ function BrandsView({
     queryKey: ["vehicle-catalog-colors"],
     queryFn: () => adminFetch<{ data: VehicleColor[] }>("/admin/vehicle-catalog/colors"),
   });
-  const colors = colorsQuery.data?.data ?? [];
+  const allColors = colorsQuery.data?.data ?? [];
+  const colors = React.useMemo(() => {
+    const seen = new Set<string>();
+    return allColors.filter((c) => {
+      const key = c.nameEn.trim().toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [allColors]);
+  const duplicateCount = allColors.length - colors.length;
 
   const createBrand = useMutation({
     mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify({ ...data, serviceType }) }),
@@ -668,10 +719,16 @@ function BrandsView({
       {/* ── Approved Colors ── */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Palette className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-semibold text-sm">Approved Colors</h3>
-            {!colorsQuery.isLoading && <Badge variant="secondary" className="text-xs">{colors.length}</Badge>}
+            {!colorsQuery.isLoading && <Badge variant="secondary" className="text-xs">{colors.length} unique</Badge>}
+            {duplicateCount > 0 && (
+              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950 gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                {duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} hidden
+              </Badge>
+            )}
           </div>
           <Button size="sm" className="gap-1.5" onClick={() => setColorDialog({ open: true })}>
             <Plus className="h-3.5 w-3.5" /> Add Color
@@ -946,8 +1003,24 @@ function YearsView({
   const years = (yearsQuery.data?.data ?? []).sort((a, b) => b.year - a.year);
 
   const createYear = useMutation({
-    mutationFn: (data: object) => adminFetch(`/admin/vehicle-catalog/models/${model.id}/years`, { method: "POST", body: JSON.stringify(data) }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] }); setYearDialog(false); toast({ title: "Year registered" }); },
+    mutationFn: async (data: { year: number; pricingCategories: string[]; isActive: boolean }) => {
+      for (const pricingCategory of data.pricingCategories) {
+        await adminFetch(`/admin/vehicle-catalog/models/${model.id}/years`, {
+          method: "POST",
+          body: JSON.stringify({ year: data.year, pricingCategory, isActive: data.isActive }),
+        });
+      }
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["vehicle-catalog-years", model.id] });
+      setYearDialog(false);
+      toast({
+        title: "Year registered",
+        description: vars.pricingCategories.length > 1
+          ? `${vars.year} added for ${vars.pricingCategories.length} pricing tiers`
+          : undefined,
+      });
+    },
     onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
   });
 
