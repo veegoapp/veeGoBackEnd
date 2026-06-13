@@ -126,3 +126,9 @@ id = "9yx4OWeOdVj-TrsHFrSlp"
 uri = "file://database-schema-report.md"
 type = "text"
 title = "VeeGo Database Schema Report"
+
+[[outputs]]
+id = "dYC5iftWcrEhJ1J2Nq2cn"
+uri = "file://SHUTTLE_API_INTEGRATION_REPORT.md"
+type = "text"
+title = "SHUTTLE_API_INTEGRATION_REPORT.md"
