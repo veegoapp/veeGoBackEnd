@@ -1224,12 +1224,21 @@ router.patch("/rides/:id/cancel", authenticate, requireRole("user"), async (req,
 
     // Notify the driver via WebSocket.
     const io = getIO();
-    if (io && driverUserId !== null) {
-      io.to(`driver:${driverUserId}`).emit(SOCKET_EVENTS.RIDE_CANCELLED, {
-        rideId:          id,
-        cancelledBy:     "passenger",
-        reason:          "passenger_cancelled",
-        cancellationFee: actualFee,
+    if (io) {
+      if (driverUserId !== null) {
+        io.to(`driver:${driverUserId}`).emit(SOCKET_EVENTS.RIDE_CANCELLED, {
+          rideId:          id,
+          cancelledBy:     "passenger",
+          reason:          "passenger_cancelled",
+          cancellationFee: actualFee,
+        });
+      }
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId:         id,
+        status:         "cancelled",
+        previousStatus: ride.status,
+        timestamp:      new Date().toISOString(),
+        meta: { cancelledBy: "passenger", refundAmount, cancellationFee: actualFee },
       });
     }
 
@@ -1382,6 +1391,13 @@ router.patch("/driver/rides/:id/accept", authenticate, requireRole("driver"), as
         },
         eta: 5,
       });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "driver_assigned",
+        previousStatus: "searching",
+        timestamp:      new Date().toISOString(),
+        meta: { driverId: driver.id, driverName: driver.name },
+      });
     }
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
@@ -1434,6 +1450,13 @@ router.patch("/driver/rides/:id/arrived", authenticate, requireRole("driver"), a
     const io = getIO();
     if (io) {
       io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_DRIVER_ARRIVED, { rideId, driverId: driver.id });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "driver_arrived",
+        previousStatus: "driver_assigned",
+        timestamp:      new Date().toISOString(),
+        meta: { driverId: driver.id },
+      });
     }
 
     // Start server-side waiting timer. Free window begins now; passenger is
@@ -1499,6 +1522,13 @@ router.patch("/driver/rides/:id/start", authenticate, requireRole("driver"), asy
     const io = getIO();
     if (io) {
       io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STARTED, { rideId, driverId: driver.id });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "active",
+        previousStatus: "driver_arrived",
+        timestamp:      new Date().toISOString(),
+        meta: { driverId: driver.id },
+      });
     }
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
@@ -1646,6 +1676,13 @@ router.patch("/driver/rides/:id/complete", authenticate, requireRole("driver"), 
     const io = getIO();
     if (io) {
       io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "completed",
+        previousStatus: "active",
+        timestamp:      new Date().toISOString(),
+        meta: { finalPrice, waitingCharge },
+      });
     }
     clearDeviationState(rideId);
 
@@ -1689,7 +1726,16 @@ router.post("/driver/rides/:id/start", authenticate, requireRole("driver"), asyn
     await db.insert(rideEventsTable).values({ rideId, type: "RIDE_STARTED", metadata: { driverId: driver.id } });
 
     const io = getIO();
-    if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STARTED, { rideId, driverId: driver.id });
+    if (io) {
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STARTED, { rideId, driverId: driver.id });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "active",
+        previousStatus: "driver_arrived",
+        timestamp:      new Date().toISOString(),
+        meta: { driverId: driver.id },
+      });
+    }
 
     res.json({ data: parseRide(updated as unknown as Record<string, unknown>) });
   } catch {
@@ -1812,7 +1858,16 @@ router.post("/driver/rides/:id/complete", authenticate, requireRole("driver"), a
     await db.insert(rideEventsTable).values({ rideId, type: "RIDE_COMPLETED", metadata: { driverId: driver.id, finalPrice, waitingCharge } });
 
     const io = getIO();
-    if (io) io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
+    if (io) {
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_COMPLETED, { rideId, finalPrice, fare: finalPrice, waitingCharge });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "completed",
+        previousStatus: "active",
+        timestamp:      new Date().toISOString(),
+        meta: { finalPrice, waitingCharge },
+      });
+    }
     clearDeviationState(rideId);
 
     // Fix 2: Criminal record enforcement after threshold trips/rides
@@ -2104,6 +2159,13 @@ router.patch("/driver/rides/:id/cancel", authenticate, requireRole("driver"), as
       io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_DRIVER_CANCELLED, {
         rideId,
         message: "Your driver cancelled. Finding you a new driver...",
+      });
+      io.to(`passenger:${ride.passengerId}`).emit(SOCKET_EVENTS.RIDE_STATUS_CHANGED, {
+        rideId,
+        status:         "searching",
+        previousStatus: ride.status,
+        timestamp:      new Date().toISOString(),
+        meta: { cancelledBy: "driver", message: "Your driver cancelled. Finding you a new driver..." },
       });
     }
 

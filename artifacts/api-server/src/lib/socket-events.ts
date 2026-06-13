@@ -26,6 +26,9 @@ export const SOCKET_EVENTS = {
   RIDE_OFFER_EXPIRED:          "ride:offer_expired",
   RIDE_NO_LONGER_AVAILABLE:    "ride:no_longer_available",
   RIDE_STATUS_UPDATE:          "ride:status_update",
+  // Unified status-change event — emitted to the passenger room on every
+  // ride state transition. Payload: { rideId, status, previousStatus, timestamp, meta }.
+  RIDE_STATUS_CHANGED:         "ride:status:changed",
 
   // ── Server → Admin room ──────────────────────────────────────────────────────
   ADMIN_TRACK_TRIP:      "admin:track:trip",
