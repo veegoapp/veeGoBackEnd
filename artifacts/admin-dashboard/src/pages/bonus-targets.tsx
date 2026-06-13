@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,6 +85,7 @@ function TargetDialog({
   open: boolean; onClose: () => void; initial?: BonusTarget;
   onSave: (data: object) => void; saving: boolean;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [serviceType, setServiceType] = useState(initial?.serviceType ?? "all");
@@ -93,6 +95,16 @@ function TargetDialog({
   const [startsAt, setStartsAt] = useState(initial?.startsAt?.slice(0, 16) ?? "");
   const [endsAt, setEndsAt] = useState(initial?.endsAt?.slice(0, 16) ?? "");
   const [isActive, setIsActive] = useState(initial?.isActive ?? true);
+
+  const SERVICE_TYPE_OPTIONS = [
+    { value: "all",      label: t("bonusTargets.serviceTypes.all") },
+    { value: "ride",     label: t("bonusTargets.serviceTypes.ride") },
+    { value: "shuttle",  label: t("bonusTargets.serviceTypes.shuttle") },
+    { value: "car",      label: t("bonusTargets.serviceTypes.car") },
+    { value: "bike",     label: t("bonusTargets.serviceTypes.bike") },
+    { value: "delivery", label: t("bonusTargets.serviceTypes.delivery") },
+    { value: "scooter",  label: t("bonusTargets.serviceTypes.scooter") },
+  ];
 
   React.useEffect(() => {
     if (open) {
@@ -116,21 +128,21 @@ function TargetDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-amber-500" />
-            {initial ? "Edit Bonus Target" : "Create Bonus Target"}
+            {initial ? t("bonusTargets.editBonusTarget") : t("bonusTargets.createBonusTarget")}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
           <div className="space-y-1.5">
-            <Label>Name</Label>
-            <Input placeholder="e.g. Complete 50 Car Rides" value={name} onChange={(e) => setName(e.target.value)} />
+            <Label>{t("common.name")}</Label>
+            <Input placeholder={t("bonusTargets.namePlaceholder")} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="space-y-1.5">
-            <Label>Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
-            <Textarea placeholder="Short description shown to drivers" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+            <Label>{t("bonusTargets.description")} <span className="text-muted-foreground text-xs">{t("bonusTargets.optional")}</span></Label>
+            <Textarea placeholder={t("bonusTargets.descPlaceholder")} value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Service Type</Label>
+              <Label>{t("bonusTargets.serviceType")}</Label>
               <Select value={serviceType} onValueChange={setServiceType}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -141,30 +153,30 @@ function TargetDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Target Type</Label>
+              <Label>{t("bonusTargets.targetType")}</Label>
               <Select value={targetType} onValueChange={(v: any) => setTargetType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ride_count">Ride Count</SelectItem>
-                  <SelectItem value="earnings_amount">Earnings Amount (EGP)</SelectItem>
+                  <SelectItem value="ride_count">{t("bonusTargets.tripCount")}</SelectItem>
+                  <SelectItem value="earnings_amount">{t("bonusTargets.earnings")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>{targetType === "ride_count" ? "Target Rides" : "Target Earnings (EGP)"}</Label>
+              <Label>{targetType === "ride_count" ? t("bonusTargets.targetRides") : t("bonusTargets.targetEarnings")}</Label>
               <Input
                 type="number" min={1} step={targetType === "ride_count" ? 1 : 0.01}
-                placeholder={targetType === "ride_count" ? "e.g. 50" : "e.g. 1000.00"}
+                placeholder={targetType === "ride_count" ? t("bonusTargets.targetRidesPlaceholder") : t("bonusTargets.targetEarningsPlaceholder")}
                 value={targetValue}
                 onChange={(e) => setTargetValue(e.target.value === "" ? "" : Number(e.target.value))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Bonus Payout (EGP)</Label>
+              <Label>{t("bonusTargets.bonusPayout")}</Label>
               <Input
-                type="number" min={0} step={0.01} placeholder="e.g. 200.00"
+                type="number" min={0} step={0.01} placeholder={t("bonusTargets.bonusPlaceholder")}
                 value={bonusAmount}
                 onChange={(e) => setBonusAmount(e.target.value === "" ? "" : Number(e.target.value))}
               />
@@ -172,21 +184,21 @@ function TargetDialog({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Starts At</Label>
+              <Label>{t("bonusTargets.startsAt")}</Label>
               <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Ends At</Label>
+              <Label>{t("bonusTargets.endsAt")}</Label>
               <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
             </div>
           </div>
           <div className="flex items-center justify-between">
-            <Label>Active</Label>
+            <Label>{t("bonusTargets.activeToggle")}</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
           <Button
             disabled={!canSave || saving}
             onClick={() => onSave({
@@ -197,7 +209,7 @@ function TargetDialog({
               isActive,
             })}
           >
-            {saving ? "Saving…" : "Save Target"}
+            {saving ? t("bonusTargets.saving") : t("bonusTargets.saveTarget")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -206,6 +218,7 @@ function TargetDialog({
 }
 
 function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: () => void }) {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery<{ data: DriverProgress[] }>({
     queryKey: ["bonus-target-progress", target.id],
     queryFn: () => adminFetch<{ data: DriverProgress[] }>(`/admin/bonus-targets/${target.id}/progress`),
@@ -220,12 +233,12 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-amber-500" />
-            {target.name} — Driver Progress
+            {t("bonusTargets.driverProgress", { name: target.name })}
           </DialogTitle>
           <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1">
-            <span>Target: {target.targetType === "ride_count" ? `${target.targetValue} rides` : formatEGP(target.targetValue)}</span>
+            <span>{target.targetType === "ride_count" ? t("bonusTargets.targetSummaryRides", { value: target.targetValue }) : t("bonusTargets.targetSummaryEarnings", { value: formatEGP(target.targetValue) })}</span>
             <span>·</span>
-            <span>Bonus: {formatEGP(target.bonusAmount)}</span>
+            <span>{t("bonusTargets.bonusSummary", { value: formatEGP(target.bonusAmount) })}</span>
             <span>·</span>
             <span>{format(parseISO(target.startsAt), "MMM d")} → {format(parseISO(target.endsAt), "MMM d, yyyy")}</span>
           </div>
@@ -238,7 +251,7 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
           ) : drivers.length === 0 ? (
             <div className="py-14 text-center text-muted-foreground">
               <Users className="h-8 w-8 mx-auto mb-3 opacity-30" />
-              <p>No drivers enrolled yet</p>
+              <p>{t("bonusTargets.noDriversEnrolled")}</p>
             </div>
           ) : (
             <div className="divide-y divide-border">
@@ -250,12 +263,12 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
                       <div className="flex items-center gap-2">
                         <Link href={`/drivers/${d.driverId}`}>
                           <span className="text-sm font-medium text-primary hover:underline cursor-pointer">
-                            {d.driverName ?? `Driver #${d.driverId}`}
+                            {d.driverName ?? `${t("common.driver")} #${d.driverId}`}
                           </span>
                         </Link>
                         {d.isCompleted && (
                           <Badge variant="outline" className="text-[10px] text-green-600 border-green-200 bg-green-50 dark:bg-green-950 gap-1">
-                            <CheckCircle2 className="h-2.5 w-2.5" /> Completed
+                            <CheckCircle2 className="h-2.5 w-2.5" /> {t("bonusTargets.completedBadge")}
                           </Badge>
                         )}
                       </div>
@@ -265,9 +278,9 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {target.targetType === "ride_count"
-                          ? `${Math.round(d.currentValue)} / ${target.targetValue} rides`
-                          : `${formatEGP(d.currentValue)} / ${formatEGP(target.targetValue)}`}
-                        {d.completedAt && ` · Completed ${format(parseISO(d.completedAt), "MMM d, yyyy")}`}
+                          ? t("bonusTargets.rideCountGoal", { current: Math.round(d.currentValue), target: target.targetValue })
+                          : t("bonusTargets.earningsGoal", { current: formatEGP(d.currentValue), target: formatEGP(target.targetValue) })}
+                        {d.completedAt && ` · ${t("bonusTargets.completedOn", { date: format(parseISO(d.completedAt), "MMM d, yyyy") })}`}
                       </p>
                     </div>
                   </div>
@@ -277,7 +290,7 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Close</Button>
+          <Button variant="outline" onClick={onClose}>{t("common.close")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -285,6 +298,7 @@ function ProgressDrilldown({ target, onClose }: { target: BonusTarget; onClose: 
 }
 
 export default function BonusTargets() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -301,37 +315,44 @@ export default function BonusTargets() {
     mutationFn: (body: object) =>
       adminFetch("/admin/bonus-targets", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
-      toast({ title: "Bonus target created" });
+      toast({ title: t("bonusTargets.targetCreated") });
       setDialog({ open: false });
       queryClient.invalidateQueries({ queryKey: ["bonus-targets"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: object }) =>
       adminFetch(`/admin/bonus-targets/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => {
-      toast({ title: "Target updated" });
+      toast({ title: t("bonusTargets.targetUpdated") });
       setDialog({ open: false });
       queryClient.invalidateQueries({ queryKey: ["bonus-targets"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
       adminFetch(`/admin/bonus-targets/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast({ title: "Target removed" });
+      toast({ title: t("bonusTargets.targetDeleted") });
       setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ["bonus-targets"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const targets = (data?.data ?? []).filter((t) => !t.isDeleted);
   const activeCount = targets.filter((t) => targetStatus(t) === "active").length;
+
+  const STATUS_META_DYNAMIC = {
+    active:   { label: t("bonusTargets.active"),    cls: "text-green-600 border-green-200 bg-green-50 dark:bg-green-950" },
+    upcoming: { label: t("dashboard.upcoming"),  cls: "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950" },
+    expired:  { label: t("commissionExemptions.expired"),   cls: "text-muted-foreground border-border bg-muted/30" },
+    disabled: { label: t("common.disabled"),  cls: "text-orange-600 border-orange-200 bg-orange-50 dark:bg-orange-950" },
+  };
 
   return (
     <div className="p-8 space-y-6">
@@ -342,20 +363,20 @@ export default function BonusTargets() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              Milestone Bonus Targets
+              {t("bonusTargets.milestoneBonusTargets")}
               {activeCount > 0 && (
                 <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50">
-                  {activeCount} active
+                  {t("bonusTargets.activeCount", { count: activeCount })}
                 </Badge>
               )}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Create and manage driver incentive milestones — ride counts or earnings thresholds that pay bonuses automatically
+              {t("bonusTargets.manageSubtitle")}
             </p>
           </div>
         </div>
         <Button onClick={() => setDialog({ open: true })} className="gap-1.5">
-          <Plus className="h-4 w-4" /> Create Target
+          <Plus className="h-4 w-4" /> {t("bonusTargets.createTarget")}
         </Button>
       </div>
 
@@ -366,28 +387,28 @@ export default function BonusTargets() {
       ) : targets.length === 0 ? (
         <div className="rounded-xl border border-border bg-card py-16 text-center text-muted-foreground">
           <Trophy className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium">No bonus targets defined</p>
-          <p className="text-sm mt-1">Create your first milestone incentive to get started</p>
+          <p className="font-medium">{t("bonusTargets.noTargetsDefined")}</p>
+          <p className="text-sm mt-1">{t("bonusTargets.firstIncentive")}</p>
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Target</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Goal</TableHead>
-                <TableHead>Bonus</TableHead>
-                <TableHead>Window</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Enrolled</TableHead>
-                <TableHead className="text-end">Actions</TableHead>
+                <TableHead>{t("bonusTargets.colTarget")}</TableHead>
+                <TableHead>{t("bonusTargets.colService")}</TableHead>
+                <TableHead>{t("bonusTargets.colGoal")}</TableHead>
+                <TableHead>{t("bonusTargets.colBonus2")}</TableHead>
+                <TableHead>{t("bonusTargets.colWindow")}</TableHead>
+                <TableHead>{t("common.status")}</TableHead>
+                <TableHead>{t("bonusTargets.colEnrolled")}</TableHead>
+                <TableHead className="text-end">{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {targets.map((target) => {
                 const st = targetStatus(target);
-                const meta = STATUS_META[st];
+                const meta = STATUS_META_DYNAMIC[st];
                 return (
                   <TableRow key={target.id}>
                     <TableCell>
@@ -401,7 +422,7 @@ export default function BonusTargets() {
                     </TableCell>
                     <TableCell className="text-sm">
                       {target.targetType === "ride_count"
-                        ? <span className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />{target.targetValue} rides</span>
+                        ? <span className="flex items-center gap-1"><TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />{t("bonusTargets.rideCountGoal", { current: "", target: target.targetValue }).replace(" / ", "")}</span>
                         : <span className="flex items-center gap-1"><Zap className="h-3.5 w-3.5 text-muted-foreground" />{formatEGP(target.targetValue)}</span>
                       }
                     </TableCell>
@@ -426,7 +447,7 @@ export default function BonusTargets() {
                       </button>
                       {target.completedCount !== undefined && target.completedCount > 0 && (
                         <span className="text-xs text-green-600 flex items-center gap-0.5">
-                          <Star className="h-2.5 w-2.5" /> {target.completedCount} completed
+                          <Star className="h-2.5 w-2.5" /> {t("bonusTargets.completed", { count: target.completedCount })}
                         </span>
                       )}
                     </TableCell>
@@ -435,7 +456,7 @@ export default function BonusTargets() {
                         <Button
                           variant="ghost" size="icon" className="h-7 w-7"
                           onClick={() => setDrilldown(target)}
-                          title="View progress"
+                          title={t("bonusTargets.viewProgress")}
                         >
                           <TrendingUp className="h-3.5 w-3.5" />
                         </Button>
@@ -482,18 +503,18 @@ export default function BonusTargets() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Bonus Target?</AlertDialogTitle>
+            <AlertDialogTitle>{t("bonusTargets.removeConfirmTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will soft-delete the target. Drivers who have already earned the bonus will not be affected, but progress tracking will stop.
+              {t("bonusTargets.removeConfirmDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteTarget !== null && deleteMutation.mutate(deleteTarget)}
             >
-              {deleteMutation.isPending ? "Removing…" : "Remove"}
+              {deleteMutation.isPending ? t("bonusTargets.removing") : t("bonusTargets.remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

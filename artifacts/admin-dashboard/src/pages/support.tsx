@@ -92,7 +92,7 @@ export default function Support() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["support-tickets"] });
       queryClient.invalidateQueries({ queryKey: ["support-stats"] });
-      toast({ title: t("support.ticketUpdated", "Ticket updated") });
+      toast({ title: t("support.ticketUpdated") });
     },
   });
 
@@ -109,7 +109,7 @@ export default function Support() {
       }
       setReplyText("");
       queryClient.invalidateQueries({ queryKey: ["support-tickets"] });
-      toast({ title: t("support.replySent", "Reply sent") });
+      toast({ title: t("support.replySent") });
     },
   });
 
@@ -166,7 +166,7 @@ export default function Support() {
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[130px]"><SelectValue placeholder={t("common.status")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("support.allStatus", "All Status")}</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
             <SelectItem value="open">{t("support.open")}</SelectItem>
             <SelectItem value="pending">{t("support.pending")}</SelectItem>
             <SelectItem value="resolved">{t("support.resolved")}</SelectItem>
@@ -177,7 +177,7 @@ export default function Support() {
         <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[120px]"><SelectValue placeholder={t("support.priority")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("support.allPriority", "All Priority")}</SelectItem>
+            <SelectItem value="all">{t("support.allPriority")}</SelectItem>
             <SelectItem value="high">{t("support.high")}</SelectItem>
             <SelectItem value="medium">{t("support.medium")}</SelectItem>
             <SelectItem value="low">{t("support.low")}</SelectItem>
@@ -187,14 +187,14 @@ export default function Support() {
         <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[120px]"><SelectValue placeholder={t("support.type")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("support.allTypes", "All Types")}</SelectItem>
+            <SelectItem value="all">{t("support.allTypes")}</SelectItem>
             <SelectItem value="passenger">{t("nav.passengers")}</SelectItem>
             <SelectItem value="driver">{t("nav.drivers")}</SelectItem>
           </SelectContent>
         </Select>
 
         {(search || statusFilter !== "all" || priorityFilter !== "all" || typeFilter !== "all") && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>{t("common.clear", "Clear")}</Button>
+          <Button variant="ghost" size="sm" onClick={clearFilters}>{t("common.clear")}</Button>
         )}
       </div>
 
@@ -241,8 +241,8 @@ export default function Support() {
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {ticket.user?.name || ticket.driver?.name || t("support.anonymous", "Anonymous")} ·{" "}
-                    {ticket.type} · #{ticket.id} ·{" "}
+                    {ticket.user?.name || ticket.driver?.name || t("common.unknown")} ·{" "}
+                    {ticket.type === "driver" ? t("common.driver") : t("common.passenger")} · #{ticket.id} ·{" "}
                     {format(new Date(ticket.createdAt), "MMM d, yyyy")}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1 truncate">{ticket.message}</p>
@@ -267,7 +267,7 @@ export default function Support() {
                 className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              {t("common.page", "Page")} {page} {t("common.of", "of")} {Math.ceil(data.total / data.limit)}
+              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / data.limit)}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext onClick={() => setPage(p => p + 1)}
@@ -293,25 +293,25 @@ export default function Support() {
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
                 <span>#{selectedTicket.id}</span>
                 <span>·</span>
-                <span className="capitalize">{selectedTicket.type}</span>
+                <span className="capitalize">{selectedTicket.type === "driver" ? t("common.driver") : t("common.passenger")}</span>
                 <span>·</span>
                 <span>{t("support.priority")}: <span className={`font-medium px-1 rounded ${priorityConfig[selectedTicket.priority].className}`}>
                   {priorityConfig[selectedTicket.priority].label}
                 </span></span>
                 <span>·</span>
-                <span>{selectedTicket.user?.name || selectedTicket.driver?.name || t("support.anonymous", "Anonymous")}</span>
+                <span>{selectedTicket.user?.name || selectedTicket.driver?.name || t("common.unknown")}</span>
                 <span>·</span>
                 <span>{format(new Date(selectedTicket.createdAt), "MMM d, yyyy HH:mm")}</span>
               </div>
 
               <div className="bg-muted rounded-lg p-4">
-                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">{t("support.originalMessage", "Original Message")}</div>
+                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">{t("support.originalMessage")}</div>
                 <p className="text-sm">{selectedTicket.message}</p>
               </div>
 
               {selectedTicket.messages.length > 0 && (
                 <div className="space-y-3">
-                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("support.replies", "Replies")}</div>
+                  <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("support.replies")}</div>
                   {selectedTicket.messages.map((msg) => (
                     <div key={msg.id} className={`flex gap-3 ${msg.senderType === "admin" ? "flex-row-reverse" : ""}`}>
                       <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
@@ -357,9 +357,9 @@ export default function Support() {
               </div>
 
               <div className="space-y-2 pt-2 border-t">
-                <div className="text-sm font-medium">{t("support.reply", "Reply")}</div>
+                <div className="text-sm font-medium">{t("support.reply")}</div>
                 <Textarea
-                  placeholder={t("support.replyPlaceholder", "Write your reply...")}
+                  placeholder={t("support.replyPlaceholder")}
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                   rows={3}
@@ -369,7 +369,7 @@ export default function Support() {
                   disabled={!replyText.trim() || replyMutation.isPending}
                   onClick={() => replyMutation.mutate({ id: selectedTicket.id, message: replyText })}
                 >
-                  <Send className="h-4 w-4 me-2" /> {t("support.sendReply", "Send Reply")}
+                  <Send className="h-4 w-4 me-2" /> {t("support.sendReply")}
                 </Button>
               </div>
             </div>

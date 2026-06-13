@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -27,20 +28,21 @@ interface OffencesResponse {
   total: number;
 }
 
-const ACTION_META: Record<string, { label: string; cls: string }> = {
-  warning:   { label: "Warning",   cls: "border-amber-200 bg-amber-50 text-amber-700" },
-  fined:     { label: "Fined",     cls: "border-red-200 bg-red-50 text-red-700" },
-  suspended: { label: "Suspended", cls: "border-purple-200 bg-purple-50 text-purple-700" },
-};
-
-const ACTOR_META: Record<string, { label: string; cls: string }> = {
-  passenger: { label: "Passenger", cls: "border-blue-200 bg-blue-50 text-blue-700" },
-  driver:    { label: "Driver",    cls: "border-slate-200 bg-slate-100 text-slate-700" },
-};
-
 export default function ShuttleOffences() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const ACTION_META: Record<string, { label: string; cls: string }> = {
+    warning:   { label: t("shuttleOffences.warning"),   cls: "border-amber-200 bg-amber-50 text-amber-700" },
+    fined:     { label: t("shuttleOffences.fined"),     cls: "border-red-200 bg-red-50 text-red-700" },
+    suspended: { label: t("shuttleOffences.suspended"), cls: "border-purple-200 bg-purple-50 text-purple-700" },
+  };
+
+  const ACTOR_META: Record<string, { label: string; cls: string }> = {
+    passenger: { label: t("shuttleOffences.actorPassenger"), cls: "border-blue-200 bg-blue-50 text-blue-700" },
+    driver:    { label: t("shuttleOffences.actorDriver"),    cls: "border-slate-200 bg-slate-100 text-slate-700" },
+  };
 
   const [actorType, setActorType] = useState("all");
   const [lastAction, setLastAction] = useState("all");
@@ -63,12 +65,12 @@ export default function ShuttleOffences() {
     mutationFn: (userId: number) =>
       adminFetch(`/admin/shuttle/offences/${userId}/reset`, { method: "PATCH" }),
     onSuccess: (_data, userId) => {
-      toast({ title: "Offences reset", description: `Offence count cleared for user #${userId}` });
+      toast({ title: t("shuttleOffences.offencesReset"), description: t("shuttleOffences.countCleared", { id: userId }) });
       setResettingId(null);
       void queryClient.invalidateQueries({ queryKey: ["shuttle-offences"] });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: err.message, variant: "destructive" });
       setResettingId(null);
     },
   });
@@ -84,15 +86,15 @@ export default function ShuttleOffences() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <ShieldAlert className="h-6 w-6 text-red-500" />
-            Shuttle Offences
+            {t("shuttleOffences.title")}
           </h1>
           <p className="text-muted-foreground mt-1">
-            All passenger and driver no-show offences, warnings, fines, and suspensions.
+            {t("shuttleOffences.subtitle")}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           <RefreshCw className="h-4 w-4 me-2" />
-          Refresh
+          {t("common.refresh")}
         </Button>
       </div>
 
@@ -100,24 +102,24 @@ export default function ShuttleOffences() {
       <div className="flex flex-wrap gap-3">
         <Select value={actorType} onValueChange={setActorType}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Actor type" />
+            <SelectValue placeholder={t("shuttleOffences.actorType")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="passenger">Passenger</SelectItem>
-            <SelectItem value="driver">Driver</SelectItem>
+            <SelectItem value="all">{t("shuttleOffences.allTypes")}</SelectItem>
+            <SelectItem value="passenger">{t("shuttleOffences.actorPassenger")}</SelectItem>
+            <SelectItem value="driver">{t("shuttleOffences.actorDriver")}</SelectItem>
           </SelectContent>
         </Select>
 
         <Select value={lastAction} onValueChange={setLastAction}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Last action" />
+            <SelectValue placeholder={t("shuttleOffences.lastAction")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Actions</SelectItem>
-            <SelectItem value="warning">Warning</SelectItem>
-            <SelectItem value="fined">Fined</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="all">{t("shuttleOffences.allActions")}</SelectItem>
+            <SelectItem value="warning">{t("shuttleOffences.warning")}</SelectItem>
+            <SelectItem value="fined">{t("shuttleOffences.fined")}</SelectItem>
+            <SelectItem value="suspended">{t("shuttleOffences.suspended")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -126,14 +128,14 @@ export default function ShuttleOffences() {
           className="w-40"
           value={dateFrom}
           onChange={(e) => setDateFrom(e.target.value)}
-          placeholder="From"
+          placeholder={t("common.from")}
         />
         <Input
           type="date"
           className="w-40"
           value={dateTo}
           onChange={(e) => setDateTo(e.target.value)}
-          placeholder="To"
+          placeholder={t("common.to")}
         />
 
         {(actorType !== "all" || lastAction !== "all" || dateFrom || dateTo) && (
@@ -142,7 +144,7 @@ export default function ShuttleOffences() {
             size="sm"
             onClick={() => { setActorType("all"); setLastAction("all"); setDateFrom(""); setDateTo(""); }}
           >
-            Clear filters
+            {t("common.clearFilters")}
           </Button>
         )}
       </div>
@@ -156,23 +158,23 @@ export default function ShuttleOffences() {
             </div>
           ) : isError ? (
             <div className="p-8 text-center text-red-500">
-              Failed to load offences. Please refresh.
+              {t("shuttleOffences.failedToLoad")}
             </div>
           ) : !data?.data.length ? (
             <div className="p-12 text-center text-muted-foreground">
-              No offences found for the selected filters.
+              {t("shuttleOffences.noOffences")}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Offence Count</TableHead>
-                  <TableHead>Last Action</TableHead>
-                  <TableHead>Last Offence</TableHead>
-                  <TableHead className="text-end">Action</TableHead>
+                  <TableHead>{t("shuttleOffences.colUser")}</TableHead>
+                  <TableHead>{t("shuttleOffences.colPhone")}</TableHead>
+                  <TableHead>{t("shuttleOffences.colType")}</TableHead>
+                  <TableHead>{t("shuttleOffences.colOffenceCount")}</TableHead>
+                  <TableHead>{t("shuttleOffences.colLastAction")}</TableHead>
+                  <TableHead>{t("shuttleOffences.colLastOffence")}</TableHead>
+                  <TableHead className="text-end">{t("shuttleOffences.colAction")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -208,7 +210,7 @@ export default function ShuttleOffences() {
                           onClick={() => handleReset(row.userId)}
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
-                          {resettingId === row.userId ? "Resetting…" : "Reset Offences"}
+                          {resettingId === row.userId ? t("shuttleOffences.resetting") : t("shuttleOffences.resetOffences")}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -221,7 +223,7 @@ export default function ShuttleOffences() {
       </Card>
 
       <p className="text-xs text-muted-foreground">
-        Total: {data?.total ?? 0} record{data?.total !== 1 ? "s" : ""}
+        {t("shuttleOffences.totalRecords", { count: data?.total ?? 0 })}
       </p>
     </div>
   );

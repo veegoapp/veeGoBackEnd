@@ -34,12 +34,12 @@ import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 
 const tripSchema = z.object({
-  routeId: z.coerce.number().min(1, "Route is required"),
-  busId: z.coerce.number().min(1, "Bus is required"),
-  driverId: z.coerce.number().min(1, "Driver is required"),
-  departureTime: z.string().min(1, "Departure time is required"),
-  arrivalTime: z.string().min(1, "Arrival time is required"),
-  price: z.coerce.number().min(0, "Price must be positive"),
+  routeId: z.coerce.number().min(1, "common.error"),
+  busId: z.coerce.number().min(1, "common.error"),
+  driverId: z.coerce.number().min(1, "common.error"),
+  departureTime: z.string().min(1, "common.error"),
+  arrivalTime: z.string().min(1, "common.error"),
+  price: z.coerce.number().min(0, "common.error"),
   recurringType: z.enum(["one_time", "daily", "weekdays", "weekends", "custom"]).default("one_time"),
   weekdays: z.string().optional(),
   isActive: z.boolean().default(true),
@@ -216,7 +216,7 @@ function TripForm({
           name="price"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("trips.ticketPriceEGP", "Ticket Price (EGP)")}</FormLabel>
+              <FormLabel>{t("trips.ticketPriceEGP")}</FormLabel>
               <FormControl><Input type="number" step="0.01" min={0} placeholder="0.00" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
@@ -226,24 +226,24 @@ function TripForm({
         <div className="border border-border rounded-lg p-4 space-y-3 bg-muted/30">
           <div className="flex items-center gap-2 text-sm font-medium">
             <Repeat className="h-4 w-4 text-muted-foreground" />
-            {t("trips.recurringSchedule", "Recurring Schedule")}
+            {t("trips.recurringSchedule")}
           </div>
           <FormField
             control={form.control}
             name="recurringType"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("trips.scheduleType", "Schedule Type")}</FormLabel>
+                <FormLabel>{t("trips.scheduleType")}</FormLabel>
                 <Select onValueChange={field.onChange} value={field.value}>
                   <FormControl>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                   </FormControl>
                   <SelectContent>
-                    <SelectItem value="one_time">{t("trips.oneTime", "One-time Trip")}</SelectItem>
-                    <SelectItem value="daily">{t("trips.daily", "Daily")}</SelectItem>
-                    <SelectItem value="weekdays">{t("trips.weekdays", "Weekdays (Mon–Fri)")}</SelectItem>
-                    <SelectItem value="weekends">{t("trips.weekends", "Weekends (Sat–Sun)")}</SelectItem>
-                    <SelectItem value="custom">{t("trips.custom", "Custom Days")}</SelectItem>
+                    <SelectItem value="one_time">{t("trips.oneTime")}</SelectItem>
+                    <SelectItem value="daily">{t("trips.daily")}</SelectItem>
+                    <SelectItem value="weekdays">{t("trips.weekdays")}</SelectItem>
+                    <SelectItem value="weekends">{t("trips.weekends")}</SelectItem>
+                    <SelectItem value="custom">{t("trips.custom")}</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormMessage />
@@ -253,7 +253,7 @@ function TripForm({
 
           {watchedRecurring === "custom" && (
             <div className="space-y-2">
-              <Label className="text-sm">{t("trips.selectDays", "Select Days")}</Label>
+              <Label className="text-sm">{t("trips.selectDays")}</Label>
               <div className="flex gap-2 flex-wrap">
                 {WEEKDAYS.map((day) => (
                   <button
@@ -285,7 +285,7 @@ function TripForm({
                   />
                 </FormControl>
                 <FormLabel className="!mt-0 font-normal cursor-pointer">
-                  {t("trips.scheduleIsActive", "Schedule is active")}
+                  {t("trips.scheduleIsActive")}
                 </FormLabel>
               </FormItem>
             )}
@@ -316,24 +316,24 @@ export default function Trips() {
 
   const statusLabel = (status: string) => {
     const ui = shuttleUiStatus(status);
-    if (ui === "open") return t("trips.scheduled", "Open");
-    if (ui === "active") return t("trips.enRoute", "Active");
-    if (ui === "cancelled") return t("trips.cancelled", "Cancelled");
+    if (ui === "open") return t("trips.scheduled");
+    if (ui === "active") return t("trips.enRoute");
+    if (ui === "cancelled") return t("trips.cancelled");
     const labels: Record<string, string> = {
-      completed: t("trips.completed", "Completed"),
-      boarding: t("trips.boarding", "Boarding"),
-      driver_assigned: t("trips.driverAssigned", "Driver Assigned"),
+      completed: t("trips.completed"),
+      boarding: t("trips.boarding"),
+      driver_assigned: t("trips.driverAssigned"),
     };
     return labels[status] ?? status;
   };
 
   const recurringLabel = (type: string) => {
     const labels: Record<string, string> = {
-      one_time: t("trips.oneTime", "One-time"),
-      daily: t("trips.daily", "Daily"),
-      weekdays: t("trips.weekdaysShort", "Weekdays"),
-      weekends: t("trips.weekendsShort", "Weekends"),
-      custom: t("trips.custom", "Custom"),
+      one_time: t("trips.oneTime"),
+      daily: t("trips.daily"),
+      weekdays: t("trips.weekdaysShort"),
+      weekends: t("trips.weekendsShort"),
+      custom: t("trips.custom"),
     };
     return labels[type] ?? type;
   };
@@ -373,12 +373,12 @@ export default function Trips() {
   const onSubmitCreate = (data: TripFormValues) => {
     createMutation.mutate({ data: data as any }, {
       onSuccess: () => {
-        toast({ title: t("trips.tripScheduled", "Trip scheduled") });
+        toast({ title: t("trips.tripScheduled") });
         setIsCreateOpen(false);
         createForm.reset(defaultValues);
         queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
       },
-      onError: () => toast({ title: t("trips.scheduleFailed", "Failed to schedule trip"), variant: "destructive" })
+      onError: () => toast({ title: t("trips.scheduleFailed"), variant: "destructive" })
     });
   };
 
@@ -386,25 +386,25 @@ export default function Trips() {
     if (!editTrip) return;
     updateMutation.mutate({ id: editTrip.id, data: data as any }, {
       onSuccess: () => {
-        toast({ title: t("trips.tripUpdated", "Trip updated") });
+        toast({ title: t("trips.tripUpdated") });
         setEditTrip(null);
         queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
       },
-      onError: () => toast({ title: t("trips.updateFailed", "Failed to update trip"), variant: "destructive" })
+      onError: () => toast({ title: t("trips.updateFailed"), variant: "destructive" })
     });
   };
 
   const handleCancelTrip = (id: number, bookingCount?: number, tripPrice?: number) => {
-    if (confirm(t("trips.cancelConfirm", "Cancel this trip? All related bookings will be cancelled and refunded."))) {
+    if (confirm(t("trips.cancelConfirm"))) {
       cancelMutation.mutate({ id }, {
-        onSuccess: (_data, vars) => {
+        onSuccess: (_data: any, vars: any) => {
           const bookings = bookingCount ?? 0;
           const totalRefund = bookings > 0 && tripPrice ? bookings * tripPrice : 0;
           toast({
-            title: t("trips.tripCancelled", "Trip Cancelled Successfully"),
+            title: t("trips.tripCancelledSuccess", "Trip Cancelled Successfully"),
             description: bookings > 0
-              ? `${bookings} linked booking${bookings === 1 ? "" : "s"} have been fully refunded to customer wallets${totalRefund > 0 ? ` (${totalRefund.toFixed(2)} EGP total)` : ""}.`
-              : "Trip has been cancelled and any related bookings have been refunded.",
+              ? t("trips.tripCancelledDesc", { count: bookings, amount: totalRefund.toFixed(2) })
+              : t("trips.tripCancelledDescGeneric", "Trip has been cancelled and any related bookings have been refunded."),
           });
           queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
         }
@@ -419,15 +419,15 @@ export default function Trips() {
     try {
       await adminFetch(`/trips/${deleteTrip.id}`, { method: "DELETE" });
       toast({
-        title: t("trips.tripDeleted", "Trip Deleted Successfully"),
+        title: t("trips.tripDeleted"),
         description: confirmedBookings > 0
-          ? `${confirmedBookings} linked booking${confirmedBookings === 1 ? "" : "s"} have been fully refunded to customer wallets.`
-          : t("trips.tripDeletedDesc", "Trip has been permanently deleted."),
+          ? t("trips.tripDeletedWithBookings", { count: confirmedBookings })
+          : t("trips.tripDeletedDesc"),
       });
       setDeleteTrip(null);
       queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
     } catch (err: any) {
-      toast({ title: err.message || t("trips.failedToDelete", "Failed to delete trip"), variant: "destructive" });
+      toast({ title: err.message || t("trips.failedToDelete"), variant: "destructive" });
     } finally {
       setIsDeleting(false);
     }
@@ -478,25 +478,25 @@ export default function Trips() {
             <CalendarClock className="h-7 w-7" />
             {t("trips.title")}
           </h1>
-          <p className="text-muted-foreground text-sm">{t("trips.subtitle", "Schedule, manage, and configure recurring shuttle trips.")}</p>
+          <p className="text-muted-foreground text-sm">{t("trips.subtitle")}</p>
         </div>
 
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
             <Button>
-              <Plus className="me-2 h-4 w-4" /> {t("trips.scheduleTrip", "Schedule Trip")}
+              <Plus className="me-2 h-4 w-4" /> {t("trips.scheduleTrip")}
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{t("trips.scheduleNewTrip", "Schedule New Trip")}</DialogTitle>
-              <DialogDescription>{t("trips.scheduleDesc", "Select a route — arrival time and price are auto-filled from route settings.")}</DialogDescription>
+              <DialogTitle>{t("trips.scheduleNewTrip")}</DialogTitle>
+              <DialogDescription>{t("trips.scheduleDesc")}</DialogDescription>
             </DialogHeader>
             <TripForm
               form={createForm}
               onSubmit={onSubmitCreate}
               isPending={createMutation.isPending}
-              submitLabel={t("trips.scheduleTrip", "Schedule Trip")}
+              submitLabel={t("trips.scheduleTrip")}
               routesData={routesData}
               busesData={busesData}
               driversData={driversData}
@@ -508,8 +508,8 @@ export default function Trips() {
       <Dialog open={!!editTrip} onOpenChange={(open) => !open && setEditTrip(null)}>
         <DialogContent className="sm:max-w-[540px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{t("trips.editTrip", "Edit Trip")} #{editTrip?.id}</DialogTitle>
-            <DialogDescription>{t("trips.editDesc", "Update trip details, assignment, timing, or recurring settings.")}</DialogDescription>
+            <DialogTitle>{t("trips.editTrip")} #{editTrip?.id}</DialogTitle>
+            <DialogDescription>{t("trips.editDesc")}</DialogDescription>
           </DialogHeader>
           <TripForm
             form={editForm}
@@ -526,9 +526,9 @@ export default function Trips() {
       <Dialog open={!!deleteTrip} onOpenChange={(open) => !open && setDeleteTrip(null)}>
         <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
-            <DialogTitle>{t("trips.deleteTrip", "Delete Trip")} #{deleteTrip?.id}?</DialogTitle>
+            <DialogTitle>{t("trips.deleteTrip")} #{deleteTrip?.id}?</DialogTitle>
             <DialogDescription>
-              {t("trips.deleteConfirmDesc", "This will permanently delete the trip and all its bookings. This cannot be undone.")}
+              {t("trips.deleteConfirmDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -536,7 +536,7 @@ export default function Trips() {
               {t("common.cancel")}
             </Button>
             <Button variant="destructive" onClick={handleDeleteTrip} disabled={isDeleting}>
-              {isDeleting ? t("trips.deleting", "Deleting…") : t("trips.deleteTrip", "Delete Trip")}
+              {isDeleting ? t("trips.deleting") : t("trips.deleteTrip")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -545,15 +545,15 @@ export default function Trips() {
       <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-xl border border-border">
         <div className="flex items-center gap-2 me-1">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">{t("trips.filters", "Filters")}:</span>
+          <span className="text-sm font-medium">{t("trips.filters")}:</span>
         </div>
         
         <Select value={routeIdFilter} onValueChange={(val) => { setRouteIdFilter(val); setPage(1); }}>
           <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder={t("trips.allRoutes", "All Routes")} />
+            <SelectValue placeholder={t("trips.allRoutes")} />
           </SelectTrigger>
           <SelectContent className="max-h-60">
-            <SelectItem value="all">{t("trips.allRoutes", "All Routes")}</SelectItem>
+            <SelectItem value="all">{t("trips.allRoutes")}</SelectItem>
             {routesData?.data.map((r: any) => (
               <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
             ))}
@@ -562,11 +562,11 @@ export default function Trips() {
 
         <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setPage(1); }}>
           <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder={t("trips.allStatuses", "All Statuses")} />
+            <SelectValue placeholder={t("trips.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("trips.allStatuses", "All Statuses")}</SelectItem>
-            <SelectItem value="scheduled">{t("trips.scheduled", "Scheduled")}</SelectItem>
+            <SelectItem value="all">{t("trips.allStatuses")}</SelectItem>
+            <SelectItem value="scheduled">{t("trips.scheduled")}</SelectItem>
             <SelectItem value="boarding">{t("trips.boarding", "Boarding")}</SelectItem>
             <SelectItem value="active">{t("trips.enRoute", "En Route")}</SelectItem>
             <SelectItem value="completed">{t("trips.completed", "Completed")}</SelectItem>
@@ -618,7 +618,7 @@ export default function Trips() {
                 </TableCell>
               </TableRow>
             ) : (
-              tripsData?.data.map((trip) => (
+              tripsData?.data.map((trip: any) => (
                 <TableRow key={trip.id} className={(trip as any).isActive === false ? "opacity-60" : ""}>
                   <TableCell>
                     <div className="font-medium text-sm">#{trip.id}</div>

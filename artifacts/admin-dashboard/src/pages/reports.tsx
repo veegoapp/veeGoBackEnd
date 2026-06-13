@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useRoute } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -181,6 +182,7 @@ function downloadCSV(rows: Record<string, unknown>[], filename: string) {
 
 // ─── 1. Revenue Report ────────────────────────────────────────────────────────
 function RevenueReport() {
+  const { t } = useTranslation();
   const [period, setPeriod] = useState<"daily" | "weekly" | "monthly">("daily");
 
   const { data, isLoading } = useQuery({
@@ -209,8 +211,8 @@ function RevenueReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-green-500/10"><DollarSign className="h-6 w-6 text-green-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Revenue Report</h1>
-            <p className="text-sm text-muted-foreground">Revenue trends, commission split, and booking volume</p>
+            <h1 className="text-2xl font-bold">{t("reports.revenueTitle", "Revenue Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.revenueSubtitle", "Revenue trends, commission split, and booking volume")}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -222,7 +224,7 @@ function RevenueReport() {
                 period === p ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:bg-muted"
               }`}
             >
-              {p.charAt(0).toUpperCase() + p.slice(1)}
+              {t(`reports.period${p.charAt(0).toUpperCase() + p.slice(1)}`, p.charAt(0).toUpperCase() + p.slice(1))}
             </button>
           ))}
           <Button
@@ -230,27 +232,27 @@ function RevenueReport() {
             onClick={() => downloadCSV(splitData, `revenue-${period}.csv`)}
             disabled={isLoading || series.length === 0}
           >
-            <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
+            <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "Export CSV")}
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
-            <Printer className="h-3.5 w-3.5 me-1.5" /> Print
+            <Printer className="h-3.5 w-3.5 me-1.5" /> {t("common.print", "Print")}
           </Button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Revenue"       value={`$${(data?.totalRevenue ?? 0).toFixed(2)}`}          icon={DollarSign}  color="bg-green-500/10 text-green-600"  loading={isLoading} />
-        <StatCard label="Total Bookings"      value={data?.totalBookings ?? 0}                             icon={Navigation}  color="bg-blue-500/10 text-blue-600"    loading={isLoading} />
-        <StatCard label="Est. Commission"     value={`$${(data?.estimatedCommission ?? 0).toFixed(2)}`}   icon={TrendingUp}  color="bg-amber-500/10 text-amber-600"   loading={isLoading} />
-        <StatCard label="Driver Payouts Paid" value={`$${(data?.totalDriverPaid ?? 0).toFixed(2)}`}       icon={DollarSign}  color="bg-violet-500/10 text-violet-600"  loading={isLoading} />
+        <StatCard label={t("reports.totalRevenue", "Total Revenue")}       value={`$${(data?.totalRevenue ?? 0).toFixed(2)}`}          icon={DollarSign}  color="bg-green-500/10 text-green-600"  loading={isLoading} />
+        <StatCard label={t("reports.totalBookings", "Total Bookings")}      value={data?.totalBookings ?? 0}                             icon={Navigation}  color="bg-blue-500/10 text-blue-600"    loading={isLoading} />
+        <StatCard label={t("reports.estCommission", "Est. Commission")}     value={`$${(data?.estimatedCommission ?? 0).toFixed(2)}`}   icon={TrendingUp}  color="bg-amber-500/10 text-amber-600"   loading={isLoading} />
+        <StatCard label={t("reports.driverPayoutsPaid", "Driver Payouts Paid")} value={`$${(data?.totalDriverPaid ?? 0).toFixed(2)}`}       icon={DollarSign}  color="bg-violet-500/10 text-violet-600"  loading={isLoading} />
       </div>
 
       {/* Commission split summary */}
       {!isLoading && data && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {[
-            { label: `App Commission (${data.commissionRate}%)`, value: data.estimatedCommission, color: "bg-amber-500/10", bar: "bg-amber-500" },
-            { label: `Driver Share (${data.driverShareRate}%)`,  value: data.totalRevenue - data.estimatedCommission, color: "bg-green-500/10", bar: "bg-green-500" },
+            { label: t("reports.appCommission", { rate: data.commissionRate }), value: data.estimatedCommission, color: "bg-amber-500/10", bar: "bg-amber-500" },
+            { label: t("reports.driverShare", { rate: data.driverShareRate }),  value: data.totalRevenue - data.estimatedCommission, color: "bg-green-500/10", bar: "bg-green-500" },
           ].map((s) => (
             <div key={s.label} className={`rounded-xl p-4 ${s.color}`}>
               <p className="text-xl font-bold">${s.value.toFixed(2)}</p>
@@ -269,12 +271,12 @@ function RevenueReport() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Revenue vs Commission Split — {period.charAt(0).toUpperCase() + period.slice(1)}
+            {t("reports.revenueVsCommission", { period: t(`reports.period${period.charAt(0).toUpperCase() + period.slice(1)}`) })}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-64 w-full" /> : series.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">No revenue data for this period</div>
+            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">{t("reports.noRevenueData", "No revenue data for this period")}</div>
           ) : (
             <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={splitData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
@@ -296,10 +298,10 @@ function RevenueReport() {
                 <XAxis dataKey="period" tick={{ fontSize: 11 }} tickFormatter={formatPeriod} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${v}`} />
                 <Tooltip
-                  formatter={(v: number, n: string) => [`$${v.toFixed(2)}`, n === "revenue" ? "Total Revenue" : n === "commission" ? "Commission" : "Driver Share"]}
+                  formatter={(v: number, n: string) => [`$${v.toFixed(2)}`, n === "revenue" ? t("reports.totalRevenue", "Total Revenue") : n === "commission" ? t("reports.commission", "Commission") : t("reports.driverShareLabel", "Driver Share")]}
                   labelFormatter={formatPeriod}
                 />
-                <Legend formatter={(v) => v === "revenue" ? "Total Revenue" : v === "commission" ? "Commission" : "Driver Share"} />
+                <Legend formatter={(v) => v === "revenue" ? t("reports.totalRevenue", "Total Revenue") : v === "commission" ? t("reports.commission", "Commission") : t("reports.driverShareLabel", "Driver Share")} />
                 <Area type="monotone" dataKey="revenue"     stroke="#22c55e" fill="url(#revG)" strokeWidth={2} dot={false} />
                 <Area type="monotone" dataKey="commission"  stroke="#f59e0b" fill="url(#comG)" strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
                 <Area type="monotone" dataKey="driverShare" stroke="#6366f1" fill="url(#drG)"  strokeWidth={1.5} dot={false} strokeDasharray="4 2" />
@@ -310,10 +312,10 @@ function RevenueReport() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Booking Volume by {period.charAt(0).toUpperCase() + period.slice(1)}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.bookingVolumeBy", { period: t(`reports.period${period.charAt(0).toUpperCase() + period.slice(1)}`) })}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-48 w-full" /> : series.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data</div>
+            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">{t("common.noData", "No data")}</div>
           ) : (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={splitData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
@@ -321,7 +323,7 @@ function RevenueReport() {
                 <XAxis dataKey="period" tick={{ fontSize: 11 }} tickFormatter={formatPeriod} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip labelFormatter={formatPeriod} />
-                <Bar dataKey="bookings" fill="#3b82f6" radius={[3, 3, 0, 0]} name="Bookings" />
+                <Bar dataKey="bookings" fill="#3b82f6" radius={[3, 3, 0, 0]} name={t("reports.bookings", "Bookings")} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -333,6 +335,7 @@ function RevenueReport() {
 
 // ─── 2. Trips Report ──────────────────────────────────────────────────────────
 function TripsReport() {
+  const { t } = useTranslation();
   const { data: tripsData, isLoading: tripsLoading } = useQuery({
     queryKey: ["admin-analytics-trips"],
     queryFn: () => adminFetch<TripsAnalytics>("/admin/analytics/trips"),
@@ -356,10 +359,10 @@ function TripsReport() {
   const totalBookings = Object.values(bookingsByStatus).reduce((a, b) => a + b, 0);
 
   const statusRows = [
-    { name: "Completed", value: bookingsByStatus.completed, color: STATUS_COLORS.completed },
-    { name: "Confirmed", value: bookingsByStatus.confirmed, color: STATUS_COLORS.confirmed },
-    { name: "Pending",   value: bookingsByStatus.pending,   color: STATUS_COLORS.pending },
-    { name: "Cancelled", value: bookingsByStatus.cancelled, color: STATUS_COLORS.cancelled },
+    { name: t("trips.completed", "Completed"), value: bookingsByStatus.completed, color: STATUS_COLORS.completed },
+    { name: t("trips.confirmed", "Confirmed"), value: bookingsByStatus.confirmed, color: STATUS_COLORS.confirmed },
+    { name: t("trips.pending", "Pending"),   value: bookingsByStatus.pending,   color: STATUS_COLORS.pending },
+    { name: t("trips.cancelled", "Cancelled"), value: bookingsByStatus.cancelled, color: STATUS_COLORS.cancelled },
   ];
 
   const isLoading = tripsLoading || bookingLoading;
@@ -370,8 +373,8 @@ function TripsReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-blue-500/10"><Navigation className="h-6 w-6 text-blue-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Trips Report</h1>
-            <p className="text-sm text-muted-foreground">Trip volume, booking status breakdown, and peak booking hours</p>
+            <h1 className="text-2xl font-bold">{t("reports.tripsTitle", "Trips Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.tripsSubtitle", "Trip volume, booking status breakdown, and peak booking hours")}</p>
           </div>
         </div>
         <Button
@@ -379,20 +382,20 @@ function TripsReport() {
           onClick={() => downloadCSV(peakHoursAll, "trips-peak-hours.csv")}
           disabled={isLoading}
         >
-          <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "Export CSV")}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Trips"     value={totals.total}     icon={Navigation}     color="bg-blue-500/10 text-blue-600"    loading={isLoading} />
-        <StatCard label="Completed"       value={totals.completed} icon={CheckCircle2}   color="bg-green-500/10 text-green-600"  loading={isLoading} />
-        <StatCard label="Active"          value={totals.active}    icon={TrendingUp}     color="bg-violet-500/10 text-violet-600" loading={isLoading} />
-        <StatCard label="Cancelled"       value={totals.cancelled} icon={XCircle}        color="bg-red-500/10 text-red-500"      loading={isLoading} />
+        <StatCard label={t("reports.totalTrips", "Total Trips")}     value={totals.total}     icon={Navigation}     color="bg-blue-500/10 text-blue-600"    loading={isLoading} />
+        <StatCard label={t("trips.completed", "Completed")}       value={totals.completed} icon={CheckCircle2}   color="bg-green-500/10 text-green-600"  loading={isLoading} />
+        <StatCard label={t("common.active", "Active")}          value={totals.active}    icon={TrendingUp}     color="bg-violet-500/10 text-violet-600" loading={isLoading} />
+        <StatCard label={t("trips.cancelled", "Cancelled")}       value={totals.cancelled} icon={XCircle}        color="bg-red-500/10 text-red-500"      loading={isLoading} />
       </div>
 
       {/* Peak hours */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Peak Booking Hours (last 30 days)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.peakBookingHours", "Peak Booking Hours (last 30 days)")}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-48 w-full" /> : (
             <ResponsiveContainer width="100%" height={220}>
@@ -400,7 +403,7 @@ function TripsReport() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                 <XAxis dataKey="hour" tick={{ fontSize: 9 }} interval={2} />
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                <Tooltip formatter={(v: number) => [v, "Bookings"]} />
+                <Tooltip formatter={(v: number) => [v, t("reports.bookings", "Bookings")]} />
                 <Bar dataKey="bookings" radius={[3, 3, 0, 0]}>
                   {peakHoursAll.map((entry) => {
                     const maxB = Math.max(...peakHoursAll.map((e) => e.bookings), 1);
@@ -419,7 +422,7 @@ function TripsReport() {
 
       {/* Booking status breakdown */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Booking Status Breakdown</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.bookingStatusBreakdown", "Booking Status Breakdown")}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-48 w-full" /> : (
             <div className="space-y-3">
@@ -444,10 +447,10 @@ function TripsReport() {
 
       {/* Daily volume with completed/cancelled */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Daily Bookings — Completed vs Cancelled (last 30 days)</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.dailyBookingsCompVsCan", "Daily Bookings — Completed vs Cancelled (last 30 days)")}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-48 w-full" /> : daily.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data</div>
+            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">{t("common.noData", "No data")}</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={daily} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
@@ -456,9 +459,9 @@ function TripsReport() {
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip labelFormatter={(l) => { try { return format(new Date(l), "MMM d, yyyy"); } catch { return l; } }} />
                 <Legend />
-                <Line type="monotone" dataKey="bookings"  stroke="#3b82f6" strokeWidth={2} dot={false} name="Total" />
-                <Line type="monotone" dataKey="completed" stroke="#22c55e" strokeWidth={1.5} dot={false} name="Completed" strokeDasharray="4 2" />
-                <Line type="monotone" dataKey="cancelled" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Cancelled" strokeDasharray="4 2" />
+                <Line type="monotone" dataKey="bookings"  stroke="#3b82f6" strokeWidth={2} dot={false} name={t("common.total", "Total")} />
+                <Line type="monotone" dataKey="completed" stroke="#22c55e" strokeWidth={1.5} dot={false} name={t("trips.completed", "Completed")} strokeDasharray="4 2" />
+                <Line type="monotone" dataKey="cancelled" stroke="#ef4444" strokeWidth={1.5} dot={false} name={t("trips.cancelled", "Cancelled")} strokeDasharray="4 2" />
               </LineChart>
             </ResponsiveContainer>
           )}
@@ -470,6 +473,7 @@ function TripsReport() {
 
 // ─── 3. Drivers Report ────────────────────────────────────────────────────────
 function DriversReport() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<"revenue" | "trips" | "rating" | "cancellations">("revenue");
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
@@ -485,10 +489,10 @@ function DriversReport() {
   const isLoading = summaryLoading || detailedLoading;
 
   const TABS = [
-    { key: "revenue",       label: "By Revenue" },
-    { key: "trips",         label: "By Trips" },
-    { key: "rating",        label: "By Rating" },
-    { key: "cancellations", label: "Most Cancellations" },
+    { key: "revenue",       label: t("reports.byRevenue", "By Revenue") },
+    { key: "trips",         label: t("reports.byTrips", "By Trips") },
+    { key: "rating",        label: t("reports.byRating", "By Rating") },
+    { key: "cancellations", label: t("reports.mostCancellations", "Most Cancellations") },
   ] as const;
 
   type Driver = { id: number; name: string; rating: number; total_earnings?: number; trip_count?: number; status?: string; cancellations?: number; total_bookings?: number };
@@ -521,8 +525,8 @@ function DriversReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-amber-500/10"><UserCircle className="h-6 w-6 text-amber-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Drivers Report</h1>
-            <p className="text-sm text-muted-foreground">Driver rankings by revenue, trips completed, rating, and cancellations</p>
+            <h1 className="text-2xl font-bold">{t("reports.driversTitle", "Drivers Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.driversSubtitleDetailed", "Driver rankings by revenue, trips completed, rating, and cancellations")}</p>
           </div>
         </div>
         <Button
@@ -530,15 +534,15 @@ function DriversReport() {
           onClick={() => downloadCSV(tabData as Record<string, unknown>[], `drivers-${tab}.csv`)}
           disabled={isLoading}
         >
-          <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "Export CSV")}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Drivers"   value={summary?.totalDrivers ?? 0}                              icon={UserCircle}  color="bg-primary/10 text-primary"       loading={isLoading} />
-        <StatCard label="Online Now"      value={summary?.onlineDrivers ?? 0}                             icon={UserCircle}  color="bg-green-500/10 text-green-600"   loading={isLoading} />
-        <StatCard label="Trips Completed" value={summary?.totalTripsCompleted ?? 0}                        icon={Navigation}  color="bg-blue-500/10 text-blue-600"     loading={isLoading} />
-        <StatCard label="Total Paid Out"  value={`$${(summary?.totalEarningsPaid ?? 0).toFixed(2)}`}      icon={DollarSign}  color="bg-amber-500/10 text-amber-600"   loading={isLoading} />
+        <StatCard label={t("reports.totalDrivers", "Total Drivers")}   value={summary?.totalDrivers ?? 0}                              icon={UserCircle}  color="bg-primary/10 text-primary"       loading={isLoading} />
+        <StatCard label={t("reports.onlineNow", "Online Now")}      value={summary?.onlineDrivers ?? 0}                             icon={UserCircle}  color="bg-green-500/10 text-green-600"   loading={isLoading} />
+        <StatCard label={t("reports.tripsCompleted", "Trips Completed")} value={summary?.totalTripsCompleted ?? 0}                        icon={Navigation}  color="bg-blue-500/10 text-blue-600"     loading={isLoading} />
+        <StatCard label={t("reports.totalPaidOut", "Total Paid Out")}  value={`$${(summary?.totalEarningsPaid ?? 0).toFixed(2)}`}      icon={DollarSign}  color="bg-amber-500/10 text-amber-600"   loading={isLoading} />
       </div>
 
       {/* Tab switcher */}
@@ -560,17 +564,17 @@ function DriversReport() {
 
       {/* Chart */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Top Drivers — {metricLabel}</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.topDrivers", "Top Drivers")} — {t(`reports.metricLabel${tab.charAt(0).toUpperCase() + tab.slice(1)}`, metricLabel)}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-48 w-full" /> : chartData.length === 0 ? (
-            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data available</div>
+            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">{t("common.noData", "No data available")}</div>
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => tab === "revenue" ? `$${v}` : `${v}`} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={60} />
-                <Tooltip formatter={(v: number) => [tab === "revenue" ? `$${v.toFixed(2)}` : v, metricLabel]} />
+                <Tooltip formatter={(v: number) => [tab === "revenue" ? `$${v.toFixed(2)}` : v, t(`reports.metricLabel${tab.charAt(0).toUpperCase() + tab.slice(1)}`, metricLabel)]} />
                 <Bar dataKey="value" fill={barColor} radius={[0, 3, 3, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -580,12 +584,12 @@ function DriversReport() {
 
       {/* Table */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Ranked List</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.rankedList", "Ranked List")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-4 space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : tabData.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No data available</div>
+            <div className="py-12 text-center text-muted-foreground text-sm">{t("common.noData", "No data available")}</div>
           ) : (
             <div className="divide-y divide-border">
               {tabData.map((d, i) => (
@@ -599,24 +603,24 @@ function DriversReport() {
                     <div className="flex items-center gap-1 text-xs text-muted-foreground">
                       <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                       {(d.rating ?? 0).toFixed(1)}
-                      {d.status && <span className="ms-1 capitalize">· {d.status}</span>}
+                      {d.status && <span className="ms-1 capitalize">· {t(`common.${d.status}`, d.status)}</span>}
                     </div>
                   </div>
                   <div className="text-end shrink-0 space-y-0.5">
                     {tab === "cancellations" ? (
                       <>
-                        <p className="text-sm font-bold text-red-500">{d.cancellations ?? 0} cancelled</p>
-                        <p className="text-xs text-muted-foreground">{d.total_bookings ?? 0} total bookings</p>
+                        <p className="text-sm font-bold text-red-500">{t("reports.cancelledCount", { count: d.cancellations ?? 0 })}</p>
+                        <p className="text-xs text-muted-foreground">{t("reports.totalBookingsCount", { count: d.total_bookings ?? 0 })}</p>
                       </>
                     ) : tab === "rating" ? (
                       <>
                         <p className="text-sm font-bold text-amber-500">{(d.rating ?? 0).toFixed(2)} ⭐</p>
-                        <p className="text-xs text-muted-foreground">{d.trip_count ?? 0} trips · ${(d.total_earnings ?? 0).toFixed(2)}</p>
+                        <p className="text-xs text-muted-foreground">{t("reports.tripsEarnings", { count: d.trip_count ?? 0, amount: (d.total_earnings ?? 0).toFixed(2) })}</p>
                       </>
                     ) : (
                       <>
                         <p className="text-sm font-bold text-green-600">${(d.total_earnings ?? 0).toFixed(2)}</p>
-                        <p className="text-xs text-muted-foreground">{d.trip_count ?? 0} trips</p>
+                        <p className="text-xs text-muted-foreground">{t("reports.tripsCount", { count: d.trip_count ?? 0 })}</p>
                       </>
                     )}
                   </div>
@@ -631,11 +635,11 @@ function DriversReport() {
 }
 
 // ─── 4. Passengers Report ─────────────────────────────────────────────────────
-const PASSENGER_TABS = ["By Trips", "By Spending", "Most Cancellations"] as const;
-type PassengerTab = typeof PASSENGER_TABS[number];
-
 function PassengersReport() {
-  const [tab, setTab] = useState<PassengerTab>("By Trips");
+  const { t } = useTranslation();
+  const PASSENGER_TABS = [t("reports.byTrips", "By Trips"), t("reports.bySpending", "By Spending"), t("reports.mostCancellations", "Most Cancellations")] as const;
+  type PassengerTab = typeof PASSENGER_TABS[number];
+  const [tab, setTab] = useState<PassengerTab>(PASSENGER_TABS[0]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-analytics-passengers"],
@@ -643,20 +647,20 @@ function PassengersReport() {
   });
 
   const rows: PassengerRow[] =
-    tab === "By Trips" ? (data?.topByTrips ?? []) :
-    tab === "By Spending" ? (data?.topBySpending ?? []) :
+    tab === PASSENGER_TABS[0] ? (data?.topByTrips ?? []) :
+    tab === PASSENGER_TABS[1] ? (data?.topBySpending ?? []) :
     (data?.topByCancellations ?? []);
 
   const chartData = rows.slice(0, 8).map((r) => ({
     name: r.name.split(" ")[0],
-    value: tab === "By Trips" ? r.total_bookings : tab === "By Spending" ? r.total_spent : r.cancellations,
+    value: tab === PASSENGER_TABS[0] ? r.total_bookings : tab === PASSENGER_TABS[1] ? r.total_spent : r.cancellations,
   }));
 
   const avgBookings = data?.totalPassengers && (data.topByTrips[0]?.total_bookings ?? 0) > 0
     ? (data.topByTrips.reduce((s, r) => s + r.total_bookings, 0) / data.totalPassengers).toFixed(1)
     : "0.0";
 
-  const valueLabel = tab === "By Trips" ? "Bookings" : tab === "By Spending" ? "Spent (EGP)" : "Cancellations";
+  const valueLabel = tab === PASSENGER_TABS[0] ? t("reports.bookings", "Bookings") : tab === PASSENGER_TABS[1] ? t("reports.spentEGP", "Spent (EGP)") : t("reports.cancellations", "Cancellations");
 
   return (
     <div className="p-6 space-y-6">
@@ -664,26 +668,26 @@ function PassengersReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-violet-500/10"><Users className="h-6 w-6 text-violet-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Passengers Report</h1>
-            <p className="text-sm text-muted-foreground">Top passengers by usage, spending, and cancellations</p>
+            <h1 className="text-2xl font-bold">{t("reports.passengersTitle", "Passengers Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.passengersSubtitleDetailed", "Top passengers by usage, spending, and cancellations")}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => downloadCSV(rows as unknown as Record<string, unknown>[], "passengers.csv")}>
-          <Download className="h-3.5 w-3.5 me-1.5" /> CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "CSV")}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Passengers" value={data?.totalPassengers ?? 0} icon={Users}      color="bg-violet-500/10 text-violet-600" loading={isLoading} />
-        <StatCard label="Avg Bookings/User" value={avgBookings}              icon={TrendingUp}  color="bg-blue-500/10 text-blue-600"     loading={isLoading} />
-        <StatCard label="Top Spender (EGP)" value={data?.topBySpending[0]?.total_spent.toFixed(0) ?? "0"} icon={DollarSign} color="bg-green-500/10 text-green-600" loading={isLoading} />
-        <StatCard label="Most Cancellations" value={data?.topByCancellations[0]?.cancellations ?? 0} icon={XCircle} color="bg-red-500/10 text-red-600" loading={isLoading} />
+        <StatCard label={t("reports.totalPassengers", "Total Passengers")} value={data?.totalPassengers ?? 0} icon={Users}      color="bg-violet-500/10 text-violet-600" loading={isLoading} />
+        <StatCard label={t("reports.avgBookingsUser", "Avg Bookings/User")} value={avgBookings}              icon={TrendingUp}  color="bg-blue-500/10 text-blue-600"     loading={isLoading} />
+        <StatCard label={t("reports.topSpender", "Top Spender (EGP)")} value={data?.topBySpending[0]?.total_spent.toFixed(0) ?? "0"} icon={DollarSign} color="bg-green-500/10 text-green-600" loading={isLoading} />
+        <StatCard label={t("reports.mostCancellations", "Most Cancellations")} value={data?.topByCancellations[0]?.cancellations ?? 0} icon={XCircle} color="bg-red-500/10 text-red-600" loading={isLoading} />
       </div>
 
       {/* Activity chart */}
       {(data?.activityByDay ?? []).length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Daily Active Passengers (Last 30 days)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.dailyActivePassengers", "Daily Active Passengers (Last 30 days)")}</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={data!.activityByDay} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
@@ -692,8 +696,8 @@ function PassengersReport() {
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
                 <Legend />
-                <Area type="monotone" dataKey="active_passengers" stroke="#8b5cf6" fill="#8b5cf620" strokeWidth={2} name="Active Passengers" />
-                <Area type="monotone" dataKey="bookings" stroke="#3b82f6" fill="#3b82f620" strokeWidth={2} name="Bookings" />
+                <Area type="monotone" dataKey="active_passengers" stroke="#8b5cf6" fill="#8b5cf620" strokeWidth={2} name={t("reports.activePassengers", "Active Passengers")} />
+                <Area type="monotone" dataKey="bookings" stroke="#3b82f6" fill="#3b82f620" strokeWidth={2} name={t("reports.bookings", "Bookings")} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -713,7 +717,7 @@ function PassengersReport() {
       {/* Chart + table */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle className="text-base">Top 8 — {valueLabel}</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.top8", "Top 8")} — {valueLabel}</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-48 w-full" /> : (
               <ResponsiveContainer width="100%" height={220}>
@@ -730,12 +734,12 @@ function PassengersReport() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">Ranked List</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.rankedList", "Ranked List")}</CardTitle></CardHeader>
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-4 space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : rows.length === 0 ? (
-              <div className="py-12 text-center text-sm text-muted-foreground">No data yet</div>
+              <div className="py-12 text-center text-sm text-muted-foreground">{t("common.noData", "No data yet")}</div>
             ) : (
               <div className="divide-y divide-border">
                 {rows.map((r, i) => (
@@ -747,11 +751,11 @@ function PassengersReport() {
                     </div>
                     <div className="text-end shrink-0">
                       <p className="text-sm font-semibold">
-                        {tab === "By Spending" ? `${r.total_spent.toFixed(0)} EGP` :
-                         tab === "By Trips" ? `${r.total_bookings} trips` :
-                         `${r.cancellations} cancelled`}
+                        {tab === PASSENGER_TABS[1] ? t("reports.amountEGP", { amount: r.total_spent.toFixed(0) }) :
+                         tab === PASSENGER_TABS[0] ? t("reports.tripsCountShort", { count: r.total_bookings }) :
+                         t("reports.cancelledCountShort", { count: r.cancellations })}
                       </p>
-                      <p className="text-xs text-muted-foreground">{r.total_bookings} total · {r.total_spent.toFixed(0)} EGP</p>
+                      <p className="text-xs text-muted-foreground">{t("reports.totalAndSpent", { total: r.total_bookings, spent: r.total_spent.toFixed(0) })}</p>
                     </div>
                   </div>
                 ))}
@@ -772,6 +776,7 @@ const SERVICE_COLORS: Record<string, string> = {
 };
 
 function ZonesReport() {
+  const { t } = useTranslation();
   const { data: zonesData, isLoading: zonesLoading } = useQuery({
     queryKey: ["zones-report"],
     queryFn: () => adminFetch<{ data: Zone[]; total: number }>("/zones?limit=200"),
@@ -790,7 +795,7 @@ function ZonesReport() {
   const totalPriceEntries = pricing.length;
 
   const serviceBreakdown = ["car", "shuttle", "bike"].map((svc) => ({
-    name: svc.charAt(0).toUpperCase() + svc.slice(1),
+    name: t(`zones.service${svc.charAt(0).toUpperCase() + svc.slice(1)}`, svc.charAt(0).toUpperCase() + svc.slice(1)),
     value: zones.filter((z) => z.services.includes(svc)).length,
     color: SERVICE_COLORS[svc],
   }));
@@ -805,14 +810,14 @@ function ZonesReport() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <div className="p-3 rounded-xl bg-rose-500/10"><MapPin className="h-6 w-6 text-rose-500" /></div>
-        <div><h1 className="text-2xl font-bold">Zones Report</h1><p className="text-sm text-muted-foreground">Service zones, coverage, and zone-level pricing overview</p></div>
+        <div><h1 className="text-2xl font-bold">{t("reports.zonesTitle", "Zones Report")}</h1><p className="text-sm text-muted-foreground">{t("reports.zonesSubtitleDetailed", "Service zones, coverage, and zone-level pricing overview")}</p></div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Zones"        value={totalZones}       icon={MapPin}      color="bg-rose-500/10 text-rose-500"      loading={zonesLoading} />
-        <StatCard label="Active Zones"       value={activeZones}      icon={MapPin}      color="bg-green-500/10 text-green-600"    loading={zonesLoading} />
-        <StatCard label="Inactive Zones"     value={totalZones - activeZones} icon={MapPin} color="bg-muted text-muted-foreground" loading={zonesLoading} />
-        <StatCard label="Price Entries"      value={totalPriceEntries} icon={Layers}     color="bg-blue-500/10 text-blue-600"      loading={pricingLoading} />
+        <StatCard label={t("reports.totalZones", "Total Zones")}        value={totalZones}       icon={MapPin}      color="bg-rose-500/10 text-rose-500"      loading={zonesLoading} />
+        <StatCard label={t("reports.activeZones", "Active Zones")}       value={activeZones}      icon={MapPin}      color="bg-green-500/10 text-green-600"    loading={zonesLoading} />
+        <StatCard label={t("reports.inactiveZones", "Inactive Zones")}     value={totalZones - activeZones} icon={MapPin} color="bg-muted text-muted-foreground" loading={zonesLoading} />
+        <StatCard label={t("reports.pricingEntries", "Price Entries")}      value={totalPriceEntries} icon={Layers}     color="bg-blue-500/10 text-blue-600"      loading={pricingLoading} />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -820,7 +825,7 @@ function ZonesReport() {
           <Card key={svc.name}>
             <CardContent className="pt-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">{svc.name} Zones</p>
+                <p className="text-sm font-medium">{t("reports.serviceZones", { name: svc.name })}</p>
                 <span className="text-2xl font-bold">{svc.value}</span>
               </div>
               <div className="mt-3 h-2 rounded-full bg-muted overflow-hidden">
@@ -830,7 +835,7 @@ function ZonesReport() {
                 />
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                {totalZones ? Math.round((svc.value / totalZones) * 100) : 0}% of zones
+                {t("reports.pctOfZones", { pct: totalZones ? Math.round((svc.value / totalZones) * 100) : 0 })}
               </p>
             </CardContent>
           </Card>
@@ -839,15 +844,15 @@ function ZonesReport() {
 
       {radiusData.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Top Zones by Coverage Radius (km)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.topZonesRadius", "Top Zones by Coverage Radius (km)")}</CardTitle></CardHeader>
           <CardContent>
             {zonesLoading ? <Skeleton className="h-48 w-full" /> : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={radiusData} margin={{ top: 5, right: 10, bottom: 30, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="name" tick={{ fontSize: 10 }} angle={-30} textAnchor="end" interval={0} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v} km`} />
-                  <Tooltip formatter={(v: number) => [`${v} km`, "Radius"]} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => t("reports.kmUnit", { count: v })} />
+                  <Tooltip formatter={(v: number) => [t("reports.kmUnit", { count: v }), t("reports.radius", "Radius")]} />
                   <Bar dataKey="radius" fill="#f43f5e" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -857,12 +862,12 @@ function ZonesReport() {
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">All Zones</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.allZones", "All Zones")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           {zonesLoading ? (
             <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
           ) : zones.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No zones configured yet</div>
+            <div className="py-12 text-center text-muted-foreground text-sm">{t("reports.noZonesConfigured", "No zones configured yet")}</div>
           ) : (
             <div className="divide-y divide-border">
               {zones.map((zone) => {
@@ -873,21 +878,21 @@ function ZonesReport() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-medium">{zone.name}</p>
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${zone.isActive ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" : "bg-muted text-muted-foreground"}`}>
-                          {zone.isActive ? "Active" : "Inactive"}
+                          {zone.isActive ? t("common.active", "Active") : t("common.inactive", "Inactive")}
                         </span>
                         {zone.services.map((svc) => (
-                          <span key={svc} className="text-xs px-1.5 py-0.5 rounded-full bg-muted font-mono">{svc}</span>
+                          <span key={svc} className="text-xs px-1.5 py-0.5 rounded-full bg-muted font-mono">{t(`zones.service${svc.charAt(0).toUpperCase() + svc.slice(1)}`, svc)}</span>
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {zone.radiusKm} km radius · {zone.centerLat.toFixed(4)}, {zone.centerLng.toFixed(4)}
+                        {t("reports.zoneRadiusLocation", { radius: zone.radiusKm, lat: zone.centerLat.toFixed(4), lng: zone.centerLng.toFixed(4) })}
                         {zone.description ? ` · ${zone.description}` : ""}
                       </p>
                     </div>
                     <div className="text-end shrink-0">
-                      <p className="text-xs font-medium text-muted-foreground">{zonePrices.length} price {zonePrices.length === 1 ? "entry" : "entries"}</p>
+                      <p className="text-xs font-medium text-muted-foreground">{t("reports.priceEntriesCount", { count: zonePrices.length })}</p>
                       {zonePrices.map((p) => (
-                        <p key={p.id} className="text-xs text-muted-foreground">{p.vehicleType}: ${p.baseFare.toFixed(2)} base</p>
+                        <p key={p.id} className="text-xs text-muted-foreground">{t(`common.${p.vehicleType}`, p.vehicleType)}: ${p.baseFare.toFixed(2)} {t("reports.base", "base")}</p>
                       ))}
                     </div>
                   </div>
@@ -906,6 +911,7 @@ const SVC_COLOR: Record<string, string> = { car: "#3b82f6", shuttle: "#f59e0b", 
 const SVC_LABEL: Record<string, string> = { car: "Car", shuttle: "Shuttle", bike: "Bike" };
 
 function ServicesReport() {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-analytics-services"],
     queryFn: () => adminFetch<ServiceAnalytics>("/admin/analytics/services"),
@@ -932,20 +938,20 @@ function ServicesReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-cyan-500/10"><Layers className="h-6 w-6 text-cyan-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Services Report</h1>
-            <p className="text-sm text-muted-foreground">Usage comparison and revenue by service type</p>
+            <h1 className="text-2xl font-bold">{t("reports.servicesTitle", "Services Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.servicesSubtitleDetailed", "Usage comparison and revenue by service type")}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => downloadCSV(revenue as unknown as Record<string, unknown>[], "services-revenue.csv")}>
-          <Download className="h-3.5 w-3.5 me-1.5" /> CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "CSV")}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Bookings"  value={totalBookings}           icon={Navigation}  color="bg-blue-500/10 text-blue-600"   loading={isLoading} />
-        <StatCard label="Total Revenue"   value={`${totalRevenue.toFixed(0)} EGP`} icon={DollarSign} color="bg-green-500/10 text-green-600" loading={isLoading} />
-        <StatCard label="Service Types"   value={usage.length}            icon={Layers}      color="bg-cyan-500/10 text-cyan-600"   loading={isLoading} />
-        <StatCard label="Unique Passengers" value={usage.reduce((s, r) => s + r.unique_passengers, 0)} icon={Users} color="bg-violet-500/10 text-violet-600" loading={isLoading} />
+        <StatCard label={t("reports.totalBookings", "Total Bookings")}  value={totalBookings}           icon={Navigation}  color="bg-blue-500/10 text-blue-600"   loading={isLoading} />
+        <StatCard label={t("reports.totalRevenue", "Total Revenue")}   value={t("reports.amountEGP", { amount: totalRevenue.toFixed(0) })} icon={DollarSign} color="bg-green-500/10 text-green-600" loading={isLoading} />
+        <StatCard label={t("reports.serviceTypes", "Service Types")}   value={usage.length}            icon={Layers}      color="bg-cyan-500/10 text-cyan-600"   loading={isLoading} />
+        <StatCard label={t("reports.uniquePassengers", "Unique Passengers")} value={usage.reduce((s, r) => s + r.unique_passengers, 0)} icon={Users} color="bg-violet-500/10 text-violet-600" loading={isLoading} />
       </div>
 
       {/* Per-service cards */}
@@ -958,17 +964,17 @@ function ServicesReport() {
             <Card key={svc.service_type}>
               <CardContent className="pt-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="font-semibold capitalize">{SVC_LABEL[svc.service_type] ?? svc.service_type}</p>
+                  <p className="font-semibold capitalize">{t(`zones.service${svc.service_type.charAt(0).toUpperCase() + svc.service_type.slice(1)}`, svc.service_type)}</p>
                   <span className="text-xl font-bold">{svc.total_bookings.toLocaleString()}</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                  <div><p className="font-medium text-foreground">{svc.completed.toLocaleString()}</p><p>Completed</p></div>
-                  <div><p className="font-medium text-foreground">{svc.cancelled.toLocaleString()}</p><p>Cancelled</p></div>
-                  <div><p className="font-medium text-foreground">{(rev?.total_revenue ?? 0).toFixed(0)} EGP</p><p>Revenue</p></div>
-                  <div><p className="font-medium text-foreground">{(rev?.avg_fare ?? 0).toFixed(0)} EGP</p><p>Avg Fare</p></div>
+                  <div><p className="font-medium text-foreground">{svc.completed.toLocaleString()}</p><p>{t("trips.completed", "Completed")}</p></div>
+                  <div><p className="font-medium text-foreground">{svc.cancelled.toLocaleString()}</p><p>{t("trips.cancelled", "Cancelled")}</p></div>
+                  <div><p className="font-medium text-foreground">{t("reports.amountEGP", { amount: (rev?.total_revenue ?? 0).toFixed(0) })}</p><p>{t("reports.revenue", "Revenue")}</p></div>
+                  <div><p className="font-medium text-foreground">{t("reports.amountEGP", { amount: (rev?.avg_fare ?? 0).toFixed(0) })}</p><p>{t("reports.avgFare", "Avg Fare")}</p></div>
                 </div>
               </CardContent>
             </Card>
@@ -979,15 +985,15 @@ function ServicesReport() {
       {/* Revenue bar chart */}
       {revenue.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Revenue per Service</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.revenuePerService", "Revenue per Service")}</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-48 w-full" /> : (
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={revenue.map((r) => ({ name: SVC_LABEL[r.service_type] ?? r.service_type, revenue: r.total_revenue, bookings: r.bookings }))} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <BarChart data={revenue.map((r) => ({ name: t(`zones.service${r.service_type.charAt(0).toUpperCase() + r.service_type.slice(1)}`, r.service_type), revenue: r.total_revenue, bookings: r.bookings }))} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(0)}`} />
-                  <Tooltip formatter={(v: number) => [`${v.toFixed(0)} EGP`, "Revenue"]} />
+                  <Tooltip formatter={(v: number) => [t("reports.amountEGP", { amount: v.toFixed(0) }), t("reports.revenue", "Revenue")]} />
                   <Bar dataKey="revenue" radius={[3, 3, 0, 0]}>
                     {revenue.map((r) => <Cell key={r.service_type} fill={SVC_COLOR[r.service_type] ?? SVC_COLOR.default} />)}
                   </Bar>
@@ -1001,7 +1007,7 @@ function ServicesReport() {
       {/* Monthly trend */}
       {monthlyChartData.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Monthly Bookings by Service (Last 6 Months)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.monthlyBookingsByService", "Monthly Bookings by Service (Last 6 Months)")}</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={monthlyChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -1024,6 +1030,7 @@ function ServicesReport() {
 
 // ─── 7. Promo Report ──────────────────────────────────────────────────────────
 function PromoReport() {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ["admin-analytics-promo"],
     queryFn: () => adminFetch<PromoAnalytics>("/admin/analytics/promo"),
@@ -1040,26 +1047,26 @@ function PromoReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-pink-500/10"><Tags className="h-6 w-6 text-pink-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Promo Report</h1>
-            <p className="text-sm text-muted-foreground">Most used promo codes, discounts given, and revenue impact</p>
+            <h1 className="text-2xl font-bold">{t("reports.promoTitle", "Promo Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.promoSubtitleDetailed", "Most used promo codes, discounts given, and revenue impact")}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => downloadCSV(codes as unknown as Record<string, unknown>[], "promo-codes.csv")}>
-          <Download className="h-3.5 w-3.5 me-1.5" /> CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "CSV")}
         </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Codes"       value={codes.length}                                icon={Tags}       color="bg-pink-500/10 text-pink-600"    loading={isLoading} />
-        <StatCard label="Active Codes"      value={activeCodes}                                 icon={CheckCircle2} color="bg-green-500/10 text-green-600"  loading={isLoading} />
-        <StatCard label="Total Redemptions" value={totalUsage}                                  icon={TrendingUp} color="bg-primary/10 text-primary"       loading={isLoading} />
-        <StatCard label="Promo Bookings"    value={data?.totalPromoBookings ?? 0}               icon={Star}       color="bg-amber-500/10 text-amber-600"   loading={isLoading} />
+        <StatCard label={t("reports.totalCodes", "Total Codes")}       value={codes.length}                                icon={Tags}       color="bg-pink-500/10 text-pink-600"    loading={isLoading} />
+        <StatCard label={t("reports.activeCodes", "Active Codes")}      value={activeCodes}                                 icon={CheckCircle2} color="bg-green-500/10 text-green-600"  loading={isLoading} />
+        <StatCard label={t("reports.totalRedemptions", "Total Redemptions")} value={totalUsage}                                  icon={TrendingUp} color="bg-primary/10 text-primary"       loading={isLoading} />
+        <StatCard label={t("reports.promoBookings", "Promo Bookings")}    value={data?.totalPromoBookings ?? 0}               icon={Star}       color="bg-amber-500/10 text-amber-600"   loading={isLoading} />
       </div>
 
       {/* Monthly impact chart */}
       {(data?.monthlyImpact ?? []).length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Monthly Promo Bookings (Last 6 Months)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.monthlyPromoBookings", "Monthly Promo Bookings (Last 6 Months)")}</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={data!.monthlyImpact} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
@@ -1068,8 +1075,8 @@ function PromoReport() {
                 <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="promo_bookings" fill="#ec4899" radius={[3, 3, 0, 0]} name="Promo Bookings" />
-                <Bar dataKey="revenue" fill="#f59e0b" radius={[3, 3, 0, 0]} name="Revenue (EGP)" />
+                <Bar dataKey="promo_bookings" fill="#ec4899" radius={[3, 3, 0, 0]} name={t("reports.promoBookings", "Promo Bookings")} />
+                <Bar dataKey="revenue" fill="#f59e0b" radius={[3, 3, 0, 0]} name={t("reports.revenueEGP", "Revenue (EGP)")} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -1078,12 +1085,12 @@ function PromoReport() {
 
       {/* Most used codes */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Most Used Promo Codes</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.mostUsedCodes", "Most Used Promo Codes")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
           ) : codes.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No promo codes found</div>
+            <div className="py-12 text-center text-muted-foreground text-sm">{t("reports.noCodesFound", "No promo codes found")}</div>
           ) : (
             <div className="divide-y divide-border">
               {codes.map((code, i) => {
@@ -1095,15 +1102,15 @@ function PromoReport() {
                         <span className="text-xs font-bold text-muted-foreground w-5">#{i + 1}</span>
                         <code className="text-sm font-mono font-bold bg-muted px-1.5 py-0.5 rounded">{code.code}</code>
                         <Badge variant="outline" className={code.is_active ? "text-green-600 border-green-200 text-xs" : "text-muted-foreground text-xs"}>
-                          {code.is_active ? "Active" : "Inactive"}
+                          {code.is_active ? t("common.active", "Active") : t("common.inactive", "Inactive")}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-3 text-sm">
-                        <span className="text-muted-foreground">{code.used_count}{code.max_usage ? `/${code.max_usage}` : ""} uses</span>
+                        <span className="text-muted-foreground">{t("reports.usageLimit", { current: code.used_count, max: code.max_usage ?? "∞" })}</span>
                         <span className="font-semibold">
-                          {code.discount_type === "percentage" ? `${code.discount_value}%` : `${code.discount_value} EGP`} off
+                          {code.discount_type === "percentage" ? t("reports.discountPct", { value: code.discount_value }) : t("reports.discountAmt", { value: code.discount_value })}
                         </span>
-                        <span className="text-xs text-muted-foreground">{code.bookings_with_promo} bookings</span>
+                        <span className="text-xs text-muted-foreground">{t("reports.bookingsCountShort", { count: code.bookings_with_promo })}</span>
                       </div>
                     </div>
                     <div className="h-1.5 rounded-full bg-muted overflow-hidden">
@@ -1122,6 +1129,7 @@ function PromoReport() {
 
 // ─── 8. Complaints Report ─────────────────────────────────────────────────────
 function ComplaintsReport() {
+  const { t } = useTranslation();
   const { data: analytics, isLoading: analyticsLoading } = useQuery({
     queryKey: ["complaints-analytics"],
     queryFn: () => adminFetch<ComplaintsAnalytics>("/admin/analytics/complaints"),
@@ -1167,8 +1175,8 @@ function ComplaintsReport() {
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl bg-orange-500/10"><MessageSquare className="h-6 w-6 text-orange-600" /></div>
           <div>
-            <h1 className="text-2xl font-bold">Complaints Report</h1>
-            <p className="text-sm text-muted-foreground">Support ticket volume, types, resolution rate, and average resolution time</p>
+            <h1 className="text-2xl font-bold">{t("reports.complaintsTitle", "Complaints Report")}</h1>
+            <p className="text-sm text-muted-foreground">{t("reports.complaintsSubtitleDetailed", "Support ticket volume, types, resolution rate, and average resolution time")}</p>
           </div>
         </div>
         <Button
@@ -1176,29 +1184,29 @@ function ComplaintsReport() {
           onClick={() => downloadCSV(tickets as unknown as Record<string, unknown>[], "complaints.csv")}
           disabled={isLoading}
         >
-          <Download className="h-3.5 w-3.5 me-1.5" /> Export CSV
+          <Download className="h-3.5 w-3.5 me-1.5" /> {t("common.exportCSV", "Export CSV")}
         </Button>
       </div>
 
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <StatCard label="Total Tickets"     value={totalTickets}      icon={MessageSquare}  color="bg-orange-500/10 text-orange-600"  loading={isLoading} />
-        <StatCard label="Resolution Rate"   value={`${resolutionRate}%`} icon={CheckCircle2} color="bg-green-500/10 text-green-600"    loading={isLoading} />
-        <StatCard label="Avg Resolution"    value={avgResLabel}       icon={Clock}          color="bg-blue-500/10 text-blue-600"       loading={isLoading} />
-        <StatCard label="Open Tickets"      value={stats.open ?? 0}   icon={AlertCircle}    color="bg-amber-500/10 text-amber-600"     loading={isLoading} />
+        <StatCard label={t("reports.totalTickets", "Total Tickets")}     value={totalTickets}      icon={MessageSquare}  color="bg-orange-500/10 text-orange-600"  loading={isLoading} />
+        <StatCard label={t("reports.resolutionRate", "Resolution Rate")}   value={`${resolutionRate}%`} icon={CheckCircle2} color="bg-green-500/10 text-green-600"    loading={isLoading} />
+        <StatCard label={t("reports.avgResolution", "Avg Resolution")}    value={avgResLabel}       icon={Clock}          color="bg-blue-500/10 text-blue-600"       loading={isLoading} />
+        <StatCard label={t("reports.openTickets", "Open Tickets")}      value={stats.open ?? 0}   icon={AlertCircle}    color="bg-amber-500/10 text-amber-600"     loading={isLoading} />
       </div>
 
       {/* Status & type breakdown side by side */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="text-base">By Status</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.byStatus", "By Status")}</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {isLoading ? <Skeleton className="h-32 w-full" /> : (
               [
-                { key: "open",     label: "Open",     color: "#f59e0b" },
-                { key: "pending",  label: "Pending",  color: "#3b82f6" },
-                { key: "resolved", label: "Resolved", color: "#22c55e" },
-                { key: "closed",   label: "Closed",   color: "#6b7280" },
+                { key: "open",     label: t("support.open", "Open"),     color: "#f59e0b" },
+                { key: "pending",  label: t("support.pending", "Pending"),  color: "#3b82f6" },
+                { key: "resolved", label: t("support.resolved", "Resolved"), color: "#22c55e" },
+                { key: "closed",   label: t("support.closed", "Closed"),   color: "#6b7280" },
               ].map((s) => {
                 const count = stats[s.key] ?? 0;
                 const pct = totalTickets ? Math.round((count / totalTickets) * 100) : 0;
@@ -1206,7 +1214,7 @@ function ComplaintsReport() {
                   <div key={s.key} className="space-y-1">
                     <div className="flex justify-between text-sm">
                       <span className="font-medium">{s.label}</span>
-                      <span className="text-muted-foreground">{count} ({pct}%)</span>
+                      <span className="text-muted-foreground">{t("reports.countPct", { count, pct })}</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">
                       <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: s.color }} />
@@ -1219,7 +1227,7 @@ function ComplaintsReport() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="text-base">By Type & Priority</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.byTypePriority", "By Type & Priority")}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {isLoading ? <Skeleton className="h-32 w-full" /> : (
               <>
@@ -1227,11 +1235,11 @@ function ComplaintsReport() {
                   {Object.entries(typeAgg).map(([type, count]) => (
                     <div key={type} className={`flex-1 rounded-lg p-3 text-center ${type === "passenger" ? "bg-blue-500/10" : "bg-amber-500/10"}`}>
                       <p className="text-xl font-bold">{count}</p>
-                      <p className="text-xs font-medium capitalize mt-0.5">{type}</p>
+                      <p className="text-xs font-medium capitalize mt-0.5">{t(`common.${type}`, type)}</p>
                     </div>
                   ))}
                   {Object.keys(typeAgg).length === 0 && (
-                    <p className="text-sm text-muted-foreground">No tickets yet</p>
+                    <p className="text-sm text-muted-foreground">{t("support.noTickets", "No tickets yet")}</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -1242,8 +1250,8 @@ function ComplaintsReport() {
                     return (
                       <div key={p.priority} className="space-y-0.5">
                         <div className="flex justify-between text-xs">
-                          <span className="capitalize font-medium">{p.priority} priority</span>
-                          <span className="text-muted-foreground">{p.count} ({pct}%)</span>
+                          <span className="capitalize font-medium">{t(`support.${p.priority}`, p.priority)} {t("reports.priority", "priority")}</span>
+                          <span className="text-muted-foreground">{t("reports.countPct", { count: p.count, pct })}</span>
                         </div>
                         <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                           <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: col }} />
@@ -1261,7 +1269,7 @@ function ComplaintsReport() {
       {/* Trend */}
       {(analytics?.trend ?? []).length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Daily Ticket Trend (last 30 days)</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">{t("reports.dailyTicketTrend", "Daily Ticket Trend (last 30 days)")}</CardTitle></CardHeader>
           <CardContent>
             {isLoading ? <Skeleton className="h-48 w-full" /> : (
               <ResponsiveContainer width="100%" height={200}>
@@ -1271,8 +1279,8 @@ function ComplaintsReport() {
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip labelFormatter={(l) => { try { return format(new Date(l), "MMM d, yyyy"); } catch { return l; } }} />
                   <Legend />
-                  <Line type="monotone" dataKey="opened"   stroke="#f59e0b" strokeWidth={2} dot={false} name="Opened" />
-                  <Line type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2} dot={false} name="Resolved" />
+                  <Line type="monotone" dataKey="opened"   stroke="#f59e0b" strokeWidth={2} dot={false} name={t("support.open", "Opened")} />
+                  <Line type="monotone" dataKey="resolved" stroke="#22c55e" strokeWidth={2} dot={false} name={t("support.resolved", "Resolved")} />
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -1282,31 +1290,31 @@ function ComplaintsReport() {
 
       {/* Recent tickets list */}
       <Card>
-        <CardHeader><CardTitle className="text-base">Recent Complaints</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">{t("reports.recentComplaints", "Recent Complaints")}</CardTitle></CardHeader>
         <CardContent className="p-0">
           {ticketsLoading ? (
             <div className="p-4 space-y-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
           ) : tickets.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No complaints found</div>
+            <div className="py-12 text-center text-muted-foreground text-sm">{t("support.noTickets", "No complaints found")}</div>
           ) : (
             <div className="divide-y divide-border">
-              {tickets.map((t) => (
-                <div key={t.id} className="flex items-center gap-3 px-4 py-3">
+              {tickets.map((t_row) => (
+                <div key={t_row.id} className="flex items-center gap-3 px-4 py-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{t.subject}</p>
+                    <p className="text-sm font-medium truncate">{t_row.subject}</p>
                     <p className="text-xs text-muted-foreground">
-                      {t.user?.name ?? t.driver?.name ?? "Unknown"} · {t.type} · {format(new Date(t.createdAt), "MMM d, yyyy")}
+                      {t_row.user?.name ?? t_row.driver?.name ?? t("common.unknown", "Unknown")} · {t(`common.${t_row.type}`, t_row.type)} · {format(new Date(t_row.createdAt), "MMM d, yyyy")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Badge variant="outline" className={`text-xs ${
-                      t.priority === "high"   ? "text-red-500 border-red-200" :
-                      t.priority === "medium" ? "text-amber-600 border-amber-200" : "text-muted-foreground"
-                    }`}>{t.priority}</Badge>
+                      t_row.priority === "high"   ? "text-red-500 border-red-200" :
+                      t_row.priority === "medium" ? "text-amber-600 border-amber-200" : "text-muted-foreground"
+                    }`}>{t(`support.${t_row.priority}`, t_row.priority)}</Badge>
                     <Badge variant="outline" className={`text-xs ${
-                      t.status === "resolved" ? "text-green-600 border-green-200" :
-                      t.status === "open"     ? "text-amber-600 border-amber-200" : "text-muted-foreground"
-                    }`}>{t.status}</Badge>
+                      t_row.status === "resolved" ? "text-green-600 border-green-200" :
+                      t_row.status === "open"     ? "text-amber-600 border-amber-200" : "text-muted-foreground"
+                    }`}>{t(`support.${t_row.status}`, t_row.status)}</Badge>
                   </div>
                 </div>
               ))}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Database, Wifi, WifiOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useTranslation } from "react-i18next";
 
 interface DbHealth {
   status: "ok" | "error";
@@ -18,6 +19,7 @@ type CheckState = "loading" | "ok" | "error";
 const POLL_INTERVAL_MS = 30_000;
 
 export function DbHealthIndicator({ collapsed }: { collapsed: boolean }) {
+  const { t } = useTranslation();
   const [health, setHealth] = useState<DbHealth | null>(null);
   const [state, setState] = useState<CheckState>("loading");
 
@@ -56,14 +58,14 @@ export function DbHealthIndicator({ collapsed }: { collapsed: boolean }) {
       ? Wifi
       : WifiOff;
 
-  const providerLabel = health?.provider ?? "Database";
+  const providerLabel = health?.provider ?? t("common.database", "Database");
   const latencyLabel = health?.latencyMs != null ? ` · ${health.latencyMs}ms` : "";
   const tooltipText =
     state === "loading"
-      ? "Checking database connection…"
+      ? t("dbHealth.checking")
       : state === "ok"
-        ? `${providerLabel}${latencyLabel} · Connected`
-        : `${providerLabel} · ${health?.error ?? "Disconnected"}`;
+        ? `${providerLabel}${latencyLabel} · ${t("dbHealth.connected")}`
+        : `${providerLabel} · ${health?.error ?? t("dbHealth.disconnected")}`;
 
   if (collapsed) {
     return (
@@ -98,10 +100,10 @@ export function DbHealthIndicator({ collapsed }: { collapsed: boolean }) {
             <Database className="h-3.5 w-3.5 text-slate-400 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide truncate">
-                Database
+                {t("common.database", "Database")}
               </p>
               <p className="text-[11px] text-slate-700 dark:text-slate-300 truncate font-medium">
-                {state === "loading" ? "Checking…" : providerLabel}
+                {state === "loading" ? t("dbHealth.checking") : providerLabel}
               </p>
             </div>
             {dot}

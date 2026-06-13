@@ -93,15 +93,15 @@ export default function AuditLogs() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             <Shield className="h-7 w-7 text-primary" />
-            {t("auditLogs.title", "Audit Logs")}
+            {t("auditLogs.title")}
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            {t("auditLogs.subtitle", "Complete record of all admin actions in the system")}
+            {t("auditLogs.subtitle")}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
           <RefreshCw className="h-4 w-4" />
-          {t("common.refresh", "Refresh")}
+          {t("common.refresh")}
         </Button>
       </div>
 
@@ -111,10 +111,10 @@ export default function AuditLogs() {
           onValueChange={(v) => { setAction(v === "all" ? "" : v); setPage(1); }}
         >
           <SelectTrigger className="w-44">
-            <SelectValue placeholder={t("auditLogs.filterAction", "Action")} />
+            <SelectValue placeholder={t("auditLogs.filterAction")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("common.all", "All Actions")}</SelectItem>
+            <SelectItem value="all">{t("common.all")}</SelectItem>
             {(actions ?? ["CREATE", "UPDATE", "DELETE"]).map((a) => (
               <SelectItem key={a} value={a}>{a}</SelectItem>
             ))}
@@ -126,10 +126,10 @@ export default function AuditLogs() {
           onValueChange={(v) => { setEntityType(v === "all" ? "" : v); setPage(1); }}
         >
           <SelectTrigger className="w-44">
-            <SelectValue placeholder={t("auditLogs.filterEntity", "Entity Type")} />
+            <SelectValue placeholder={t("auditLogs.filterEntity")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("common.all", "All Entities")}</SelectItem>
+            <SelectItem value="all">{t("common.all")}</SelectItem>
             {(entityTypes ?? []).map((e) => (
               <SelectItem key={e} value={e}>{e}</SelectItem>
             ))}
@@ -138,7 +138,7 @@ export default function AuditLogs() {
 
         {(action || entityType) && (
           <Button variant="ghost" size="sm" onClick={resetFilters}>
-            {t("common.clearFilters", "Clear Filters")}
+            {t("common.clearFilters")}
           </Button>
         )}
 

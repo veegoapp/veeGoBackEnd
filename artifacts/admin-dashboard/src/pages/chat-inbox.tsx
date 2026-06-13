@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAdminSocket } from "@/hooks/useAdminSocket";
@@ -51,11 +52,12 @@ interface ChatStats {
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function SenderBadge({ type }: { type: string }) {
+  const { t } = useTranslation();
   const map: Record<string, { label: string; className: string }> = {
-    passenger: { label: "Passenger", className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
-    driver:    { label: "Driver",    className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
-    admin:     { label: "Admin",     className: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" },
-    system:    { label: "System",    className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
+    passenger: { label: t("chatInbox.passenger"), className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
+    driver:    { label: t("common.driver"),    className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
+    admin:     { label: t("chatInbox.admin"),     className: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" },
+    system:    { label: t("chatInbox.system"),    className: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400" },
   };
   const { label, className } = map[type] ?? map.system!;
   return <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${className}`}>{label}</span>;
@@ -77,6 +79,7 @@ function MessageThread({
   tripId: number;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -128,7 +131,7 @@ function MessageThread({
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-primary" />
-          <span className="font-semibold text-sm">Trip #{tripId}</span>
+          <span className="font-semibold text-sm">{t("chatInbox.tripId", { id: tripId })}</span>
           {threadQuery.data?.tripStatus && (
             <Badge variant="outline" className="text-xs capitalize">
               {threadQuery.data.tripStatus}
@@ -154,7 +157,7 @@ function MessageThread({
         ) : messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
             <MessageSquare className="h-8 w-8 mb-2 opacity-30" />
-            <p className="text-sm">No messages yet</p>
+            <p className="text-sm">{t("chatInbox.noMessages")}</p>
           </div>
         ) : (
           <div className="space-y-3 py-2">
@@ -197,7 +200,7 @@ function MessageThread({
       <div className="border-t px-4 py-3">
         <div className="flex gap-2">
           <Input
-            placeholder="Type a message as admin…"
+            placeholder={t("chatInbox.typeAdminPlaceholder")}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={handleKey}
@@ -212,7 +215,7 @@ function MessageThread({
             <Send className="h-4 w-4" />
           </Button>
         </div>
-        <p className="text-[10px] text-muted-foreground mt-1.5">Enter to send · Admin messages are visible to all parties</p>
+        <p className="text-[10px] text-muted-foreground mt-1.5">{t("chatInbox.adminHint")}</p>
       </div>
     </div>
   );
@@ -231,6 +234,7 @@ function ConversationList({
   onSelect: (id: number) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   if (isLoading) {
     return (
       <div className="space-y-2 p-3">
@@ -243,8 +247,8 @@ function ConversationList({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <MessageSquare className="h-8 w-8 mb-2 opacity-30" />
-        <p className="text-sm font-medium">No conversations yet</p>
-        <p className="text-xs mt-1">Trip messages will appear here</p>
+        <p className="text-sm font-medium">{t("chatInbox.noConversations")}</p>
+        <p className="text-xs mt-1">{t("chatInbox.noMessagesYet")}</p>
       </div>
     );
   }
@@ -265,23 +269,23 @@ function ConversationList({
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-medium text-sm">Trip #{conv.trip_id}</span>
+                  <span className="font-medium text-sm">{t("chatInbox.tripId", { id: conv.trip_id })}</span>
                   <Badge variant="outline" className="text-[10px] capitalize px-1 py-0 h-4">
                     {conv.trip_status}
                   </Badge>
                   {hasUnread && (
                     <Badge className="text-[10px] px-1.5 py-0 h-4 bg-primary">
-                      {conv.unread_count} new
+                      {t("chatInbox.newBadge", { count: conv.unread_count })}
                     </Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {conv.user_name ?? "Unknown passenger"}
+                  {conv.user_name ?? t("chatInbox.unknownPassenger")}
                   {conv.driver_name ? ` · ${conv.driver_name}` : ""}
                 </p>
                 <p className="text-xs text-foreground/80 mt-1 truncate">
                   <span className="text-muted-foreground">
-                    {conv.last_sender_type === "admin" ? "You" : conv.last_sender_type}:{" "}
+                    {conv.last_sender_type === "admin" ? t("chatInbox.you") : (conv.last_sender_type === "passenger" ? t("chatInbox.passenger") : (conv.last_sender_type === "driver" ? t("common.driver") : t("chatInbox.system")))}:{" "}
                   </span>
                   {conv.last_message}
                 </p>
@@ -303,6 +307,7 @@ function ConversationList({
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function ChatInbox() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const { token } = useAuth();
@@ -358,10 +363,10 @@ export default function ChatInbox() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <MessageSquare className="h-6 w-6 text-primary" />
-              Chat Inbox
+              {t("chatInbox.title")}
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Trip conversations between passengers and drivers
+              {t("chatInbox.inboxSubtitle")}
             </p>
           </div>
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -369,7 +374,7 @@ export default function ChatInbox() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
             </span>
-            Live
+            {t("chatInbox.live")}
           </div>
         </div>
 
@@ -381,17 +386,17 @@ export default function ChatInbox() {
             <>
               <div className="text-center">
                 <p className="text-xl font-bold">{stats?.totalMessages ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Total Messages</p>
+                <p className="text-xs text-muted-foreground">{t("chatInbox.totalMessages")}</p>
               </div>
               <Separator orientation="vertical" className="h-8" />
               <div className="text-center">
                 <p className="text-xl font-bold text-primary">{stats?.unreadMessages ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Unread</p>
+                <p className="text-xs text-muted-foreground">{t("chatInbox.unread")}</p>
               </div>
               <Separator orientation="vertical" className="h-8" />
               <div className="text-center">
                 <p className="text-xl font-bold">{stats?.tripConversations ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Conversations</p>
+                <p className="text-xs text-muted-foreground">{t("chatInbox.conversations")}</p>
               </div>
             </>
           )}
@@ -404,7 +409,7 @@ export default function ChatInbox() {
         <div className="w-80 border-e flex flex-col overflow-hidden shrink-0">
           <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Conversations ({convs.length})
+              {t("chatInbox.conversationsCount", { count: convs.length })}
             </span>
             <Button
               variant="ghost"
@@ -439,8 +444,8 @@ export default function ChatInbox() {
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <MessageSquare className="h-12 w-12 mb-3 opacity-20" />
-              <p className="text-base font-medium">Select a conversation</p>
-              <p className="text-sm mt-1">Choose a trip from the left to view messages</p>
+              <p className="text-base font-medium">{t("chatInbox.selectPrompt")}</p>
+              <p className="text-sm mt-1">{t("chatInbox.selectDesc")}</p>
             </div>
           )}
         </div>

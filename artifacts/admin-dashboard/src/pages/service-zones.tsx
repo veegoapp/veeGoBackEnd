@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -36,18 +37,12 @@ type ServiceType = "car" | "motorcycle" | "delivery" | "shuttle";
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
-const SERVICE_META: Record<ServiceType, { icon: React.ElementType; label: string; color: string; bg: string }> = {
-  car:        { icon: Car,         label: "Car",         color: "text-blue-600",   bg: "bg-blue-500/10" },
-  shuttle:    { icon: Bus,         label: "Shuttle",     color: "text-amber-600",  bg: "bg-amber-500/10" },
-  motorcycle: { icon: Bike,        label: "Motorcycle",  color: "text-orange-600", bg: "bg-orange-500/10" },
-  delivery:   { icon: PackageOpen, label: "Delivery",    color: "text-violet-600", bg: "bg-violet-500/10" },
-};
-
 const VALID_TYPES: ServiceType[] = ["car", "motorcycle", "delivery", "shuttle"];
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 export default function ServiceZones() {
+  const { t } = useTranslation();
   const [, params] = useRoute("/services/:type/zones");
   const type = (params?.type ?? "car") as ServiceType;
   const { toast } = useToast();
@@ -55,7 +50,17 @@ export default function ServiceZones() {
 
   const [pendingToggles, setPendingToggles] = useState<Set<number>>(new Set());
 
-  const meta = SERVICE_META[type];
+  const serviceMeta = useMemo(() => {
+    const meta: Record<ServiceType, { icon: React.ElementType; label: string; color: string; bg: string }> = {
+      car:        { icon: Car,         label: t("services.carLabel"),         color: "text-blue-600",   bg: "bg-blue-500/10" },
+      shuttle:    { icon: Bus,         label: t("services.shuttleLabel"),     color: "text-amber-600",  bg: "bg-amber-500/10" },
+      motorcycle: { icon: Bike,        label: t("services.motorcycleLabel"),  color: "text-orange-600", bg: "bg-orange-500/10" },
+      delivery:   { icon: PackageOpen, label: t("services.deliveryLabel"),    color: "text-violet-600", bg: "bg-violet-500/10" },
+    };
+    return meta;
+  }, [t]);
+
+  const meta = serviceMeta[type];
 
   const zonesQuery = useQuery({
     queryKey: ["zones-list"],
@@ -77,7 +82,7 @@ export default function ServiceZones() {
       queryClient.setQueryData(["service-control", type], updated);
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to update zone", description: err.message, variant: "destructive" });
+      toast({ title: t("serviceZones.failedToUpdate"), description: err.message, variant: "destructive" });
       queryClient.invalidateQueries({ queryKey: ["service-control", type] });
     },
   });
@@ -108,7 +113,7 @@ export default function ServiceZones() {
         },
         onSuccess: () => {
           toast({
-            title: currentlyEnabled ? "Zone disabled for this service" : "Zone enabled for this service",
+            title: currentlyEnabled ? t("serviceZones.zoneDisabled") : t("serviceZones.zoneEnabled"),
           });
         },
       }
@@ -118,7 +123,7 @@ export default function ServiceZones() {
   if (!VALID_TYPES.includes(type)) {
     return (
       <div className="p-6">
-        <p className="text-muted-foreground">Invalid service type.</p>
+        <p className="text-muted-foreground">{t("serviceZones.invalidService")}</p>
       </div>
     );
   }
@@ -137,7 +142,7 @@ export default function ServiceZones() {
         <Link href={`/services/${type}`}>
           <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground -ms-2 mt-0.5">
             <ArrowLeft className="h-4 w-4" />
-            Back to {meta?.label ?? type}
+            {t("serviceZones.backTo", { service: meta?.label ?? type })}
           </Button>
         </Link>
       </div>
@@ -147,9 +152,9 @@ export default function ServiceZones() {
           <Icon className={`h-6 w-6 ${meta?.color ?? "text-foreground"}`} />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">{meta?.label ?? type} — Available Zones</h1>
+          <h1 className="text-2xl font-bold">{t("serviceZones.title", { service: meta?.label ?? type })}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Toggle each zone to enable or disable this service within it
+            {t("serviceZones.subtitle")}
           </p>
         </div>
       </div>
@@ -159,7 +164,7 @@ export default function ServiceZones() {
         <div className="flex items-center gap-2.5 p-3 rounded-lg border border-green-300 bg-green-50 dark:bg-green-950/30 dark:border-green-800">
           <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
           <p className="text-sm text-green-700 dark:text-green-400">
-            No zones restricted — this service is currently available in <strong>all zones</strong>. Enable specific zones below to restrict it.
+            {t("serviceZones.noZonesRestricted")}
           </p>
         </div>
       )}
@@ -169,12 +174,15 @@ export default function ServiceZones() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Globe className="h-4 w-4" />
-            Zones
+            {t("serviceZones.zonesCard")}
           </CardTitle>
           <CardDescription>
             {isLoading
-              ? "Loading zones…"
-              : `${zones.length} zone${zones.length !== 1 ? "s" : ""} configured · ${activeZoneIds.length === 0 ? "All active" : `${activeZoneIds.length} selected`}`}
+              ? t("serviceZones.loadingZones")
+              : t("serviceZones.zonesConfigured", {
+                  count: zones.length,
+                  active: activeZoneIds.length === 0 ? t("serviceZones.allActive") : t("serviceZones.selected", { count: activeZoneIds.length })
+                })}
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
@@ -187,10 +195,10 @@ export default function ServiceZones() {
           ) : zones.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <MapPin className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">No zones have been created yet.</p>
+              <p className="text-sm text-muted-foreground">{t("serviceZones.noZones")}</p>
               <Link href="/zones">
                 <Button variant="outline" size="sm" className="mt-1">
-                  Go to Zones page
+                  {t("serviceZones.goToZones")}
                 </Button>
               </Link>
             </div>
@@ -198,9 +206,9 @@ export default function ServiceZones() {
             <div className="divide-y">
               {/* Table header */}
               <div className="grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2.5 text-xs font-medium text-muted-foreground bg-muted/40 rounded-t-none">
-                <span>Zone Name &amp; Description</span>
-                <span className="text-center w-24">Operation Status</span>
-                <span className="text-center w-20">Service Active</span>
+                <span>{t("serviceZones.colZoneName")}</span>
+                <span className="text-center w-24">{t("serviceZones.colOperationStatus")}</span>
+                <span className="text-center w-20">{t("serviceZones.colServiceActive")}</span>
               </div>
 
               {/* Zone rows */}
@@ -220,7 +228,7 @@ export default function ServiceZones() {
                         <span className="font-medium text-sm">{zone.name}</span>
                         {!zone.isActive && (
                           <Badge variant="outline" className="text-xs text-muted-foreground border-muted-foreground/30">
-                            GIS Inactive
+                            {t("serviceZones.gisInactive")}
                           </Badge>
                         )}
                       </div>
@@ -228,7 +236,7 @@ export default function ServiceZones() {
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">{zone.description}</p>
                       )}
                       <p className="text-xs text-muted-foreground/60 mt-0.5">
-                        {zone.centerLat.toFixed(4)}, {zone.centerLng.toFixed(4)} · {zone.radiusKm} km radius
+                        {zone.centerLat.toFixed(4)}, {zone.centerLng.toFixed(4)} · {zone.radiusKm} {t("serviceZones.kmRadius")}
                       </p>
                     </div>
 
@@ -237,12 +245,12 @@ export default function ServiceZones() {
                       {zone.isActive ? (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600">
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          Active
+                          {t("common.active")}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground">
                           <AlertCircle className="h-3.5 w-3.5" />
-                          Inactive
+                          {t("common.inactive")}
                         </span>
                       )}
                     </div>
@@ -256,7 +264,7 @@ export default function ServiceZones() {
                         aria-label={`Toggle ${zone.name} for ${meta?.label ?? type} service`}
                       />
                       <span className={`text-xs font-medium ${isServiceActive ? "text-green-600" : "text-muted-foreground"}`}>
-                        {isPending ? "Saving…" : isServiceActive ? "On" : "Off"}
+                        {isPending ? t("serviceZones.zoneSaving") : isServiceActive ? t("serviceZones.on") : t("serviceZones.off")}
                       </span>
                     </div>
                   </div>
@@ -270,8 +278,8 @@ export default function ServiceZones() {
       {/* Footer note */}
       {!isLoading && zones.length > 0 && (
         <p className="text-xs text-muted-foreground text-center pb-2">
-          Toggle a zone to instantly enable or disable this service within it. Changes are saved automatically.
-          {allZonesActive && " Currently showing as globally active — enable a specific zone to start zone-based restrictions."}
+          {t("serviceZones.toggleHint")}
+          {allZonesActive && ` ${t("serviceZones.globallyActive")}`}
         </p>
       )}
     </div>

@@ -44,6 +44,7 @@ type RatingStats = {
 // ─── Stars display ────────────────────────────────────────────────────────────
 
 function Stars({ score }: { score: number }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((s) => (
@@ -261,7 +262,7 @@ export default function Ratings() {
                       <Stars score={parseFloat(row.score)} />
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className="capitalize text-[10px]">{row.context}</Badge>
+                      <Badge variant="outline" className="capitalize text-[10px]">{t(`ratings.context${row.context.charAt(0).toUpperCase() + row.context.slice(1)}`, row.context)}</Badge>
                     </TableCell>
                     <TableCell className="max-w-[200px]">
                       {row.comment ? (
@@ -318,10 +319,10 @@ export default function Ratings() {
                 <Stars score={parseFloat(selected.score)} />
               </div>
               {[
-                { label: t("ratings.passenger", "Passenger"), value: selected.raterName ?? `User #${selected.raterId}` },
-                { label: t("ratings.driver", "Driver"), value: selected.driverName ?? `Driver #${selected.driverId}` },
-                { label: t("ratings.context", "Context"), value: <Badge variant="outline" className="capitalize text-[10px]">{selected.context}</Badge> },
-                { label: t("ratings.reference", "Reference"), value: selected.tripId ? `Trip #${selected.tripId}` : selected.rideId ? `Ride #${selected.rideId}` : "—" },
+                { label: t("ratings.passenger", "Passenger"), value: selected.raterName ?? `${t("common.user")} #${selected.raterId}` },
+                { label: t("ratings.driver", "Driver"), value: selected.driverName ?? `${t("common.driver")} #${selected.driverId}` },
+                { label: t("ratings.context", "Context"), value: <Badge variant="outline" className="capitalize text-[10px]">{t(`ratings.context${selected.context.charAt(0).toUpperCase() + selected.context.slice(1)}`, selected.context)}</Badge> },
+                { label: t("ratings.reference", "Reference"), value: selected.tripId ? `${t("common.trip")} #${selected.tripId}` : selected.rideId ? `${t("common.ride")} #${selected.rideId}` : "—" },
                 { label: t("ratings.comment", "Comment"), value: selected.comment ?? "—" },
                 { label: t("common.date", "Date"), value: format(new Date(selected.createdAt), "dd MMM yyyy, HH:mm:ss") },
               ].map((row) => (
@@ -346,7 +347,7 @@ export default function Ratings() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><Trash2 className="h-4 w-4" /> {t("ratings.deleteConfirmTitle", "Delete Rating")}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            {t("ratings.deleteConfirmBody", "This will permanently remove rating")} #{deleteTarget?.id} ({deleteTarget?.score}★) {t("ratings.deleteConfirmBy", "left by")} {deleteTarget?.raterName ?? `User #${deleteTarget?.raterId}`}.
+            {t("ratings.deleteConfirmBody", "This will permanently remove rating")} #{deleteTarget?.id} ({deleteTarget?.score}★) {t("ratings.deleteConfirmBy", "left by")} {deleteTarget?.raterName ?? `${t("common.user")} #${deleteTarget?.raterId}`}.
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>{t("common.cancel", "Cancel")}</Button>

@@ -40,12 +40,12 @@ type LiveDriver = {
   } | null;
 };
 
-const SERVICE_OPTIONS = [
-  { value: "all", label: "All Services" },
-  { value: "shuttle", label: "Shuttle" },
-  { value: "car", label: "Car" },
-  { value: "motorcycle", label: "Motorcycle" },
-  { value: "delivery", label: "Delivery" },
+const SERVICE_OPTIONS = (t: any) => [
+  { value: "all", label: t("common.allServices", "All Services") },
+  { value: "shuttle", label: t("nav.shuttle", "Shuttle") },
+  { value: "car", label: t("nav.cars", "Car") },
+  { value: "motorcycle", label: t("nav.motorcycles", "Motorcycle") },
+  { value: "delivery", label: t("nav.delivery", "Delivery") },
 ];
 
 function applyLocationOverlay(
@@ -160,8 +160,8 @@ export default function LiveTracking() {
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             {connected
-              ? "Real-time driver positions via Socket.IO"
-              : "Polling for driver positions every 10 seconds"}
+              ? t("liveTracking.socketStatus", "Real-time driver positions via Socket.IO")
+              : t("liveTracking.pollingStatus", "Polling for driver positions every 10 seconds")}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -173,13 +173,13 @@ export default function LiveTracking() {
             }`}
           >
             {connected ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
-            {connected ? "Live" : "Polling"}
+            {connected ? t("liveTracking.liveStatus", "Live") : t("liveTracking.pollingShort", "Polling")}
           </span>
           <span className="text-xs text-muted-foreground">
-            Updated: {lastRefresh.toLocaleTimeString()}
+            {t("dashboard.lastSynced")}: {lastRefresh.toLocaleTimeString()}
           </span>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="h-4 w-4 me-1" /> Refresh
+            <RefreshCw className="h-4 w-4 me-1" /> {t("common.refresh")}
           </Button>
         </div>
       </div>
@@ -187,10 +187,10 @@ export default function LiveTracking() {
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Total Drivers", value: drivers.length,                                        icon: UserCircle, color: "text-primary"      },
-          { label: "Online",        value: drivers.filter((d) => d.status === "online").length,    icon: Radio,      color: "text-emerald-500" },
-          { label: "On Trip",       value: drivers.filter((d) => d.status === "busy").length,      icon: Bus,        color: "text-amber-500"  },
-          { label: "With GPS",      value: withGps.length,                                         icon: MapPin,     color: "text-blue-500"   },
+          { label: t("liveTracking.statTotalDrivers", "Total Drivers"), value: drivers.length,                                        icon: UserCircle, color: "text-primary"      },
+          { label: t("common.online"),        value: drivers.filter((d) => d.status === "online").length,    icon: Radio,      color: "text-emerald-500" },
+          { label: t("liveTracking.statOnTrip", "On Trip"),       value: drivers.filter((d) => d.status === "busy").length,      icon: Bus,        color: "text-amber-500"  },
+          { label: t("liveTracking.statWithGps", "With GPS"),      value: withGps.length,                                         icon: MapPin,     color: "text-blue-500"   },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="pt-5 flex items-center gap-3">
@@ -208,8 +208,8 @@ export default function LiveTracking() {
 
       {/* Service filter bar */}
       <div className="flex flex-wrap gap-2 items-center bg-card border border-border rounded-xl px-4 py-3">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide me-1">Service</span>
-        {SERVICE_OPTIONS.map((opt) => (
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide me-1">{t("common.type")}</span>
+        {SERVICE_OPTIONS(t).map((opt) => (
           <button
             key={opt.value}
             onClick={() => setServiceFilter(opt.value)}
@@ -230,31 +230,31 @@ export default function LiveTracking() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             className="ps-9"
-            placeholder="Search by name or phone…"
+            placeholder={t("liveTracking.searchPlaceholder", "Search by name or phone…")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="All statuses" />
+            <SelectValue placeholder={t("common.allStatuses")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="online">Online</SelectItem>
-            <SelectItem value="busy">On Trip</SelectItem>
-            <SelectItem value="offline">Offline</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
+            <SelectItem value="online">{t("common.online")}</SelectItem>
+            <SelectItem value="busy">{t("liveTracking.statOnTrip", "On Trip")}</SelectItem>
+            <SelectItem value="offline">{t("common.offline")}</SelectItem>
+            <SelectItem value="suspended">{t("common.suspended")}</SelectItem>
           </SelectContent>
         </Select>
         {(searchQuery || statusFilter !== "all" || serviceFilter !== "all") && (
           <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); setServiceFilter("all"); }}>
-            Clear
+            {t("common.clear")}
           </Button>
         )}
         {(searchQuery || statusFilter !== "all" || serviceFilter !== "all") && (
           <span className="text-xs text-muted-foreground ms-auto">
-            {filteredDrivers.length} of {drivers.length} drivers
+            {t("liveTracking.filteredCount", { count: filteredDrivers.length, total: drivers.length, defaultValue: "{{count}} of {{total}} drivers" })}
           </span>
         )}
       </div>
@@ -263,15 +263,15 @@ export default function LiveTracking() {
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <MapPin className="h-4 w-4" /> Fleet Map
+            <MapPin className="h-4 w-4" /> {t("liveTracking.fleetMap", "Fleet Map")}
             {withGps.length > 0 && (
               <span className="text-xs font-normal text-muted-foreground ms-2">
-                {withGps.length} driver{withGps.length !== 1 ? "s" : ""} with GPS signal
+                {t("liveTracking.gpsCount", { count: withGps.length, defaultValue: "{{count}} driver(s) with GPS signal" })}
               </span>
             )}
             {connected && locationUpdates.size > 0 && (
               <span className="text-xs font-normal text-emerald-600 dark:text-emerald-400 ms-1">
-                · {locationUpdates.size} live
+                · {t("liveTracking.liveCount", { count: locationUpdates.size, defaultValue: "{{count}} live" })}
               </span>
             )}
           </CardTitle>
@@ -280,7 +280,7 @@ export default function LiveTracking() {
           <div className="h-[480px] w-full rounded-b-xl overflow-hidden">
             {isLoading ? (
               <div className="h-full flex items-center justify-center bg-muted">
-                <p className="text-muted-foreground text-sm">Loading map…</p>
+                <p className="text-muted-foreground text-sm">{t("liveTracking.loadingMap")}</p>
               </div>
             ) : (
               <MapLibreMap
@@ -298,7 +298,9 @@ export default function LiveTracking() {
       {/* Online driver cards */}
       {online.length > 0 && (
         <div>
-          <h2 className="font-semibold text-lg mb-3">Active Drivers ({online.length})</h2>
+          <h2 className="font-semibold text-lg mb-3">
+            {t("liveTracking.activeDrivers", { count: online.length, defaultValue: "Active Drivers ({{count}})" })}
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {online.map((d) => {
               const hasLive = locationUpdates.has(d.id);
@@ -339,14 +341,14 @@ export default function LiveTracking() {
                       </div>
                       <div className="flex items-center gap-1 text-muted-foreground">
                         <Gauge className="h-3 w-3" />
-                        <span>{d.currentSpeed != null ? `${d.currentSpeed.toFixed(0)} km/h` : "—"}</span>
+                        <span>{d.currentSpeed != null ? t("liveTracking.speedKmH", { speed: d.currentSpeed.toFixed(0), defaultValue: "{{speed}} km/h" }) : "—"}</span>
                       </div>
                       <div className="flex items-center gap-1 text-muted-foreground col-span-2">
                         <MapPin className="h-3 w-3 shrink-0" />
                         <span className="truncate">
                           {d.currentLatitude != null
                             ? `${d.currentLatitude.toFixed(4)}, ${d.currentLongitude?.toFixed(4)}`
-                            : "No GPS signal"}
+                            : t("liveTracking.noGpsSignal", "No GPS signal")}
                         </span>
                       </div>
                       {d.currentHeading != null && (
@@ -358,7 +360,7 @@ export default function LiveTracking() {
                       {d.assignedBusId && (
                         <div className="flex items-center gap-1 text-muted-foreground">
                           <Bus className="h-3 w-3" />
-                          <span>Bus #{d.assignedBusId}</span>
+                          <span>{t("nav.buses")} #{d.assignedBusId}</span>
                         </div>
                       )}
                     </div>
@@ -369,14 +371,14 @@ export default function LiveTracking() {
                           href={`/trips/${d.activeTrip.id}`}
                           className="font-medium text-primary hover:underline"
                         >
-                          Active Trip #{d.activeTrip.id}
+                          {t("dashboard.activeTrips")} #{d.activeTrip.id}
                         </Link>
                         <p className="text-muted-foreground capitalize">{d.activeTrip.status}</p>
                       </div>
                     )}
 
                     <p className="text-xs text-muted-foreground">
-                      Updated {formatDistanceToNow(new Date(d.updatedAt), { addSuffix: true })}
+                      {t("common.updatedAt")} {formatDistanceToNow(new Date(d.updatedAt), { addSuffix: true })}
                     </p>
                   </CardContent>
                 </Card>
@@ -389,15 +391,17 @@ export default function LiveTracking() {
       {/* Offline table */}
       {offline.length > 0 && (
         <div>
-          <h2 className="font-semibold text-lg mb-3">Offline / Suspended ({offline.length})</h2>
+          <h2 className="font-semibold text-lg mb-3">
+            {t("liveTracking.offlineDrivers", { count: offline.length, defaultValue: "Offline / Suspended ({{count}})" })}
+          </h2>
           <div className="rounded-xl border border-border bg-card overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/30">
-                  <th className="text-start px-4 py-3 font-medium">Driver</th>
-                  <th className="text-start px-4 py-3 font-medium">Phone</th>
-                  <th className="text-start px-4 py-3 font-medium">Status</th>
-                  <th className="text-start px-4 py-3 font-medium">Last Seen</th>
+                  <th className="text-start px-4 py-3 font-medium">{t("liveTracking.colDriver")}</th>
+                  <th className="text-start px-4 py-3 font-medium">{t("liveTracking.colPhone")}</th>
+                  <th className="text-start px-4 py-3 font-medium">{t("liveTracking.colStatus")}</th>
+                  <th className="text-start px-4 py-3 font-medium">{t("liveTracking.colLastSeen")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -435,8 +439,8 @@ export default function LiveTracking() {
       {!isLoading && drivers.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Radio className="h-16 w-16 mb-4 opacity-20" />
-          <p className="text-lg font-medium">No drivers found</p>
-          <p className="text-sm mt-1">Register drivers first to see them here.</p>
+          <p className="text-lg font-medium">{t("liveTracking.noDriversFound")}</p>
+          <p className="text-sm mt-1">{t("liveTracking.noDriversDesc", "Register drivers first to see them here.")}</p>
         </div>
       )}
     </div>

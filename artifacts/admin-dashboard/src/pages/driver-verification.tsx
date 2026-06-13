@@ -42,11 +42,11 @@ function getDriverStatus(docs: DriverDocument[]): "verified" | "pending" | "reje
   return "verified";
 }
 
-const STATUS_CONFIG: Record<string, { variant: any; icon: React.ElementType; label: string; cls: string }> = {
-  verified: { variant: "outline",     icon: CheckCircle2,   label: "Verified",  cls: "text-green-600 border-green-300 bg-green-50 dark:bg-green-950" },
-  pending:  { variant: "secondary",   icon: Clock,          label: "Pending",   cls: "text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950" },
-  rejected: { variant: "destructive", icon: AlertTriangle,  label: "Issues",    cls: "text-red-500 border-red-300 bg-red-50 dark:bg-red-950" },
-  empty:    { variant: "outline",     icon: FileImage,      label: "No docs",   cls: "text-muted-foreground" },
+const STATUS_CONFIG: Record<string, { variant: any; icon: React.ElementType; label: string; cls: string; tKey: string }> = {
+  verified: { variant: "outline",     icon: CheckCircle2,   label: "Verified",  tKey: "verified", cls: "text-green-600 border-green-300 bg-green-50 dark:bg-green-950" },
+  pending:  { variant: "secondary",   icon: Clock,          label: "Pending",   tKey: "pending",  cls: "text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950" },
+  rejected: { variant: "destructive", icon: AlertTriangle,  label: "Issues",    tKey: "rejected",  cls: "text-red-500 border-red-300 bg-red-50 dark:bg-red-950" },
+  empty:    { variant: "outline",     icon: FileImage,      label: "No docs",   tKey: "noDocs",    cls: "text-muted-foreground" },
 };
 
 export default function DriverVerification() {
@@ -158,7 +158,7 @@ export default function DriverVerification() {
       );
     },
     onSuccess: async () => {
-      toast({ title: "All pending documents approved", description: `${viewDriver?.driver.name}'s documents have been approved.` });
+      toast({ title: t("verification.allPendingApproved", "All pending documents approved"), description: t("verification.allApprovedDesc", "{{name}}'s documents have been approved.", { name: viewDriver?.driver.name }) });
       queryClient.invalidateQueries({ queryKey: ["driver-documents"] });
       queryClient.invalidateQueries({ queryKey: ["driver-documents-stats"] });
       const updated = await adminFetch<DriverDocs>(`/driver-documents/by-driver/${viewDriver!.driver.id}`);
@@ -217,7 +217,7 @@ export default function DriverVerification() {
           </SelectContent>
         </Select>
         {statusFilter !== "all" && (
-          <Button variant="ghost" size="sm" onClick={() => setStatusFilter("all")}>Clear</Button>
+          <Button variant="ghost" size="sm" onClick={() => setStatusFilter("all")}>{t("common.clear", "Clear")}</Button>
         )}
         {data && <p className="ms-auto text-sm text-muted-foreground">{data.total} {t("verification.documentsTotal", "documents total")}</p>}
       </div>
@@ -259,11 +259,11 @@ export default function DriverVerification() {
                 <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                   <Badge variant="outline" className={`text-[10px] gap-1 ${statusMeta.cls}`}>
                     <StatusIcon className="h-2.5 w-2.5" />
-                    {statusMeta.label}
+                    {t(`verification.${statusMeta.tKey}`, statusMeta.label)}
                   </Badge>
                   <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>{driverDocs.length} docs</span>
-                    {pending > 0  && <Badge variant="secondary"    className="text-[10px]">{pending} pending</Badge>}
+                    <span>{t("verification.docsCount", "{{count}} docs", { count: driverDocs.length })}</span>
+                    {pending > 0  && <Badge variant="secondary"    className="text-[10px]">{t("verification.pendingCount", "{{count}} pending", { count: pending })}</Badge>}
                     {approved > 0 && <Badge variant="outline"      className="text-[10px] text-green-600">{approved} ✓</Badge>}
                     {rejected > 0 && <Badge variant="destructive"  className="text-[10px]">{rejected} ✗</Badge>}
                   </div>
@@ -311,7 +311,7 @@ export default function DriverVerification() {
                   onClick={() => approveAllMutation.mutate(viewDriver!.driver.id)}
                 >
                   <CheckCheck className="h-3.5 w-3.5" />
-                  {approveAllMutation.isPending ? "Approving…" : `Approve All (${pendingCount})`}
+                  {approveAllMutation.isPending ? t("common.loading") : t("verification.approveAllCount", "Approve All ({{count}})", { count: pendingCount })}
                 </Button>
               )}
             </div>
@@ -323,12 +323,12 @@ export default function DriverVerification() {
                   const Icon = meta.icon;
                   return (
                     <Badge variant="outline" className={`text-xs gap-1 ${meta.cls}`}>
-                      <Icon className="h-3 w-3" /> {meta.label}
+                      <Icon className="h-3 w-3" /> {t(`verification.${meta.tKey}`, meta.label)}
                     </Badge>
                   );
                 })()}
                 <span className="text-xs text-muted-foreground">
-                  {viewDriver.documents.length} document{viewDriver.documents.length !== 1 ? "s" : ""} uploaded
+                  {t("verification.docsUploadedCount", "{{count}} documents uploaded", { count: viewDriver.documents.length })}
                 </span>
               </div>
             )}
@@ -352,7 +352,7 @@ export default function DriverVerification() {
                   <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950 p-3 flex items-start gap-2 mb-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
-                      Approving this final required document will trigger <strong>immediate automatic account activation</strong> for this driver.
+                      {t("verification.accountActivationWarning", "Approving this final required document will trigger immediate automatic account activation for this driver.")}
                     </p>
                   </div>
                 )}
@@ -360,7 +360,7 @@ export default function DriverVerification() {
                   <div className="rounded-lg border border-green-300 bg-green-50 dark:bg-green-950 p-3 flex items-start gap-2 mb-2">
                     <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                     <p className="text-sm text-green-800 dark:text-green-200 font-medium">
-                      All required documents approved — this driver's account has been automatically activated.
+                      {t("verification.accountActivatedMessage", "All required documents approved — this driver's account has been automatically activated.")}
                     </p>
                   </div>
                 )}
@@ -405,7 +405,7 @@ export default function DriverVerification() {
                               <div className="flex items-center gap-1 mt-1">
                                 <Badge variant={cfg.variant} className="text-[10px]">
                                   <StatusIcon className="h-2.5 w-2.5 me-1" />
-                                  {doc.verificationStatus}
+                                  {t(`verification.${doc.verificationStatus}`)}
                                 </Badge>
                               </div>
                               {doc.adminNotes && (
@@ -511,13 +511,13 @@ export default function DriverVerification() {
               )}
 
               <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                <span>Uploaded {format(new Date(zoomDoc.uploadedAt), "MMM d, yyyy HH:mm")}</span>
+                <span>{t("verification.uploadedAt", "Uploaded {{date}}", { date: format(new Date(zoomDoc.uploadedAt), "MMM d, yyyy HH:mm") })}</span>
                 {zoomDoc.mimeType && <><span>·</span><span>{zoomDoc.mimeType}</span></>}
               </div>
 
               {zoomDoc.adminNotes && (
                 <div className="bg-muted/50 rounded-lg p-3 text-sm">
-                  <span className="font-medium text-xs text-muted-foreground">Previous note: </span>
+                  <span className="font-medium text-xs text-muted-foreground">{t("verification.previousNote", "Previous note")}: </span>
                   {zoomDoc.adminNotes}
                 </div>
               )}

@@ -81,7 +81,7 @@ export default function Wallet() {
   const onSubmitRefund = (values: RefundFormValues) => {
     refundMutation.mutate({ data: values }, {
       onSuccess: () => {
-        toast({ title: "Refund issued successfully" });
+        toast({ title: t("wallet.refundSuccess", "Refund issued successfully") });
         setIsRefundOpen(false);
         form.reset();
         queryClient.invalidateQueries({ queryKey: getListAllTransactionsQueryKey() });
@@ -112,38 +112,38 @@ export default function Wallet() {
         <Dialog open={isRefundOpen} onOpenChange={setIsRefundOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-              <RefreshCcw className="me-2 h-4 w-4" /> Issue Manual Refund
+              <RefreshCcw className="me-2 h-4 w-4" /> {t("wallet.issueRefund", "Issue Manual Refund")}
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Issue Manual Refund</DialogTitle>
+              <DialogTitle>{t("wallet.issueRefund", "Issue Manual Refund")}</DialogTitle>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmitRefund)} className="space-y-4">
                 <FormField control={form.control} name="userId" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>User ID</FormLabel>
+                    <FormLabel>{t("wallet.userId", "User ID")}</FormLabel>
                     <FormControl><Input type="number" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="amount" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Amount (EGP)</FormLabel>
+                    <FormLabel>{t("wallet.amountEGP", "Amount (EGP)")}</FormLabel>
                     <FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control} name="description" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reason / Reference</FormLabel>
-                    <FormControl><Input placeholder="Customer service compensation" {...field} /></FormControl>
+                    <FormLabel>{t("wallet.reasonRef", "Reason / Reference")}</FormLabel>
+                    <FormControl><Input placeholder={t("wallet.reasonPlaceholder", "Customer service compensation")} {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <DialogFooter>
-                  <Button type="submit" disabled={refundMutation.isPending}>Process Refund</Button>
+                  <Button type="submit" disabled={refundMutation.isPending}>{t("wallet.processRefund", "Process Refund")}</Button>
                 </DialogFooter>
               </form>
             </Form>
@@ -155,13 +155,13 @@ export default function Wallet() {
       <div className="flex flex-wrap gap-3 items-center bg-card p-4 rounded-xl border border-border">
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Filters:</span>
+          <span className="text-sm font-medium">{t("wallet.filtersLabel", "Filters:")}</span>
         </div>
 
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search name or description..."
+            placeholder={t("wallet.searchPlaceholder", "Search name or description...")}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="ps-8 w-[220px]"
@@ -169,7 +169,7 @@ export default function Wallet() {
         </div>
 
         <Input
-          placeholder="User ID..."
+          placeholder={t("wallet.userIdPlaceholder", "User ID...")}
           value={userIdFilter}
           onChange={(e) => { setUserIdFilter(e.target.value); setPage(1); }}
           className="w-[100px]"
@@ -178,18 +178,18 @@ export default function Wallet() {
 
         <Select value={typeFilter} onValueChange={(val) => { setTypeFilter(val); setPage(1); }}>
           <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All Types" />
+            <SelectValue placeholder={t("wallet.allTypes", "All Types")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="deposit">Deposit</SelectItem>
-            <SelectItem value="payment">Payment</SelectItem>
-            <SelectItem value="refund">Refund</SelectItem>
+            <SelectItem value="all">{t("wallet.allTypes", "All Types")}</SelectItem>
+            <SelectItem value="deposit">{t("wallet.deposit", "Deposit")}</SelectItem>
+            <SelectItem value="payment">{t("wallet.payment", "Payment")}</SelectItem>
+            <SelectItem value="refund">{t("wallet.refund", "Refund")}</SelectItem>
           </SelectContent>
         </Select>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">From</span>
+          <span className="text-xs text-muted-foreground">{t("wallet.from", "From")}</span>
           <Input
             type="date"
             value={dateFrom}
@@ -199,7 +199,7 @@ export default function Wallet() {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">To</span>
+          <span className="text-xs text-muted-foreground">{t("wallet.to", "To")}</span>
           <Input
             type="date"
             value={dateTo}
@@ -210,7 +210,7 @@ export default function Wallet() {
 
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="ms-auto gap-1">
-            <X className="h-3.5 w-3.5" /> Clear
+            <X className="h-3.5 w-3.5" /> {t("common.clear")}
           </Button>
         )}
       </div>
@@ -219,12 +219,12 @@ export default function Wallet() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Txn ID</TableHead>
-              <TableHead>Date & Time</TableHead>
-              <TableHead>User</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead className="text-end">Amount (EGP)</TableHead>
+              <TableHead>{t("wallet.colTxnId", "Txn ID")}</TableHead>
+              <TableHead>{t("wallet.colDateTime", "Date & Time")}</TableHead>
+              <TableHead>{t("wallet.colUser", "User")}</TableHead>
+              <TableHead>{t("wallet.colType", "Type")}</TableHead>
+              <TableHead>{t("wallet.colDescription", "Description")}</TableHead>
+              <TableHead className="text-end">{t("wallet.colAmount", "Amount (EGP)")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -239,7 +239,7 @@ export default function Wallet() {
             ) : !data?.data.length ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                  No transactions found.
+                  {t("common.noData")}
                 </TableCell>
               </TableRow>
             ) : (
@@ -250,7 +250,7 @@ export default function Wallet() {
                     {format(new Date(txn.createdAt), "MMM d, yyyy HH:mm")}
                   </TableCell>
                   <TableCell>
-                    <div className="font-medium text-sm">{txn.user?.name || `User #${txn.userId}`}</div>
+                    <div className="font-medium text-sm">{txn.user?.name || `${t("common.user", "User")} #${txn.userId}`}</div>
                     {txn.user?.email && <div className="text-xs text-muted-foreground">{txn.user.email}</div>}
                   </TableCell>
                   <TableCell>
@@ -270,7 +270,7 @@ export default function Wallet() {
                             : "text-red-500 border-red-200 bg-red-50 dark:bg-red-950"
                         }
                       >
-                        {txn.type}
+                        {t(`wallet.${txn.type}`, txn.type)}
                       </Badge>
                     </div>
                   </TableCell>
@@ -297,7 +297,7 @@ export default function Wallet() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              Page {page} of {Math.ceil(data.total / data.limit)}
+              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / data.limit)}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext

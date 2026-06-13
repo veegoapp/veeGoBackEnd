@@ -137,14 +137,14 @@ export default function Bookings() {
         body: JSON.stringify({ userId, amount, description }),
       }),
     onSuccess: () => {
-      toast({ title: "Refund issued successfully" });
+      toast({ title: t("bookings.refundSuccess", "Refund issued successfully") });
       setRefundDialog({ open: false });
       setRefundAmount("");
       setRefundReason("");
       queryClient.invalidateQueries({ queryKey: ["admin-bookings"] });
     },
     onError: (err: Error) =>
-      toast({ title: "Refund failed", description: err.message, variant: "destructive" }),
+      toast({ title: t("bookings.refundFailed", "Refund failed"), description: err.message, variant: "destructive" }),
   });
 
   const handleCancel = useCallback(
@@ -159,13 +159,13 @@ export default function Bookings() {
     if (!refundDialog.open) return;
     const amt = parseFloat(refundAmount);
     if (isNaN(amt) || amt <= 0) {
-      toast({ title: "Enter a valid positive amount", variant: "destructive" });
+      toast({ title: t("users.validAmount"), variant: "destructive" });
       return;
     }
     refundMutation.mutate({
       userId: refundDialog.booking.userId,
       amount: amt,
-      description: refundReason || `Admin refund for booking #${refundDialog.booking.id}`,
+      description: refundReason || t("bookings.refundReasonDefault", { id: refundDialog.booking.id }),
     });
   };
 
@@ -218,7 +218,7 @@ export default function Bookings() {
             {t("bookings.title")}
           </h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            {data ? `${data.total} total bookings` : "Loading…"}
+            {data ? t("bookings.totalCount", { count: data.total }) : t("common.loading")}
           </p>
         </div>
         <Button variant="outline" size="sm" className="gap-1.5" onClick={handleExport} disabled={bookings.length === 0}>
@@ -451,47 +451,47 @@ export default function Bookings() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Ticket className="h-4 w-4" /> Booking #{detailBooking?.id}
+              <Ticket className="h-4 w-4" /> {t("bookings.bookingId")}: #{detailBooking?.id}
             </DialogTitle>
           </DialogHeader>
           {detailBooking && (
             <div className="space-y-4 py-1">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Passenger</p>
-                <DetailRow label="Name" value={detailBooking.userName ?? `User #${detailBooking.userId}`} />
-                <DetailRow label="Email" value={detailBooking.userEmail} />
-                <DetailRow label="Phone" value={detailBooking.userPhone} />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("bookings.passenger")}</p>
+                <DetailRow label={t("common.name")} value={detailBooking.userName ?? `${t("common.customer")} #${detailBooking.userId}`} />
+                <DetailRow label={t("common.email")} value={detailBooking.userEmail} />
+                <DetailRow label={t("common.phone")} value={detailBooking.userPhone} />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Trip</p>
-                <DetailRow label="Trip ID" value={`#${detailBooking.tripId}`} />
-                <DetailRow label="Route" value={detailBooking.routeName} />
-                <DetailRow label="From" value={detailBooking.fromLocation} />
-                <DetailRow label="To" value={detailBooking.toLocation} />
-                <DetailRow label="Service" value={detailBooking.serviceType} />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("common.trip")}</p>
+                <DetailRow label={t("bookings.bookingId")} value={`#${detailBooking.tripId}`} />
+                <DetailRow label={t("common.route")} value={detailBooking.routeName} />
+                <DetailRow label={t("bookings.from")} value={detailBooking.fromLocation} />
+                <DetailRow label={t("bookings.to")} value={detailBooking.toLocation} />
+                <DetailRow label={t("common.type")} value={detailBooking.serviceType} />
                 <DetailRow
-                  label="Departure"
+                  label={t("common.departure")}
                   value={detailBooking.departureTime
                     ? format(new Date(detailBooking.departureTime), "MMM d, yyyy HH:mm")
                     : null}
                 />
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Booking</p>
-                <DetailRow label="Seats" value={detailBooking.seatCount} />
-                <DetailRow label="Total Price" value={formatEGP(detailBooking.totalPrice)} />
-                <DetailRow label="Status" value={
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{t("bookings.title")}</p>
+                <DetailRow label={t("bookings.seats")} value={detailBooking.seatCount} />
+                <DetailRow label={t("common.amount")} value={formatEGP(detailBooking.totalPrice)} />
+                <DetailRow label={t("common.status")} value={
                   <Badge variant="outline" className={`capitalize ${STATUS_BADGE[detailBooking.status] ?? ""}`}>
                     {detailBooking.status}
                   </Badge>
                 } />
-                <DetailRow label="Payment" value={
+                <DetailRow label={t("common.payment")} value={
                   <Badge variant="outline" className={`capitalize ${PAYMENT_BADGE[detailBooking.paymentStatus] ?? ""}`}>
                     {detailBooking.paymentStatus}
                   </Badge>
                 } />
                 <DetailRow
-                  label="Booked At"
+                  label={t("common.createdAt")}
                   value={detailBooking.createdAt
                     ? format(new Date(detailBooking.createdAt), "MMM d, yyyy HH:mm")
                     : null}
@@ -523,7 +523,7 @@ export default function Bookings() {
                 <Ban className="me-1.5 h-3.5 w-3.5" /> {t("bookings.cancelBooking", "Cancel Booking")}
               </Button>
             )}
-            <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>{t("common.close", "Close")}</Button>
+            <Button variant="outline" size="sm" onClick={() => setDetailBooking(null)}>{t("common.close")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -534,16 +534,19 @@ export default function Bookings() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <DollarSign className="h-4 w-4 text-green-600" />
-              Refund to Wallet
+              {t("bookings.refundToWallet")}
             </DialogTitle>
           </DialogHeader>
           {refundDialog.open && (
             <form onSubmit={handleRefundSubmit} className="space-y-4 py-1">
               <p className="text-sm text-muted-foreground">
-                Refund wallet credit to <strong>{refundDialog.booking.userName ?? `User #${refundDialog.booking.userId}`}</strong> for booking <strong>#{refundDialog.booking.id}</strong>.
+                {t("bookings.refundDescription", { 
+                  name: refundDialog.booking.userName ?? `${t("common.customer")} #${refundDialog.booking.userId}`,
+                  id: refundDialog.booking.id 
+                })}
               </p>
               <div className="space-y-1.5">
-                <Label htmlFor="refund-amount">Amount (EGP)</Label>
+                <Label htmlFor="refund-amount">{t("common.amount")}</Label>
                 <Input
                   id="refund-amount"
                   type="number"
@@ -555,20 +558,20 @@ export default function Bookings() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="refund-reason">Reason</Label>
+                <Label htmlFor="refund-reason">{t("users.walletReason")}</Label>
                 <Input
                   id="refund-reason"
-                  placeholder="e.g. Trip cancelled by operator"
+                  placeholder={t("users.walletReasonPlaceholder")}
                   value={refundReason}
                   onChange={(e) => setRefundReason(e.target.value)}
                 />
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setRefundDialog({ open: false })}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
                 <Button type="submit" disabled={refundMutation.isPending}>
-                  {refundMutation.isPending ? "Processing…" : "Issue Refund"}
+                  {refundMutation.isPending ? t("common.processing") : t("common.confirm")}
                 </Button>
               </DialogFooter>
             </form>

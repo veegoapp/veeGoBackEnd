@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useParams } from "wouter";
 import {
   useListVehicles,
@@ -120,6 +121,7 @@ function VehicleFormDialog({
   onSubmit: (v: VehicleFormValues) => void;
   isLoading: boolean;
 }) {
+  const { t } = useTranslation();
   const form = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
     defaultValues: {
@@ -164,42 +166,42 @@ function VehicleFormDialog({
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="driverId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Driver ID</FormLabel>
+                  <FormLabel>{t("vehicles.driverId")}</FormLabel>
                   <FormControl><Input type="number" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="plateNumber" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Plate Number</FormLabel>
+                  <FormLabel>{t("vehicles.plateNumber")}</FormLabel>
                   <FormControl><Input placeholder="ABC-1234" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="make" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Make</FormLabel>
+                  <FormLabel>{t("vehicles.make")}</FormLabel>
                   <FormControl><Input placeholder="Toyota" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="model" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Model</FormLabel>
+                  <FormLabel>{t("vehicles.model")}</FormLabel>
                   <FormControl><Input placeholder="Corolla" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="year" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Year</FormLabel>
+                  <FormLabel>{t("vehicles.year")}</FormLabel>
                   <FormControl><Input type="number" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={form.control} name="color" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Color</FormLabel>
+                  <FormLabel>{t("vehicles.color")}</FormLabel>
                   <FormControl><Input placeholder="White" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -208,12 +210,12 @@ function VehicleFormDialog({
             <div className="grid grid-cols-2 gap-4">
               <FormField control={form.control} name="vehicleType" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vehicle Type</FormLabel>
+                  <FormLabel>{t("vehicles.vehicleType")}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={allowedTypes.length === 1}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {allowedTypes.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      {allowedTypes.map((t_item) => (
+                        <SelectItem key={t_item.value} value={t_item.value}>{t_item.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -222,14 +224,14 @@ function VehicleFormDialog({
               )} />
               <FormField control={form.control} name="status" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel>{t("common.status")}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="verified">Verified</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="suspended">Suspended</SelectItem>
+                      <SelectItem value="pending">{t("vehicles.statusPending")}</SelectItem>
+                      <SelectItem value="verified">{t("vehicles.statusVerified")}</SelectItem>
+                      <SelectItem value="rejected">{t("vehicles.statusRejected")}</SelectItem>
+                      <SelectItem value="suspended">{t("vehicles.statusSuspended")}</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -237,8 +239,8 @@ function VehicleFormDialog({
               )} />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>{isLoading ? "Saving..." : "Save"}</Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+              <Button type="submit" disabled={isLoading}>{isLoading ? t("common.saving") : t("common.save")}</Button>
             </DialogFooter>
           </form>
         </Form>
@@ -250,6 +252,7 @@ function VehicleFormDialog({
 // ─── Registered Fleet Tab ─────────────────────────────────────────────────────
 
 function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; serviceType: string }) {
+  const { t } = useTranslation();
   const { Icon, allowedTypes, defaultType, fixedType } = config;
   const [page, setPage]               = useState(1);
   const [search, setSearch]           = useState("");
@@ -276,9 +279,9 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
         setIsCreateOpen(false);
-        toast({ title: "Vehicle added" });
+        toast({ title: t("vehicles.vehicleAdded") });
       },
-      onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      onError: (e: any) => toast({ title: t("common.error"), description: e?.message, variant: "destructive" }),
     },
   });
 
@@ -287,9 +290,9 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
         setEditVehicle(null);
-        toast({ title: "Vehicle updated" });
+        toast({ title: t("vehicles.vehicleUpdated") });
       },
-      onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      onError: (e: any) => toast({ title: t("common.error"), description: e?.message, variant: "destructive" }),
     },
   });
 
@@ -298,9 +301,9 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListVehiclesQueryKey() });
         setDeleteId(null);
-        toast({ title: "Vehicle removed" });
+        toast({ title: t("vehicles.vehicleRemoved") });
       },
-      onError: (e: any) => toast({ title: "Error", description: e?.message, variant: "destructive" }),
+      onError: (e: any) => toast({ title: t("common.error"), description: e?.message, variant: "destructive" }),
     },
   });
 
@@ -310,10 +313,10 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {data ? `${data.total} vehicles registered` : "Loading…"}
+          {data ? t("vehicles.vehiclesCount", { count: data.total }) : t("common.loading2")}
         </p>
         <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 me-1.5" /> Add Vehicle
+          <Plus className="h-4 w-4 me-1.5" /> {t("vehicles.addVehicle")}
         </Button>
       </div>
 
@@ -322,34 +325,34 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             className="ps-8 w-56"
-            placeholder="Search plate, make, model..."
+            placeholder={t("vehicles.searchPlaceholder")}
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { setSearch(searchInput); setPage(1); } }}
           />
         </div>
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-36"><SelectValue placeholder={t("common.status")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="verified">Verified</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="suspended">Suspended</SelectItem>
+            <SelectItem value="all">{t("vehicles.allStatuses")}</SelectItem>
+            <SelectItem value="pending">{t("vehicles.statusPending")}</SelectItem>
+            <SelectItem value="verified">{t("vehicles.statusVerified")}</SelectItem>
+            <SelectItem value="rejected">{t("vehicles.statusRejected")}</SelectItem>
+            <SelectItem value="suspended">{t("vehicles.statusSuspended")}</SelectItem>
           </SelectContent>
         </Select>
         {!fixedType && (
           <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
-            <SelectTrigger className="w-32"><SelectValue placeholder="Type" /></SelectTrigger>
+            <SelectTrigger className="w-32"><SelectValue placeholder={t("common.type")} /></SelectTrigger>
             <SelectContent>
-              {allowedTypes.map((t) => (
-                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+              {allowedTypes.map((t_item) => (
+                <SelectItem key={t_item.value} value={t_item.value}>{t_item.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         )}
         {search && (
-          <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>Clear</Button>
+          <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>{t("common.clear")}</Button>
         )}
       </div>
 
@@ -358,13 +361,13 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">#</TableHead>
-              <TableHead>Vehicle</TableHead>
-              <TableHead>Plate</TableHead>
-              <TableHead>Year</TableHead>
-              <TableHead>Color</TableHead>
-              <TableHead>Driver</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-end">Actions</TableHead>
+              <TableHead>{t("vehicles.vehicle")}</TableHead>
+              <TableHead>{t("vehicles.plate")}</TableHead>
+              <TableHead>{t("vehicles.year")}</TableHead>
+              <TableHead>{t("vehicles.color")}</TableHead>
+              <TableHead>{t("common.driver")}</TableHead>
+              <TableHead className="text-center">{t("common.status")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -380,7 +383,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
               <TableRow>
                 <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                   <Icon className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  No vehicles found
+                  {t("vehicles.noVehicles")}
                 </TableCell>
               </TableRow>
             ) : (
@@ -390,7 +393,13 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
                   <TableCell>
                     <div>
                       <p className="font-medium">{vehicle.make} {vehicle.model}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{vehicle.vehicleType}</p>
+                      <p className="text-xs text-muted-foreground capitalize">
+                        {vehicle.vehicleType === "car" ? t("vehicles.typeCar") :
+                         vehicle.vehicleType === "motorcycle" ? t("vehicles.typeMotorcycle") :
+                         vehicle.vehicleType === "van" ? t("vehicles.typeVan") :
+                         vehicle.vehicleType === "minibus" ? t("vehicles.typeMinibus") :
+                         vehicle.vehicleType}
+                      </p>
                     </div>
                   </TableCell>
                   <TableCell className="font-mono font-medium">{vehicle.plateNumber}</TableCell>
@@ -403,12 +412,16 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
                         <p className="text-xs text-muted-foreground">{vehicle.driverPhone}</p>
                       </div>
                     ) : (
-                      <span className="text-muted-foreground text-xs">Unassigned</span>
+                      <span className="text-muted-foreground text-xs">{t("vehicles.unassigned")}</span>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="secondary" className={STATUS_COLORS[vehicle.status] ?? ""}>
-                      {vehicle.status}
+                      {vehicle.status === "pending" ? t("vehicles.statusPending") :
+                       vehicle.status === "verified" ? t("vehicles.statusVerified") :
+                       vehicle.status === "rejected" ? t("vehicles.statusRejected") :
+                       vehicle.status === "suspended" ? t("vehicles.statusSuspended") :
+                       vehicle.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-end">
@@ -435,7 +448,9 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
               <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} aria-disabled={page === 1} />
             </PaginationItem>
             <PaginationItem>
-              <span className="text-sm px-3 py-1 text-muted-foreground">Page {page} of {totalPages}</span>
+              <span className="text-sm px-3 py-1 text-muted-foreground">
+                {t("common.page")} {page} {t("common.of")} {totalPages}
+              </span>
             </PaginationItem>
             <PaginationItem>
               <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-disabled={page === totalPages} />
@@ -447,7 +462,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
       <VehicleFormDialog
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Add Vehicle"
+        title={t("vehicles.addVehicle")}
         allowedTypes={allowedTypes}
         isLoading={createMutation.isPending}
         onSubmit={(values) => createMutation.mutate({ data: values })}
@@ -457,7 +472,7 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
         <VehicleFormDialog
           open={!!editVehicle}
           onClose={() => setEditVehicle(null)}
-          title="Edit Vehicle"
+          title={t("vehicles.editVehicle")}
           allowedTypes={allowedTypes}
           defaultValues={{
             driverId:    editVehicle.driverId,
@@ -478,18 +493,18 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Vehicle?</AlertDialogTitle>
+            <AlertDialogTitle>{t("vehicles.removeTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the vehicle from the system.
+              {t("vehicles.removeDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
             >
-              {deleteMutation.isPending ? "Removing..." : "Remove"}
+              {deleteMutation.isPending ? t("vehicles.removing") : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -501,9 +516,47 @@ function RegisteredFleetTab({ config, serviceType }: { config: ServiceConfig; se
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Vehicles() {
+  const { t } = useTranslation();
   const params = useParams<{ serviceType?: string }>();
   const serviceType = params.serviceType ?? "car";
-  const config = SERVICE_CONFIGS[serviceType] ?? SERVICE_CONFIGS.car;
+  
+  const LOCAL_SERVICE_CONFIGS: Record<string, any> = {
+    car: {
+      title: t("vehicles.carTitle"),
+      subtitle: t("vehicles.carSubtitle"),
+      Icon: Car,
+      color: "text-blue-600",
+      bg: "bg-blue-500/10",
+      allowedTypes: [{ value: "car", label: t("vehicles.typeCar") }],
+      defaultType: "car",
+      fixedType: true,
+    },
+    motorcycle: {
+      title: t("vehicles.motorcycleTitle"),
+      subtitle: t("vehicles.motorcycleSubtitle"),
+      Icon: Bike,
+      color: "text-green-600",
+      bg: "bg-green-500/10",
+      allowedTypes: [{ value: "motorcycle", label: t("vehicles.typeMotorcycle") }],
+      defaultType: "motorcycle",
+      fixedType: true,
+    },
+    delivery: {
+      title: t("vehicles.deliveryTitle"),
+      subtitle: t("vehicles.deliverySubtitle"),
+      Icon: PackageOpen,
+      color: "text-orange-600",
+      bg: "bg-orange-500/10",
+      allowedTypes: [
+        { value: "van",     label: t("vehicles.typeVan") },
+        { value: "minibus", label: t("vehicles.typeMinibus") },
+      ],
+      defaultType: "van",
+      fixedType: false,
+    },
+  };
+
+  const config = LOCAL_SERVICE_CONFIGS[serviceType] ?? LOCAL_SERVICE_CONFIGS.car;
   const { Icon, title, subtitle, color, bg } = config;
 
   return (
@@ -522,11 +575,11 @@ export default function Vehicles() {
         <TabsList className="mb-2">
           <TabsTrigger value="fleet" className="gap-2">
             <List className="h-3.5 w-3.5" />
-            Registered Fleet
+            {t("vehicles.registeredFleet")}
           </TabsTrigger>
           <TabsTrigger value="catalog" className="gap-2">
             <BookOpen className="h-3.5 w-3.5" />
-            Allowed Catalog
+            {t("vehicles.allowedCatalog")}
           </TabsTrigger>
         </TabsList>
 

@@ -112,7 +112,7 @@ export default function Notifications() {
   const totalPages = historyData ? Math.ceil(historyData.total / historyData.limit) : 1;
 
   const sendButtonLabel = broadcastMutation.isPending
-    ? t("notifications.sending")
+    ? t("common.sending")
     : target === "all" ? t("notifications.sendAll")
     : target === "users" ? t("notifications.sendCustomers")
     : target === "drivers" ? t("notifications.sendDrivers")
@@ -344,7 +344,7 @@ export default function Notifications() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-sm font-semibold truncate">{n.title}</p>
                               <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                                {n.user?.role ?? t("common.unknown")}
+                                {n.user?.role === "driver" ? t("common.driver") : n.user?.role === "user" ? t("common.passenger") : (n.user?.role ?? t("common.unknown"))}
                               </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5">

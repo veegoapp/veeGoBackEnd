@@ -79,20 +79,25 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const TRIP_STATUS_LABELS: Record<string, string> = {
-  scheduled: "Scheduled", waiting_driver: "Waiting Driver", driver_assigned: "Driver Assigned",
-  boarding: "Boarding", active: "Active", completed: "Completed", cancelled: "Cancelled",
+  scheduled: "trips.scheduled", 
+  waiting_driver: "trips.waitingDriver", 
+  driver_assigned: "trips.driverAssigned",
+  boarding: "trips.boarding", 
+  active: "trips.enRoute", 
+  completed: "trips.completed", 
+  cancelled: "trips.cancelled",
 };
 
 const ALL_DOC_TYPES = [
-  { type: "profile_photo",         labelEn: "Profile Photo" },
-  { type: "national_id_front",     labelEn: "National ID — Front" },
-  { type: "national_id_back",      labelEn: "National ID — Back" },
-  { type: "criminal_record",       labelEn: "Criminal Record (Feesh)" },
-  { type: "driving_license_front", labelEn: "Driving License — Front" },
-  { type: "driving_license_back",  labelEn: "Driving License — Back" },
-  { type: "vehicle_license_front", labelEn: "Vehicle License — Front" },
-  { type: "vehicle_license_back",  labelEn: "Vehicle License — Back" },
-  { type: "vehicle_photo",         labelEn: "Vehicle Photos" },
+  { type: "profile_photo",         key: "verification.profilePhoto" },
+  { type: "national_id_front",     key: "verification.nationalIdFront" },
+  { type: "national_id_back",      key: "verification.nationalIdBack" },
+  { type: "criminal_record",       key: "verification.criminalRecord" },
+  { type: "driving_license_front", key: "verification.drivingLicenseFront" },
+  { type: "driving_license_back",  key: "verification.drivingLicenseBack" },
+  { type: "vehicle_license_front", key: "verification.vehicleLicenseFront" },
+  { type: "vehicle_license_back",  key: "verification.vehicleLicenseBack" },
+  { type: "vehicle_photo",         key: "verification.vehiclePhoto" },
 ];
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -176,7 +181,7 @@ export default function DriverDetail() {
       adminFetch(`/driver-documents/${id}`, { method: "PATCH", body: JSON.stringify({ verificationStatus: status }) }),
     onSuccess: (_d, vars) => {
       queryClient.invalidateQueries({ queryKey: [...qKey, "docs"] });
-      toast({ title: vars.status === "approved" ? "Document approved ✓" : "Document rejected" });
+      toast({ title: vars.status === "approved" ? t("verification.documentApproved") : t("verification.documentRejected") });
       setZoomDoc(null);
     },
   });
@@ -190,15 +195,15 @@ export default function DriverDetail() {
   const sendNotifMutation = useMutation({
     mutationFn: ({ title, body }: { title: string; body: string }) =>
       adminFetch("/notifications", { method: "POST", body: JSON.stringify({ userId: driver?.userId, title, body }) }),
-    onSuccess: () => { toast({ title: "Notification sent" }); setPromoOpen(false); },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: t("driverDetail.notificationSent", "Notification sent") }); setPromoOpen(false); },
+    onError: (err: Error) => toast({ title: t("common.error"), description: err.message, variant: "destructive" }),
   });
 
   const toggleBlockMutation = useMutation({
     mutationFn: () => adminFetch(`/admin/users/${driver!.userId}/toggle-block`, { method: "PATCH" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...qKey, "user"] });
-      toast({ title: userInfo?.isBlocked ? "Driver unblocked" : "Driver blocked" });
+      toast({ title: userInfo?.isBlocked ? t("driverDetail.driverUnblocked", "Driver unblocked") : t("driverDetail.driverBlocked", "Driver blocked") });
     },
   });
 
@@ -210,7 +215,7 @@ export default function DriverDetail() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [...qKey, "driver"] });
-      toast({ title: driver?.isActive ? "Driver suspended" : "Driver activated" });
+      toast({ title: driver?.isActive ? t("driverDetail.driverSuspended", "Driver suspended") : t("driverDetail.driverActivated", "Driver activated") });
     },
   });
 
@@ -218,21 +223,21 @@ export default function DriverDetail() {
     mutationFn: ({ title, body }: { title: string; body: string }) =>
       adminFetch("/notifications", { method: "POST", body: JSON.stringify({ userId: driver?.userId, title, body }) }),
     onSuccess: () => {
-      toast({ title: "Message sent" });
+      toast({ title: t("driverDetail.messageSent", "Message sent") });
       setMsgOpen(false);
       setMsgTitle("");
       setMsgBody("");
     },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("common.error"), description: err.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => adminFetch(`/admin/drivers/${driverId}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast({ title: "Driver account deleted" });
+      toast({ title: t("driverDetail.driverDeleted", "Driver account deleted") });
       navigate("/drivers");
     },
-    onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("driverDetail.deleteFailed", "Delete failed"), description: err.message, variant: "destructive" }),
   });
 
   const { data: criminalRecord, refetch: recheckCriminal, isFetching: criminalChecking } = useQuery<{
@@ -279,11 +284,11 @@ export default function DriverDetail() {
         body: JSON.stringify({ commissionRate: rate }),
       }),
     onSuccess: () => {
-      toast({ title: rate !== null ? "Commission override saved" : "Commission override cleared" });
+      toast({ title: rate !== null ? t("driverDetail.commissionSaved", "Commission override saved") : t("driverDetail.commissionCleared", "Commission override cleared") });
       setCommissionEditing(false);
       queryClient.invalidateQueries({ queryKey: [...qKey, "commission"] });
     },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("common.error"), description: err.message, variant: "destructive" }),
   });
   let rate: number | null = null;
 
@@ -332,7 +337,9 @@ export default function DriverDetail() {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold">{driver.name}</h1>
-              <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[driver.status]}`}>{driver.status}</Badge>
+              <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[driver.status]}`}>
+                {t(`drivers.${driver.status}`, driver.status)}
+              </Badge>
               <Badge variant="outline" className={`text-[10px] ${driver.isActive ? "text-green-600 border-green-500/30 bg-green-500/10" : "text-destructive border-destructive/30 bg-destructive/10"}`}>
                 {driver.isActive ? t("driverDetail.active") : t("common.inactive")}
               </Badge>
@@ -346,7 +353,7 @@ export default function DriverDetail() {
                 <span className="font-semibold text-foreground">{Number(driver.rating).toFixed(1)}</span>
               </span>
               <span className="flex items-center gap-1"><Activity className="h-3 w-3" /><span className="font-semibold text-foreground">{totalTrips}</span> {t("nav.trips")}</span>
-              <span className="flex items-center gap-1"><Hash className="h-3 w-3" />Driver ID #{driver.id}</span>
+              <span className="flex items-center gap-1"><Hash className="h-3 w-3" />{t("common.driver")} ID #{driver.id}</span>
             </div>
           </div>
         </div>
@@ -358,7 +365,7 @@ export default function DriverDetail() {
           variant={userInfo?.isBlocked ? "outline" : "destructive"}
           size="sm"
           onClick={() => {
-            if (confirm(userInfo?.isBlocked ? "Unblock this driver's account?" : "Block this driver's account?"))
+            if (confirm(userInfo?.isBlocked ? t("driverDetail.confirmUnblock", "Unblock this driver's account?") : t("driverDetail.confirmBlock", "Block this driver's account?")))
               toggleBlockMutation.mutate();
           }}
           disabled={toggleBlockMutation.isPending}
@@ -370,7 +377,7 @@ export default function DriverDetail() {
           variant="outline"
           size="sm"
           onClick={() => {
-            if (confirm(driver.isActive ? "Suspend this driver?" : "Activate this driver?"))
+            if (confirm(driver.isActive ? t("driverDetail.confirmSuspend", "Suspend this driver?") : t("driverDetail.confirmActivate", "Activate this driver?")))
               toggleActiveMutation.mutate();
           }}
           disabled={toggleActiveMutation.isPending}
@@ -420,9 +427,9 @@ export default function DriverDetail() {
             {t("driverDetail.tabDocuments")}
             {pendingDocs > 0 && <span className="ms-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-500 text-white text-[9px] font-bold">{pendingDocs}</span>}
           </TabsTrigger>
-          <TabsTrigger value="locations">{t("locations.tabLocationHistory", "Location History")}</TabsTrigger>
+          <TabsTrigger value="locations">{t("locations.tabLocationHistory")}</TabsTrigger>
           <TabsTrigger value="bonus" className="gap-1.5">
-            <Trophy className="h-3.5 w-3.5" /> Bonus Milestones
+            <Trophy className="h-3.5 w-3.5" /> {t("driverDetail.bonusMilestones", "Bonus Milestones")}
           </TabsTrigger>
         </TabsList>
 
@@ -436,7 +443,7 @@ export default function DriverDetail() {
                 <InfoRow icon={Mail} label={t("driverDetail.userAccountId")} value={`#${driver.userId}`} />
                 <InfoRow icon={Hash} label={t("driverDetail.licenseNumber")} value={driver.licenseNumber} />
                 <InfoRow icon={Hash} label={t("driverDetail.nationalId")} value={driver.nationalId} />
-                <InfoRow icon={Bus} label={t("driverDetail.assignedBus")} value={driver.assignedBusId ? `Bus #${driver.assignedBusId}` : null} />
+                <InfoRow icon={Bus} label={t("driverDetail.assignedBus")} value={driver.assignedBusId ? `${t("buses.title")} #${driver.assignedBusId}` : null} />
                 <InfoRow icon={CalendarDays} label={t("driverDetail.joined")} value={format(new Date(driver.createdAt), "PPP")} />
                 <InfoRow icon={Clock} label={t("driverDetail.lastUpdated")} value={
                   `${format(parseISO(driver.updatedAt), "MMM d, yyyy HH:mm")} (${formatDistanceToNow(parseISO(driver.updatedAt), { addSuffix: true })})`
@@ -448,7 +455,7 @@ export default function DriverDetail() {
               <CardHeader><CardTitle className="text-base">{t("driverDetail.accountStatus")}</CardTitle></CardHeader>
               <CardContent>
                 <InfoRow icon={Activity} label={t("driverDetail.driverStatus")} value={
-                  <Badge className={`text-[10px] ${STATUS_COLORS[driver.status]}`}>{driver.status}</Badge>
+                  <Badge className={`text-[10px] ${STATUS_COLORS[driver.status]}`}>{t(`drivers.${driver.status}`, driver.status)}</Badge>
                 } />
                 <InfoRow icon={ShieldCheck} label={t("driverDetail.account")} value={
                   userInfo?.isBlocked
@@ -478,7 +485,7 @@ export default function DriverDetail() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" /> Criminal Record Compliance
+                <AlertTriangle className="h-4 w-4 text-amber-500" /> {t("driverDetail.criminalRecordCheck", "Criminal Record Check")}
               </CardTitle>
               <Button
                 size="sm" variant="outline" className="h-7 text-xs gap-1"
@@ -486,7 +493,7 @@ export default function DriverDetail() {
                 onClick={() => recheckCriminal()}
               >
                 <RefreshCw className={`h-3 w-3 ${criminalChecking ? "animate-spin" : ""}`} />
-                {criminalChecking ? "Checking…" : "Run Check"}
+                {criminalChecking ? t("common.loading") : t("common.refresh")}
               </Button>
             </CardHeader>
             <CardContent>
@@ -496,13 +503,13 @@ export default function DriverDetail() {
                     <div className="rounded-lg border border-red-300 bg-red-50 dark:bg-red-950 p-3 flex items-start gap-2">
                       <AlertTriangle className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
                       <p className="text-sm text-red-700 dark:text-red-300 font-medium">
-                        Suspended: Criminal Record Threshold Exceeded — {criminalRecord.totalCompletedTripsAndRides} completed trips/rides ≥ {criminalRecord.threshold} limit without an approved criminal record document.
+                        {t("driverDetail.suspendedThresholdExceeded", "Suspended: Criminal Record Threshold Exceeded — {{count}} completed trips/rides ≥ {{threshold}} limit without an approved criminal record document.", { count: criminalRecord.totalCompletedTripsAndRides, threshold: criminalRecord.threshold })}
                       </p>
                     </div>
                   )}
                   <div className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Completed Trips &amp; Rides</span>
+                      <span className="text-muted-foreground">{t("driverDetail.completedTripsRides", "Completed Trips & Rides")}</span>
                       <span className="font-semibold">
                         {criminalRecord.totalCompletedTripsAndRides} / {criminalRecord.threshold}
                       </span>
@@ -513,15 +520,15 @@ export default function DriverDetail() {
                     />
                   </div>
                   <div className="flex items-center gap-2 text-xs">
-                    <span className="text-muted-foreground">Criminal Record Document:</span>
+                    <span className="text-muted-foreground">{t("driverDetail.criminalRecordDoc", "Criminal Record Document")}:</span>
                     {criminalRecord.hasCriminalRecordApproved
-                      ? <span className="text-green-600 font-medium flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Approved</span>
-                      : <span className="text-red-600 font-medium flex items-center gap-1"><XCircle className="h-3 w-3" /> Not Approved</span>
+                      ? <span className="text-green-600 font-medium flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> {t("driverDetail.approvedLabel")}</span>
+                      : <span className="text-red-600 font-medium flex items-center gap-1"><XCircle className="h-3 w-3" /> {t("driverDetail.notApproved", "Not Approved")}</span>
                     }
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">Click "Run Check" to fetch criminal record compliance status.</p>
+                <p className="text-sm text-muted-foreground">{t("driverDetail.runCheckDesc", "Click \"Run Check\" to fetch criminal record compliance status.")}</p>
               )}
             </CardContent>
           </Card>
@@ -530,7 +537,7 @@ export default function DriverDetail() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
-                <Percent className="h-4 w-4 text-purple-500" /> Commission Override
+                <Percent className="h-4 w-4 text-purple-500" /> {t("nav.commission")} {t("driverDetail.override", "Override")}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -538,11 +545,11 @@ export default function DriverDetail() {
                 <div className="flex-1">
                   {commissionData?.commissionRate !== null && commissionData?.commissionRate !== undefined ? (
                     <p className="text-sm">
-                      Personal Rate: <span className="font-bold text-purple-600">{(commissionData.commissionRate * 100).toFixed(1)}%</span>
-                      <span className="text-xs text-muted-foreground ms-2">(overrides global rate)</span>
+                      {t("driverDetail.personalRate", "Personal Rate")}: <span className="font-bold text-purple-600">{(commissionData.commissionRate * 100).toFixed(1)}%</span>
+                      <span className="text-xs text-muted-foreground ms-2">({t("driverDetail.overridesGlobal", "overrides global rate")})</span>
                     </p>
                   ) : (
-                    <p className="text-sm text-muted-foreground">Using global commission rate</p>
+                    <p className="text-sm text-muted-foreground">{t("driverDetail.usingGlobalRate", "Using global commission rate")}</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -564,10 +571,10 @@ export default function DriverDetail() {
                           rate = commissionInput === "" ? null : Number(commissionInput) / 100;
                           commissionMutation.mutate(rate);
                         }}>
-                        Save
+                        {t("common.save")}
                       </Button>
                       <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setCommissionEditing(false)}>
-                        Cancel
+                        {t("common.cancel")}
                       </Button>
                     </>
                   ) : (
@@ -578,13 +585,13 @@ export default function DriverDetail() {
                             ? String((commissionData.commissionRate * 100).toFixed(1)) : "");
                           setCommissionEditing(true);
                         }}>
-                        <Edit className="h-3 w-3" /> Set Override
+                        <Edit className="h-3 w-3" /> {t("driverDetail.setOverride", "Set Override")}
                       </Button>
                       {commissionData?.commissionRate !== null && commissionData?.commissionRate !== undefined && (
                         <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground"
                           disabled={commissionMutation.isPending}
                           onClick={() => { rate = null; commissionMutation.mutate(null); }}>
-                          Clear
+                          {t("common.clear")}
                         </Button>
                       )}
                     </>
@@ -592,7 +599,7 @@ export default function DriverDetail() {
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                Setting a personal rate overrides the global commission for this driver only. Clear the override to revert to the system-wide rate.
+                {t("driverDetail.commissionOverrideNote", "Setting a personal rate overrides the global commission for this driver only. Clear the override to revert to the system-wide rate.")}
               </p>
             </CardContent>
           </Card>
@@ -684,7 +691,8 @@ export default function DriverDetail() {
 
               {/* Doc grid */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {ALL_DOC_TYPES.map(({ type, labelEn }) => {
+                {ALL_DOC_TYPES.map(({ type, key }) => {
+                  const labelEn = t(key);
                   const doc = documents.find((d) => d.type === type);
                   if (!doc) {
                     return (
@@ -743,13 +751,13 @@ export default function DriverDetail() {
           <div className="space-y-4">
             <div className="flex items-center gap-2 mb-2">
               <Trophy className="h-5 w-5 text-amber-500" />
-              <h3 className="font-semibold text-base">Active Bonus Milestones</h3>
+              <h3 className="font-semibold text-base">{t("driverDetail.bonusMilestones", "Bonus Milestones")}</h3>
             </div>
             {!bonusProgressData?.data?.length ? (
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
                   <Trophy className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                  <p>No active bonus targets for this driver</p>
+                  <p>{t("driverDetail.noActiveBonuses", "No active bonus targets for this driver")}</p>
                 </CardContent>
               </Card>
             ) : (
@@ -762,19 +770,21 @@ export default function DriverDetail() {
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div>
                             <p className="font-semibold text-sm">{bp.targetName}</p>
-                            <p className="text-xs text-muted-foreground capitalize">{bp.serviceType} · {bp.targetType === "ride_count" ? "Ride Count" : "Earnings"}</p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {t(`nav.${bp.serviceType}`, bp.serviceType)} · {bp.targetType === "ride_count" ? t("driverDetail.rideCount", "Ride Count") : t("nav.revenue")}
+                            </p>
                           </div>
                           <div className="text-end shrink-0">
                             <p className="font-bold text-green-600 text-sm">{formatEGP(bp.bonusAmount)}</p>
-                            <p className="text-xs text-muted-foreground">bonus</p>
+                            <p className="text-xs text-muted-foreground">{t("driverDetail.bonus", "bonus")}</p>
                           </div>
                         </div>
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs text-muted-foreground">
                             <span>
                               {bp.targetType === "ride_count"
-                                ? `${Math.round(bp.currentValue)} of ${bp.targetValue} rides`
-                                : `${formatEGP(bp.currentValue)} of ${formatEGP(bp.targetValue)}`}
+                                ? t("driverDetail.rideCountProgress", "{{current}} of {{target}} rides", { current: Math.round(bp.currentValue), target: bp.targetValue })
+                                : t("driverDetail.earningsProgress", "{{current}} of {{target}}", { current: formatEGP(bp.currentValue), target: formatEGP(bp.targetValue) })}
                             </span>
                             <span className="font-bold text-foreground">{pct}%</span>
                           </div>
@@ -783,7 +793,7 @@ export default function DriverDetail() {
                         {bp.isCompleted && (
                           <div className="flex items-center gap-1 mt-2 text-xs text-green-600 font-medium">
                             <CheckCircle2 className="h-3 w-3" />
-                            Completed {bp.completedAt ? format(parseISO(bp.completedAt), "MMM d, yyyy") : ""}
+                            {t("driverDetail.completedDate", "Completed {{date}}", { date: bp.completedAt ? format(parseISO(bp.completedAt), "MMM d, yyyy") : "" })}
                           </div>
                         )}
                       </CardContent>
@@ -800,7 +810,7 @@ export default function DriverDetail() {
       <Dialog open={promoOpen} onOpenChange={setPromoOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><Tag className="h-4 w-4" /> {t("driverDetail.sendPromo")}</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">Pick a promo code to share with {driver.name}.</p>
+          <p className="text-sm text-muted-foreground">{t("driverDetail.pickPromoDesc", "Pick a promo code to share with {{name}}.", { name: driver.name })}</p>
           {!promosData?.data.length ? (
             <div className="py-8 text-center text-muted-foreground text-sm">
               {promosData ? t("driverDetail.noActivePromos") : t("common.loading")}
@@ -812,9 +822,9 @@ export default function DriverDetail() {
                   <div>
                     <p className="font-mono font-bold text-sm">{promo.code}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {promo.discountType === "percentage" ? `${promo.discountValue}% off` : `EGP ${promo.discountValue} off`}
-                      {promo.expiryDate ? ` · Expires ${format(parseISO(promo.expiryDate), "MMM d, yyyy")}` : ""}
-                      {promo.maxUsage ? ` · ${promo.usedCount}/${promo.maxUsage} used` : ""}
+                      {promo.discountType === "percentage" ? `${promo.discountValue}% ${t("promoCodes.off", "off")}` : `EGP ${promo.discountValue} ${t("promoCodes.off", "off")}`}
+                      {promo.expiryDate ? ` · ${t("promoCodes.expires", "Expires")} ${format(parseISO(promo.expiryDate), "MMM d, yyyy")}` : ""}
+                      {promo.maxUsage ? ` · ${promo.usedCount}/${promo.maxUsage} ${t("promoCodes.used", "used")}` : ""}
                     </p>
                   </div>
                   <div className="flex gap-1.5 shrink-0">
@@ -837,7 +847,7 @@ export default function DriverDetail() {
       <Dialog open={!!zoomDoc} onOpenChange={(o) => !o && setZoomDoc(null)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>{ALL_DOC_TYPES.find((d) => d.type === zoomDoc?.type)?.labelEn ?? "Document"}</DialogTitle>
+            <DialogTitle>{zoomDoc ? t(ALL_DOC_TYPES.find((d) => d.type === zoomDoc.type)?.key || "") : t("driverDetail.documents")}</DialogTitle>
           </DialogHeader>
           {zoomDoc && (
             <div className="space-y-4">
@@ -898,10 +908,10 @@ export default function DriverDetail() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              This will permanently delete <strong>{driver?.name}</strong>'s driver account and all associated data. This action cannot be undone.
+              {t("driverDetail.deleteConfirmText", "This will permanently delete {{name}}'s driver account and all associated data. This action cannot be undone.", { name: driver?.name })}
             </p>
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
-              ⚠ All trips, documents, and earnings data linked to this driver will also be removed.
+              ⚠ {t("driverDetail.deleteAllDataLinked", "All trips, documents, and earnings data linked to this driver will also be removed.")}
             </div>
           </div>
           <DialogFooter>

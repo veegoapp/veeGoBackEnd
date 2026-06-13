@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,7 @@ function ExemptionDialog({
   }) => void;
   saving: boolean;
 }) {
+  const { t } = useTranslation();
   const [driverSearch, setDriverSearch] = useState("");
   const [selectedDriverId, setSelectedDriverId] = useState<number | "">(initial?.driverId ?? "");
   const [startsAt, setStartsAt] = useState(initial?.startsAt?.slice(0, 16) ?? "");
@@ -105,14 +107,14 @@ function ExemptionDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? "Edit Exemption Period" : "Create Commission Exemption"}</DialogTitle>
+          <DialogTitle>{initial ? t("commissionExemptions.editPeriodTitle") : t("commissionExemptions.createPeriodTitle")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
           {!initial && (
             <div className="space-y-1.5">
-              <Label>Driver</Label>
+              <Label>{t("common.driver")}</Label>
               <Input
-                placeholder="Search driver name..."
+                placeholder={t("commissionExemptions.searchDriverPlaceholder")}
                 value={driverSearch}
                 onChange={(e) => setDriverSearch(e.target.value)}
               />
@@ -132,43 +134,43 @@ function ExemptionDialog({
               )}
               {selectedDriverId !== "" && (
                 <p className="text-xs text-green-600 flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Driver #{selectedDriverId} selected
+                  <CheckCircle2 className="h-3 w-3" /> {t("commissionExemptions.driverSelected", { id: selectedDriverId })}
                 </p>
               )}
             </div>
           )}
           {initial && (
             <div className="rounded-lg bg-muted/40 border border-border px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Driver: </span>
+              <span className="text-muted-foreground">{t("common.driver")}: </span>
               <span className="font-medium">{initial.driver?.name ?? `#${initial.driverId}`}</span>
             </div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Starts At</Label>
+              <Label>{t("commissionExemptions.startsAt")}</Label>
               <Input type="datetime-local" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Ends At</Label>
+              <Label>{t("commissionExemptions.endsAt")}</Label>
               <Input type="datetime-local" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>Reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
+            <Label>{t("commissionExemptions.reason")} <span className="text-muted-foreground text-xs">{t("bonusTargets.optional")}</span></Label>
             <Textarea
-              placeholder="e.g. New driver onboarding incentive — first 30 days"
+              placeholder={t("commissionExemptions.reasonPlaceholder")}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={2}
             />
           </div>
           <div className="flex items-center justify-between">
-            <Label>Active</Label>
+            <Label>{t("commissionExemptions.activeToggle")}</Label>
             <Switch checked={isActive} onCheckedChange={setIsActive} />
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
           <Button
             disabled={!canSave || saving}
             onClick={() => onSave({
@@ -179,7 +181,7 @@ function ExemptionDialog({
               isActive,
             })}
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("commissionExemptions.saving") : t("common.save")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -188,6 +190,7 @@ function ExemptionDialog({
 }
 
 export default function CommissionExemptions() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -204,39 +207,46 @@ export default function CommissionExemptions() {
     mutationFn: (body: object) =>
       adminFetch("/admin/commission-exemptions", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
-      toast({ title: "Exemption period created" });
+      toast({ title: t("commissionExemptions.exemptionCreated") });
       setDialog({ open: false });
       queryClient.invalidateQueries({ queryKey: ["commission-exemptions"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: number; data: object }) =>
       adminFetch(`/admin/commission-exemptions/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => {
-      toast({ title: "Exemption updated" });
+      toast({ title: t("commissionExemptions.exemptionUpdated") });
       setDialog({ open: false });
       queryClient.invalidateQueries({ queryKey: ["commission-exemptions"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
       adminFetch(`/admin/commission-exemptions/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast({ title: "Exemption deleted" });
+      toast({ title: t("commissionExemptions.exemptionDeleted") });
       setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ["commission-exemptions"] });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const exemptions = data?.data ?? [];
   const total = data?.total ?? 0;
   const limit = data?.limit ?? 15;
   const totalPages = Math.ceil(total / limit);
+
+  const STATUS_META_DYNAMIC = {
+    active:   { label: t("commissionExemptions.activeNow"),  cls: "text-green-600 border-green-200 bg-green-50 dark:bg-green-950",   icon: CheckCircle2 },
+    future:   { label: t("commissionExemptions.upcoming"),    cls: "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950",       icon: CalendarRange },
+    expired:  { label: t("commissionExemptions.expired"),     cls: "text-muted-foreground border-border bg-muted/30",                  icon: Clock },
+    disabled: { label: t("commissionExemptions.disabled"),    cls: "text-orange-600 border-orange-200 bg-orange-50 dark:bg-orange-950", icon: Clock },
+  };
 
   return (
     <div className="p-8 space-y-6">
@@ -246,14 +256,14 @@ export default function CommissionExemptions() {
             <Percent className="h-6 w-6 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Commission Exemption Periods</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{t("commissionExemptions.periodTitle")}</h1>
             <p className="text-sm text-muted-foreground">
-              Grant zero-commission windows to specific drivers for onboarding or performance incentives
+              {t("commissionExemptions.periodSubtitle")}
             </p>
           </div>
         </div>
         <Button onClick={() => setDialog({ open: true })} className="gap-1.5">
-          <Plus className="h-4 w-4" /> Create Exemption
+          <Plus className="h-4 w-4" /> {t("commissionExemptions.createBtn")}
         </Button>
       </div>
 
@@ -261,12 +271,12 @@ export default function CommissionExemptions() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-14">ID</TableHead>
-              <TableHead>Driver</TableHead>
-              <TableHead>Window</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-end">Actions</TableHead>
+              <TableHead className="w-14">{t("commissionExemptions.colId")}</TableHead>
+              <TableHead>{t("common.driver")}</TableHead>
+              <TableHead>{t("commissionExemptions.colWindow")}</TableHead>
+              <TableHead>{t("commissionExemptions.reason")}</TableHead>
+              <TableHead>{t("common.status")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -282,13 +292,13 @@ export default function CommissionExemptions() {
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-14 text-muted-foreground">
                   <Percent className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                  <p>No exemption periods defined yet</p>
+                  <p>{t("commissionExemptions.noExemptions")}</p>
                 </TableCell>
               </TableRow>
             ) : (
               exemptions.map((ex) => {
                 const st = exemptionStatus(ex);
-                const meta = STATUS_META[st];
+                const meta = STATUS_META_DYNAMIC[st];
                 const Icon = meta.icon;
                 return (
                   <TableRow key={ex.id}>
@@ -296,7 +306,7 @@ export default function CommissionExemptions() {
                     <TableCell>
                       <Link href={`/drivers/${ex.driverId}`}>
                         <span className="text-sm font-medium text-primary hover:underline cursor-pointer">
-                          {ex.driver?.name ?? `Driver #${ex.driverId}`}
+                          {ex.driver?.name ?? `${t("common.driver")} #${ex.driverId}`}
                         </span>
                       </Link>
                       {ex.driver?.phone && (
@@ -313,7 +323,7 @@ export default function CommissionExemptions() {
                     </TableCell>
                     <TableCell className="max-w-[200px]">
                       <p className="text-sm text-muted-foreground truncate">
-                        {ex.reason || <span className="italic">No reason provided</span>}
+                        {ex.reason || <span className="italic">{t("commissionExemptions.noReason")}</span>}
                       </p>
                     </TableCell>
                     <TableCell>
@@ -355,7 +365,7 @@ export default function CommissionExemptions() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              Page {page} of {totalPages}
+              {t("common.page")} {page} {t("common.of")} {totalPages}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext
@@ -384,18 +394,18 @@ export default function CommissionExemptions() {
       <AlertDialog open={deleteTarget !== null} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Exemption #{deleteTarget}?</AlertDialogTitle>
+            <AlertDialogTitle>{t("commissionExemptions.deleteConfirmTitle", { id: deleteTarget })}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the commission exemption period. The driver will revert to global or personal commission rates immediately. This cannot be undone.
+              {t("commissionExemptions.deleteConfirmDesc")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteTarget !== null && deleteMutation.mutate(deleteTarget)}
             >
-              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+              {deleteMutation.isPending ? t("commissionExemptions.deleting") : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

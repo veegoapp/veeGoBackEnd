@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +29,7 @@ function formatEGP(amount: number): string {
 }
 
 export default function ShuttleCashDebts() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [collectingId, setCollectingId] = useState<number | null>(null);
@@ -41,12 +43,12 @@ export default function ShuttleCashDebts() {
     mutationFn: (userId: number) =>
       adminFetch(`/admin/shuttle/cash-debts/${userId}/collect`, { method: "PATCH" }),
     onSuccess: (_data, userId) => {
-      toast({ title: "Debt collected", description: `Balance reset to 0 for user #${userId}` });
+      toast({ title: t("shuttleCashDebts.debtCollected"), description: t("shuttleCashDebts.balanceReset", { id: userId }) });
       setCollectingId(null);
       void queryClient.invalidateQueries({ queryKey: ["shuttle-cash-debts"] });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: t("common.error"), description: err.message, variant: "destructive" });
       setCollectingId(null);
     },
   });
@@ -60,14 +62,14 @@ export default function ShuttleCashDebts() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Cash Debts</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("shuttleCashDebts.title")}</h1>
           <p className="text-muted-foreground mt-1">
-            Passengers with a negative wallet balance from shuttle no-show fines.
+            {t("shuttleCashDebts.subtitle")}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refetch()}>
           <RefreshCw className="h-4 w-4 me-2" />
-          Refresh
+          {t("common.refresh")}
         </Button>
       </div>
 
@@ -77,7 +79,7 @@ export default function ShuttleCashDebts() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-red-500" />
-              Total Debtors
+              {t("shuttleCashDebts.totalDebtors")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -88,7 +90,7 @@ export default function ShuttleCashDebts() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Wallet className="h-4 w-4 text-amber-500" />
-              Total Outstanding
+              {t("shuttleCashDebts.totalOutstanding")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -110,23 +112,23 @@ export default function ShuttleCashDebts() {
             </div>
           ) : isError ? (
             <div className="p-8 text-center text-red-500">
-              Failed to load cash debts. Please refresh.
+              {t("shuttleCashDebts.failedToLoad")}
             </div>
           ) : !data?.data.length ? (
             <div className="p-12 text-center">
               <CheckCircle className="h-10 w-10 text-emerald-500 mx-auto mb-3" />
-              <p className="text-muted-foreground">No passengers with outstanding cash debts.</p>
+              <p className="text-muted-foreground">{t("shuttleCashDebts.noDebts")}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Passenger</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Debt Amount</TableHead>
-                  <TableHead>No-Show Count</TableHead>
-                  <TableHead>Last Offence</TableHead>
-                  <TableHead className="text-end">Action</TableHead>
+                  <TableHead>{t("shuttleCashDebts.colPassenger")}</TableHead>
+                  <TableHead>{t("shuttleCashDebts.colPhone")}</TableHead>
+                  <TableHead>{t("shuttleCashDebts.colDebtAmount")}</TableHead>
+                  <TableHead>{t("shuttleCashDebts.colNoShowCount")}</TableHead>
+                  <TableHead>{t("shuttleCashDebts.colLastOffence")}</TableHead>
+                  <TableHead className="text-end">{t("shuttleCashDebts.colAction")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -156,7 +158,7 @@ export default function ShuttleCashDebts() {
                         disabled={collectingId === row.userId}
                         onClick={() => handleCollect(row.userId)}
                       >
-                        {collectingId === row.userId ? "Saving…" : "Mark Collected"}
+                        {collectingId === row.userId ? t("shuttleCashDebts.saving") : t("shuttleCashDebts.markCollected")}
                       </Button>
                     </TableCell>
                   </TableRow>

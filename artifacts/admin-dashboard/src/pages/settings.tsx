@@ -55,7 +55,7 @@ export default function Settings() {
     { id: "general", label: t("settings.tabGeneral"), icon: Globe },
     { id: "app", label: t("settings.tabAppInfo"), icon: Info },
     { id: "staff", label: t("settings.tabStaff"), icon: UsersRound },
-    { id: "system", label: "System Engine", icon: Cpu },
+    { id: "system", label: t("settings.tabSystemEngine", "System Engine"), icon: Cpu },
   ];
 
   const [activeTab, setActiveTab] = useState("general");
@@ -325,6 +325,7 @@ function SystemSettingRow({
   settingKey: string;
 }) {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [inputValue, setInputValue] = React.useState<string>("");
   const [isEditing, setIsEditing] = React.useState(false);
@@ -347,11 +348,11 @@ function SystemSettingRow({
         body: JSON.stringify({ key: settingKey, value: inputValue }),
       }),
     onSuccess: () => {
-      toast({ title: `${label} updated` });
+      toast({ title: t("settings.settingUpdated", { label }) });
       queryClient.invalidateQueries({ queryKey: ["system-setting", settingKey] });
       setIsEditing(false);
     },
-    onError: (e: Error) => toast({ title: "Failed to save", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   return (
@@ -393,6 +394,7 @@ function SystemSettingRow({
 
 function WalletLimitsRow() {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [maxTopup, setMaxTopup] = React.useState("");
   const [dailyLimit, setDailyLimit] = React.useState("");
   const [editing, setEditing] = React.useState(false);
@@ -416,31 +418,31 @@ function WalletLimitsRow() {
         body: JSON.stringify({ wallet_max_topup: Number(maxTopup), wallet_daily_topup_limit: Number(dailyLimit) }),
       }),
     onSuccess: () => {
-      toast({ title: "Wallet limits updated" });
+      toast({ title: t("settings.walletLimitsUpdated", "Wallet limits updated") });
       setEditing(false);
     },
-    onError: (e: Error) => toast({ title: "Failed", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label className="text-sm">Max Top-Up per Request (EGP)</Label>
+          <Label className="text-sm">{t("settings.maxTopupLabel", "Max Top-Up per Request (EGP)")}</Label>
           <Input
             type="number" min={0} step={1}
             value={maxTopup}
             onChange={(e) => { setMaxTopup(e.target.value); setEditing(true); }}
-            placeholder="e.g. 1000"
+            placeholder={t("settings.maxTopupPlaceholder", "e.g. 1000")}
           />
         </div>
         <div className="space-y-1.5">
-          <Label className="text-sm">Daily Top-Up Limit (EGP)</Label>
+          <Label className="text-sm">{t("settings.dailyLimitLabel", "Daily Top-Up Limit (EGP)")}</Label>
           <Input
             type="number" min={0} step={1}
             value={dailyLimit}
             onChange={(e) => { setDailyLimit(e.target.value); setEditing(true); }}
-            placeholder="e.g. 2000"
+            placeholder={t("settings.dailyLimitPlaceholder", "e.g. 2000")}
           />
         </div>
       </div>
@@ -448,7 +450,7 @@ function WalletLimitsRow() {
         <div className="flex justify-end">
           <Button size="sm" disabled={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
             <Save className="h-3.5 w-3.5 me-1.5" />
-            {saveMutation.isPending ? "Saving…" : "Save Wallet Limits"}
+            {saveMutation.isPending ? t("common.saving") : t("settings.saveWalletLimits", "Save Wallet Limits")}
           </Button>
         </div>
       )}
@@ -457,13 +459,14 @@ function WalletLimitsRow() {
 }
 
 function SystemEngineTab() {
+  const { t } = useTranslation();
   const SYSTEM_KEYS = [
-    { key: "dispatch_radius_km",            label: "Initial Search Radius (km)",       description: "Starting radius used to find nearby drivers when a booking is placed." },
-    { key: "dispatch_max_radius_km",         label: "Max Search Radius (km)",           description: "Maximum expansion radius before the dispatch engine gives up finding a driver." },
-    { key: "dispatch_offer_timeout_seconds", label: "Driver Offer Timeout (seconds)",   description: "How long a driver has to accept a trip offer before it expires and moves on." },
-    { key: "no_show_fee_egp",               label: "Shuttle No-Show Fee (EGP)",         description: "Penalty charged to passengers who book a shuttle seat but do not board." },
-    { key: "cancellation_grace_hours",       label: "Free Cancellation Window (hours)", description: "Bookings cancelled within this window before departure are refunded without a fee." },
-    { key: "criminal_record_trip_threshold", label: "Criminal Record Suspension Limit", description: "Drivers who exceed this completed-trip count without an approved criminal record are auto-suspended." },
+    { key: "dispatch_radius_km",            label: t("settings.initialRadiusLabel", "Initial Search Radius (km)"),       description: t("settings.initialRadiusDesc", "Starting radius used to find nearby drivers when a booking is placed.") },
+    { key: "dispatch_max_radius_km",         label: t("settings.maxRadiusLabel", "Max Search Radius (km)"),           description: t("settings.maxRadiusDesc", "Maximum expansion radius before the dispatch engine gives up finding a driver.") },
+    { key: "dispatch_offer_timeout_seconds", label: t("settings.offerTimeoutLabel", "Driver Offer Timeout (seconds)"),   description: t("settings.offerTimeoutDesc", "How long a driver has to accept a trip offer before it expires and moves on.") },
+    { key: "no_show_fee_egp",               label: t("settings.noShowFeeLabel", "Shuttle No-Show Fee (EGP)"),         description: t("settings.noShowFeeDesc", "Penalty charged to passengers who book a shuttle seat but do not board.") },
+    { key: "cancellation_grace_hours",       label: t("settings.graceHoursLabel", "Free Cancellation Window (hours)"), description: t("settings.graceHoursDesc", "Bookings cancelled within this window before departure are refunded without a fee.") },
+    { key: "criminal_record_trip_threshold", label: t("settings.suspensionLimitLabel", "Criminal Record Suspension Limit"), description: t("settings.suspensionLimitDesc", "Drivers who exceed this completed-trip count without an approved criminal record are auto-suspended.") },
   ];
 
   return (
@@ -471,11 +474,10 @@ function SystemEngineTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Cpu className="h-4 w-4" /> Dispatch &amp; Operational Parameters
+            <Cpu className="h-4 w-4" /> {t("settings.dispatchParams", "Dispatch & Operational Parameters")}
           </CardTitle>
           <CardDescription>
-            Core system settings that control dispatch radius, timing, fees, and compliance thresholds.
-            Changes take effect immediately — no restart required.
+            {t("settings.dispatchParamsDesc", "Core system settings that control dispatch radius, timing, fees, and compliance thresholds. Changes take effect immediately — no restart required.")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -488,10 +490,10 @@ function SystemEngineTab() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <WalletIcon className="h-4 w-4" /> Wallet Financial Limits
+            <WalletIcon className="h-4 w-4" /> {t("settings.walletLimits", "Wallet Financial Limits")}
           </CardTitle>
           <CardDescription>
-            Control how much passengers can top up their wallet per transaction and per day.
+            {t("settings.walletLimitsDesc", "Control how much passengers can top up their wallet per transaction and per day.")}
           </CardDescription>
         </CardHeader>
         <CardContent>

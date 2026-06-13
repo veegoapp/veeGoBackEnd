@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { useParams, Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
@@ -90,41 +91,42 @@ interface TripDetail {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  scheduled:       { label: "Open",            cls: "border-blue-200 bg-blue-50 text-blue-700" },
-  waiting_driver:  { label: "Active",          cls: "border-green-200 bg-green-50 text-green-700" },
-  driver_assigned: { label: "Driver Assigned", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
-  boarding:        { label: "Boarding",        cls: "border-purple-200 bg-purple-50 text-purple-700" },
-  active:          { label: "Active",          cls: "border-green-200 bg-green-50 text-green-700" },
-  completed:       { label: "Completed",       cls: "border-slate-200 bg-slate-50 text-slate-600" },
-  cancelled:       { label: "Cancelled",       cls: "border-red-200 bg-red-50 text-red-700" },
+const STATUS_META: Record<string, { key: string; cls: string }> = {
+  scheduled:       { key: "common.pending",    cls: "border-blue-200 bg-blue-50 text-blue-700" },
+  waiting_driver:  { key: "common.active",     cls: "border-green-200 bg-green-50 text-green-700" },
+  driver_assigned: { key: "trips.driverAssigned", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  boarding:        { key: "common.boarded",    cls: "border-purple-200 bg-purple-50 text-purple-700" },
+  active:          { key: "common.active",     cls: "border-green-200 bg-green-50 text-green-700" },
+  completed:       { key: "common.completed",  cls: "border-slate-200 bg-slate-50 text-slate-600" },
+  cancelled:       { key: "common.cancelled",  cls: "border-red-200 bg-red-50 text-red-700" },
 };
 
-const BOOKING_STATUS_META: Record<string, { label: string; cls: string }> = {
-  pending:    { label: "Pending",   cls: "border-amber-200 bg-amber-50 text-amber-700" },
-  confirmed:  { label: "Confirmed", cls: "border-blue-200 bg-blue-50 text-blue-700" },
-  boarded:    { label: "Boarded",   cls: "border-green-200 bg-green-50 text-green-700" },
-  absent:     { label: "Absent",    cls: "border-orange-200 bg-orange-50 text-orange-700" },
-  completed:  { label: "Completed", cls: "border-slate-200 bg-slate-50 text-slate-600" },
-  cancelled:  { label: "Cancelled", cls: "border-red-200 bg-red-50 text-red-700" },
+const BOOKING_STATUS_META: Record<string, { key: string; cls: string }> = {
+  pending:    { key: "common.pending",   cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  confirmed:  { key: "common.confirmed", cls: "border-blue-200 bg-blue-50 text-blue-700" },
+  boarded:    { key: "common.boarded",   cls: "border-green-200 bg-green-50 text-green-700" },
+  absent:     { key: "common.absent",    cls: "border-orange-200 bg-orange-50 text-orange-700" },
+  completed:  { key: "common.completed", cls: "border-slate-200 bg-slate-50 text-slate-600" },
+  cancelled:  { key: "common.cancelled", cls: "border-red-200 bg-red-50 text-red-700" },
 };
 
-const PAYMENT_META: Record<string, { label: string; cls: string }> = {
-  pending:    { label: "Pending", cls: "text-amber-600" },
-  paid:       { label: "Paid",    cls: "text-green-600" },
-  refunded:   { label: "Refunded", cls: "text-blue-600" },
-  failed:     { label: "Failed",  cls: "text-red-600" },
+const PAYMENT_META: Record<string, { key: string; cls: string }> = {
+  pending:    { key: "common.pending", cls: "text-amber-600" },
+  paid:       { key: "common.paid",    cls: "text-green-600" },
+  refunded:   { key: "common.refunded", cls: "text-blue-600" },
+  failed:     { key: "common.failed",  cls: "text-red-600" },
 };
 
-const STATION_STATUS_META: Record<string, { label: string; icon: React.ElementType; cls: string }> = {
-  pending:   { label: "Pending",   icon: Clock,          cls: "text-muted-foreground" },
-  arrived:   { label: "Arrived",   icon: CheckCircle2,   cls: "text-amber-600" },
-  completed: { label: "Completed", icon: CheckCircle2,   cls: "text-green-600" },
+const STATION_STATUS_META: Record<string, { key: string; icon: React.ElementType; cls: string }> = {
+  pending:   { key: "common.pending",   icon: Clock,          cls: "text-muted-foreground" },
+  arrived:   { key: "dashboard.boarding", icon: CheckCircle2,   cls: "text-amber-600" },
+  completed: { key: "common.completed", icon: CheckCircle2,   cls: "text-green-600" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const m = STATUS_META[status] ?? { label: status, cls: "" };
-  return <Badge variant="outline" className={`text-xs font-medium ${m.cls}`}>{m.label}</Badge>;
+  const { t } = useTranslation();
+  const m = STATUS_META[status] ?? { key: status, cls: "" };
+  return <Badge variant="outline" className={`text-xs font-medium ${m.cls}`}>{t(m.key)}</Badge>;
 }
 
 function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
@@ -146,6 +148,7 @@ function InfoRow({ icon: Icon, label, value }: { icon: React.ElementType; label:
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ShuttleTripDetail() {
+  const { t } = useTranslation();
   const { id } = useParams();
   const tripId = parseInt(id || "0", 10);
   const { toast } = useToast();
@@ -166,10 +169,10 @@ export default function ShuttleTripDetail() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shuttle-trip-detail", tripId] });
-      toast({ title: "Trip cancelled" });
+      toast({ title: t("shuttleTripDetail.tripCancelled") });
     },
     onError: (err: Error) =>
-      toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
+      toast({ title: t("shuttleTripDetail.cancelFailed"), description: err.message, variant: "destructive" }),
   });
 
   // ─── Loading ──────────────────────────────────────────────────────────────
@@ -194,10 +197,10 @@ export default function ShuttleTripDetail() {
     return (
       <div className="p-8 text-center text-muted-foreground">
         <Bus className="h-12 w-12 mx-auto mb-3 opacity-20" />
-        <p className="font-medium">Trip not found</p>
+        <p className="font-medium">{t("shuttleTripDetail.notFound")}</p>
         <Link href="/shuttle-trips">
           <Button variant="outline" size="sm" className="mt-4 gap-2">
-            <ArrowLeft className="h-4 w-4" /> Back to Trips
+            <ArrowLeft className="h-4 w-4" /> {t("common.previous")}
           </Button>
         </Link>
       </div>
@@ -227,11 +230,11 @@ export default function ShuttleTripDetail() {
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold">Shuttle Trip #{trip.id}</h1>
+            <h1 className="text-2xl font-bold">{t("shuttleTripDetail.title")} #{trip.id}</h1>
             <StatusBadge status={trip.status} />
             {trip.scheduleId && (
               <Badge variant="outline" className="text-[10px] text-muted-foreground">
-                Schedule #{trip.scheduleId}
+                {t("trips.schedule")} #{trip.scheduleId}
               </Badge>
             )}
           </div>
@@ -246,13 +249,13 @@ export default function ShuttleTripDetail() {
             className="gap-2"
             disabled={cancelMutation.isPending}
             onClick={() => {
-              if (confirm("Cancel this trip? Passengers will be notified.")) {
+              if (confirm(t("shuttleTripDetail.cancelConfirm"))) {
                 cancelMutation.mutate();
               }
             }}
           >
             <Ban className="h-4 w-4" />
-            {cancelMutation.isPending ? "Cancelling…" : "Cancel Trip"}
+            {cancelMutation.isPending ? t("common.processing") : t("shuttleTripDetail.cancelTrip")}
           </Button>
         )}
       </div>
@@ -261,26 +264,26 @@ export default function ShuttleTripDetail() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           {
-            label: "Seats Filled",
+            label: t("shuttleTripDetail.seatFill"),
             value: `${trip.bookedSeats}/${trip.totalSeats} (${fillPct}%)`,
             icon: Users,
             color: "bg-blue-500/10 text-blue-600",
           },
           {
-            label: "Ticket Price",
+            label: t("common.price"),
             value: formatEGP(trip.price),
             icon: Ticket,
             color: "bg-green-500/10 text-green-600",
           },
           {
-            label: "Revenue",
+            label: t("shuttleTripDetail.revenue"),
             value: formatEGP(revenue),
             icon: Wallet,
             color: "bg-amber-500/10 text-amber-600",
           },
           {
-            label: "Duration",
-            value: `${duration} min`,
+            label: t("routes.duration"),
+            value: `${duration} ${t("routes.min")}`,
             icon: Clock,
             color: "bg-purple-500/10 text-purple-600",
           },
@@ -307,18 +310,18 @@ export default function ShuttleTripDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <CalendarClock className="h-4 w-4 text-muted-foreground" />
-              Schedule
+              {t("trips.schedule")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <InfoRow icon={Navigation}   label="Departure"      value={fmtUtcFull(trip.departureTime)} />
-            <InfoRow icon={MapPin}       label="Arrival"        value={fmtUtcFull(trip.arrivalTime)} />
-            <InfoRow icon={Clock}        label="Duration"       value={`${duration} minutes`} />
-            {trip.acceptedAt  && <InfoRow icon={CheckCircle2} label="Accepted"   value={fmtUtcShort(trip.acceptedAt)} />}
-            {trip.startedAt   && <InfoRow icon={CheckCircle2} label="Started"    value={fmtUtcShort(trip.startedAt)} />}
-            {trip.completedAt && <InfoRow icon={CheckCircle2} label="Completed"  value={fmtUtcShort(trip.completedAt)} />}
-            {trip.cancelledAt && <InfoRow icon={XCircle}      label="Cancelled"  value={fmtUtcShort(trip.cancelledAt)} />}
-            {trip.cancelReason && <InfoRow icon={AlertCircle} label="Cancel Reason" value={trip.cancelReason} />}
+            <InfoRow icon={Navigation}   label={t("common.departure")}      value={fmtUtcFull(trip.departureTime)} />
+            <InfoRow icon={MapPin}       label={t("common.arrival")}        value={fmtUtcFull(trip.arrivalTime)} />
+            <InfoRow icon={Clock}        label={t("routes.duration")}       value={`${duration} ${t("routes.minutes")}`} />
+            {trip.acceptedAt  && <InfoRow icon={CheckCircle2} label={t("common.confirmed")}   value={fmtUtcShort(trip.acceptedAt)} />}
+            {trip.startedAt   && <InfoRow icon={CheckCircle2} label={t("common.active")}    value={fmtUtcShort(trip.startedAt)} />}
+            {trip.completedAt && <InfoRow icon={CheckCircle2} label={t("common.completed")}  value={fmtUtcShort(trip.completedAt)} />}
+            {trip.cancelledAt && <InfoRow icon={XCircle}      label={t("common.cancelled")}  value={fmtUtcShort(trip.cancelledAt)} />}
+            {trip.cancelReason && <InfoRow icon={AlertCircle} label={t("common.description")} value={trip.cancelReason} />}
           </CardContent>
         </Card>
 
@@ -327,7 +330,7 @@ export default function ShuttleTripDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <UserCircle className="h-4 w-4 text-muted-foreground" />
-              Driver
+              {t("common.driver")}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -335,17 +338,17 @@ export default function ShuttleTripDetail() {
               <>
                 <InfoRow
                   icon={UserCircle}
-                  label="Name"
+                  label={t("common.name")}
                   value={
                     <Link href={`/drivers/${trip.driver.id}`} className="text-primary hover:underline">
                       {trip.driver.name}
                     </Link>
                   }
                 />
-                <InfoRow icon={Phone} label="Phone" value={trip.driver.phone} />
+                <InfoRow icon={Phone} label={t("common.phone")} value={trip.driver.phone} />
                 <InfoRow
                   icon={Star}
-                  label="Rating"
+                  label={t("common.rating")}
                   value={
                     <div className="flex items-center gap-1">
                       {[1,2,3,4,5].map((i) => (
@@ -358,14 +361,14 @@ export default function ShuttleTripDetail() {
                     </div>
                   }
                 />
-                <InfoRow icon={CheckCircle2} label="Status" value={
+                <InfoRow icon={CheckCircle2} label={t("common.status")} value={
                   <Badge variant="outline" className="text-xs capitalize">{trip.driver.status}</Badge>
                 } />
               </>
             ) : (
               <div className="py-6 text-center text-muted-foreground text-sm">
                 <UserCircle className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                No driver assigned yet
+                {t("shuttleTripDetail.noBookings")}
               </div>
             )}
           </CardContent>
@@ -376,20 +379,20 @@ export default function ShuttleTripDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Bus className="h-4 w-4 text-muted-foreground" />
-              Bus / Vehicle
+              {t("buses.title")} / {t("nav.vehicles")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {trip.bus ? (
               <>
-                <InfoRow icon={Building2}    label="Plate Number" value={<span className="font-mono font-semibold">{trip.bus.plateNumber}</span>} />
-                <InfoRow icon={Bus}          label="Model"        value={trip.bus.model} />
-                <InfoRow icon={Users}        label="Capacity"     value={`${trip.bus.capacity} seats`} />
+                <InfoRow icon={Building2}    label={t("buses.plate")} value={<span className="font-mono font-semibold">{trip.bus.plateNumber}</span>} />
+                <InfoRow icon={Bus}          label={t("buses.model")}        value={trip.bus.model} />
+                <InfoRow icon={Users}        label={t("common.capacity")}     value={`${trip.bus.capacity} ${t("buses.seats")}`} />
               </>
             ) : (
               <div className="py-6 text-center text-muted-foreground text-sm">
                 <Bus className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                No bus assigned yet
+                {t("shuttleTripDetail.noBookings")}
               </div>
             )}
           </CardContent>
@@ -402,19 +405,19 @@ export default function ShuttleTripDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <Route className="h-4 w-4 text-muted-foreground" />
-              Route: {trip.route?.name ?? "—"} · {trip.route?.fromLocation} → {trip.route?.toLocation}
+              {t("common.route")}: {trip.route?.name ?? "—"} · {trip.route?.fromLocation} → {trip.route?.toLocation}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  <TableHead className="text-xs w-12">Stop</TableHead>
-                  <TableHead className="text-xs">Station Name</TableHead>
-                  <TableHead className="text-xs">Direction</TableHead>
-                  <TableHead className="text-xs">Segment Price</TableHead>
-                  <TableHead className="text-xs">Progress</TableHead>
-                  <TableHead className="text-xs">Arrived At</TableHead>
+                  <TableHead className="text-xs w-12">{t("routes.path")}</TableHead>
+                  <TableHead className="text-xs">{t("dashboard.stations")}</TableHead>
+                  <TableHead className="text-xs">{t("common.type")}</TableHead>
+                  <TableHead className="text-xs">{t("routes.basePrice")}</TableHead>
+                  <TableHead className="text-xs">{t("common.status")}</TableHead>
+                  <TableHead className="text-xs">{t("common.arrival")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -432,13 +435,13 @@ export default function ShuttleTripDetail() {
                       <TableCell>
                         <div className={`flex items-center gap-1.5 text-xs font-medium ${sm.cls}`}>
                           <Icon className="h-3.5 w-3.5" />
-                          {sm.label}
+                          {t(sm.key)}
                         </div>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground tabular-nums">
                         {station.progress?.arrivedAt
                           ? fmtUtcShort(station.progress.arrivedAt)
-                          : <span className="italic">Not yet</span>}
+                          : <span className="italic">{t("common.noData")}</span>}
                       </TableCell>
                     </TableRow>
                   );
@@ -454,7 +457,7 @@ export default function ShuttleTripDetail() {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            Passengers
+            {t("nav.passengers")}
             <Badge variant="outline" className="ms-1 text-xs">{trip.totalPassengers}</Badge>
           </CardTitle>
         </CardHeader>
@@ -462,26 +465,26 @@ export default function ShuttleTripDetail() {
           {trip.passengers.length === 0 ? (
             <div className="py-10 text-center text-muted-foreground">
               <Users className="h-8 w-8 mx-auto mb-2 opacity-20" />
-              <p className="text-sm">No bookings yet</p>
+              <p className="text-sm">{t("shuttleTripDetail.noBookings")}</p>
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30 hover:bg-muted/30">
-                  <TableHead className="text-xs">Passenger</TableHead>
-                  <TableHead className="text-xs">Phone</TableHead>
-                  <TableHead className="text-xs">Email</TableHead>
-                  <TableHead className="text-xs text-center">Seats</TableHead>
-                  <TableHead className="text-xs">Booking Status</TableHead>
-                  <TableHead className="text-xs">Payment</TableHead>
-                  <TableHead className="text-xs text-end">Amount</TableHead>
-                  <TableHead className="text-xs">Booked At</TableHead>
+                  <TableHead className="text-xs">{t("shuttleTripDetail.colPassenger")}</TableHead>
+                  <TableHead className="text-xs">{t("common.phone")}</TableHead>
+                  <TableHead className="text-xs">{t("common.email")}</TableHead>
+                  <TableHead className="text-xs text-center">{t("shuttleTripDetail.colSeats")}</TableHead>
+                  <TableHead className="text-xs">{t("shuttleTripDetail.colStatus")}</TableHead>
+                  <TableHead className="text-xs">{t("shuttleTripDetail.colPayment")}</TableHead>
+                  <TableHead className="text-xs text-end">{t("common.amount")}</TableHead>
+                  <TableHead className="text-xs">{t("common.createdAt")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {trip.passengers.map((p) => {
-                  const bm = BOOKING_STATUS_META[p.status] ?? { label: p.status, cls: "" };
-                  const pm = PAYMENT_META[p.paymentStatus] ?? { label: p.paymentStatus, cls: "text-muted-foreground" };
+                  const bm = BOOKING_STATUS_META[p.status] ?? { key: p.status, cls: "" };
+                  const pm = PAYMENT_META[p.paymentStatus] ?? { key: p.paymentStatus, cls: "text-muted-foreground" };
                   return (
                     <TableRow key={p.bookingId}>
                       <TableCell>
@@ -507,12 +510,12 @@ export default function ShuttleTripDetail() {
                         <Badge variant="outline" className="text-xs">{p.seatCount}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={`text-xs ${bm.cls}`}>{bm.label}</Badge>
+                        <Badge variant="outline" className={`text-xs ${bm.cls}`}>{t(bm.key)}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className={`flex items-center gap-1 text-xs font-medium ${pm.cls}`}>
                           <CreditCard className="h-3 w-3" />
-                          {pm.label}
+                          {t(pm.key)}
                         </div>
                       </TableCell>
                       <TableCell className="text-sm font-medium text-end tabular-nums">

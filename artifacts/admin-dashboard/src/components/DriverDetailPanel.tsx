@@ -468,20 +468,20 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                   ) : (
                     <>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-lg font-bold">{driver?.name ?? `Driver #${driverId}`}</span>
+                        <span className="text-lg font-bold">{driver?.name ?? `${t("common.driver")} #${driverId}`}</span>
                         <Badge variant="outline" className="text-[10px]">
-                          <ServiceIcon className="h-3 w-3 me-1" />{serviceType}
+                          <ServiceIcon className="h-3 w-3 me-1" />{t(`nav.${serviceType}`)}
                         </Badge>
                         {driver && (
                           <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[driver.status]}`}>
-                            {driver.status}
+                            {t(`common.${driver.status}`, driver.status)}
                           </Badge>
                         )}
                         <Badge variant="outline" className={`text-[10px] ${driver?.isActive ? "text-green-600 border-green-500/30 bg-green-500/10" : "text-destructive border-destructive/30 bg-destructive/10"}`}>
-                          {driver?.isActive ? t("driverPanel.active") : t("driverPanel.inactive")}
+                          {driver?.isActive ? t("common.active") : t("common.inactive")}
                         </Badge>
                         {userInfo?.isBlocked && (
-                          <Badge variant="destructive" className="text-[10px]">{t("driverPanel.blockedYes")}</Badge>
+                          <Badge variant="destructive" className="text-[10px]">{t("common.blocked")}</Badge>
                         )}
                       </div>
 
@@ -506,7 +506,7 @@ export default function DriverDetailPanel({ driverId, serviceType, open, onClose
                           </span>
                         )}
                         <span className="flex items-center gap-1">
-                          <Hash className="h-3 w-3" />ID #{driverId}
+                          <Hash className="h-3 w-3" />{t("common.id")} #{driverId}
                         </span>
                       </div>
                     </>

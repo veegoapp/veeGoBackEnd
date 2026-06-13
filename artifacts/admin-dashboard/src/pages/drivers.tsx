@@ -90,7 +90,7 @@ export default function Drivers() {
   };
 
   const driversList = data?.data || [];
-  const filtered = driversList.filter((d) => {
+  const filtered = driversList.filter((d: any) => {
     if (statusFilter === "online" && !d.isOnline) return false;
     if (statusFilter === "offline" && d.isOnline) return false;
 
@@ -101,8 +101,8 @@ export default function Drivers() {
     return true;
   });
 
-  const onlineCount = driversList.filter((d) => d.isOnline).length;
-  const offlineCount = driversList.filter((d) => !d.isOnline).length;
+  const onlineCount = driversList.filter((d: any) => d.isOnline).length;
+  const offlineCount = driversList.filter((d: any) => !d.isOnline).length;
 
   return (
     <div className="p-8 space-y-6">
@@ -181,7 +181,7 @@ export default function Drivers() {
                         </FormControl>
                         <SelectContent>
                           <SelectItem value="none">{t("common.none", "None")}</SelectItem>
-                          {busesData?.data.map((b) => (
+                          {busesData?.data.map((b: any) => (
                             <SelectItem key={b.id} value={b.id.toString()}>{t("buses.plate", "Plate")}: {b.plateNumber}</SelectItem>
                           ))}
                         </SelectContent>
@@ -204,7 +204,7 @@ export default function Drivers() {
         {[
           { label: t("drivers.totalDrivers", "Total Drivers"), value: driversList.length, icon: UserCircle, color: "text-primary bg-primary/10" },
           { label: t("drivers.onDuty", "On Duty"), value: onlineCount, icon: Radio, color: "text-emerald-600 bg-emerald-100 dark:bg-emerald-900 dark:text-emerald-300" },
-          { label: t("drivers.offDuty", "Off Duty"), value: offlineCount, icon: WifiOff, color: "text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-300" },
+          { label: t("drivers.offDuty", "Off Duty"), value: offlineCount, icon: Radio, color: "text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-300" },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="pt-5 flex items-center gap-3">
@@ -282,7 +282,7 @@ export default function Drivers() {
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((driver) => (
+              filtered.map((driver: any) => (
                 <TableRow
                   key={driver.id}
                   className="hover:bg-muted/40 transition-colors cursor-pointer"
@@ -295,7 +295,7 @@ export default function Drivers() {
                       </div>
                       <div>
                         <div className="font-medium text-sm">{driver.name}</div>
-                        <div className="text-xs text-muted-foreground">ID: #{driver.id}</div>
+                        <div className="text-xs text-muted-foreground">{t("common.id")}: #{driver.id}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -349,7 +349,7 @@ export default function Drivers() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              Page {page} of {Math.ceil(data.total / 15)}
+              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / 15)}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
@@ -97,6 +98,7 @@ function getDisplayKey(cat: CarCategory): string {
 }
 
 function CarCategoryEditor() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<number | null>(null);
@@ -131,11 +133,11 @@ function CarCategoryEditor() {
     mutationFn: ({ id, values }: { id: number; values: Record<string, number> }) =>
       adminFetch(`/admin/car-categories/${id}`, { method: "PATCH", body: JSON.stringify({ ...values, serviceType: "car" }) }),
     onSuccess: () => {
-      toast({ title: "Category pricing updated" });
+      toast({ title: t("pricing.categoryUpdated") });
       queryClient.invalidateQueries({ queryKey: ["car-categories"] });
       setEditing(false);
     },
-    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("pricing.updateFailed"), description: err.message, variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -147,17 +149,17 @@ function CarCategoryEditor() {
       minimumFare:   parseFloat(form.minimumFare),
     };
     if (Object.values(values).some(isNaN)) {
-      toast({ title: "Invalid values", description: "All fields must be valid numbers.", variant: "destructive" });
+      toast({ title: t("pricing.invalidValues"), description: t("pricing.allFieldsValid"), variant: "destructive" });
       return;
     }
     updateMutation.mutate({ id: selected.id, values });
   };
 
   const fields: { key: keyof CarCategoryForm; label: string; hint: string }[] = [
-    { key: "baseFare",      label: "Base Fare (EGP)",       hint: "Flat fee at the start of every ride" },
-    { key: "perKmRate",     label: "Per Km Rate (EGP)",     hint: "Amount charged per kilometer" },
-    { key: "perMinuteRate", label: "Per Minute Rate (EGP)", hint: "Amount charged per minute of duration" },
-    { key: "minimumFare",   label: "Minimum Fare (EGP)",    hint: "Minimum charge regardless of distance" },
+    { key: "baseFare",      label: t("pricing.baseFareEGP"),       hint: t("pricing.baseFareHint") },
+    { key: "perKmRate",     label: t("pricing.perKmEGP"),     hint: t("pricing.perKmHint") },
+    { key: "perMinuteRate", label: t("pricing.perMinuteEGP"), hint: t("pricing.perMinuteHint") },
+    { key: "minimumFare",   label: t("pricing.minimumFareEGP"),    hint: t("pricing.minimumFareHint") },
   ];
 
   if (isLoading) {
@@ -174,37 +176,43 @@ function CarCategoryEditor() {
     return (
       <Card>
         <CardContent className="pt-6 text-center text-sm text-muted-foreground py-10">
-          No car categories found. Seed the database to create Economy, Economy Plus, and Comfort categories.
+          {t("pricing.noCategoriesFound")}
         </CardContent>
       </Card>
     );
   }
 
+  const CAR_CATEGORY_DISPLAY_LOCAL: Record<string, { label: string; color: string; bg: string; desc: string }> = {
+    economy:      { label: t("pricing.economy"),      color: "text-blue-600",   bg: "bg-blue-500/10",   desc: t("pricing.economyDesc") },
+    economy_plus: { label: t("pricing.economyPlus"), color: "text-indigo-600", bg: "bg-indigo-500/10", desc: t("pricing.economyPlusDesc") },
+    comfort:      { label: t("pricing.comfort"),      color: "text-violet-600", bg: "bg-violet-500/10", desc: t("pricing.comfortDesc") },
+  };
+
   const displayKey = selected ? getDisplayKey(selected) : "economy";
-  const displayMeta = CAR_CATEGORY_DISPLAY[displayKey] ?? { label: "Category", color: "text-primary", bg: "bg-primary/10" };
+  const displayMeta = CAR_CATEGORY_DISPLAY_LOCAL[displayKey] ?? { label: t("common.type"), color: "text-primary", bg: "bg-primary/10", desc: "" };
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-base flex items-center gap-2">
-            <Layers className="h-4 w-4" /> Category-Based Pricing
+            <Layers className="h-4 w-4" /> {t("pricing.categoryBased")}
           </CardTitle>
           {selected && !editing && (
             <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
-              <Pencil className="h-3.5 w-3.5" /> Edit {getDisplayName(selected)}
+              <Pencil className="h-3.5 w-3.5" /> {t("common.edit")} {displayMeta.label}
             </Button>
           )}
         </div>
         <CardDescription className="text-xs">
-          Select a vehicle category to view or edit its fare configuration
+          {t("pricing.categoryDesc")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
         <div className="flex gap-1 p-1 bg-muted/50 rounded-lg border border-border w-fit">
           {categories.map((cat) => {
             const key = getDisplayKey(cat);
-            const meta = CAR_CATEGORY_DISPLAY[key] ?? { label: cat.name, color: "text-primary", bg: "" };
+            const meta = CAR_CATEGORY_DISPLAY_LOCAL[key] ?? { label: cat.name, color: "text-primary", bg: "" };
             const isActive = cat.id === (selected?.id ?? null);
             return (
               <button
@@ -262,7 +270,7 @@ function CarCategoryEditor() {
               <div className="flex items-center gap-2 pt-2">
                 <Button onClick={handleSave} disabled={updateMutation.isPending} className="gap-1.5">
                   <Check className="h-3.5 w-3.5" />
-                  {updateMutation.isPending ? "Saving…" : "Save Changes"}
+                  {updateMutation.isPending ? t("common.saving") : t("common.saveChanges")}
                 </Button>
                 <Button
                   variant="ghost"
@@ -277,7 +285,7 @@ function CarCategoryEditor() {
                   }}
                   className="gap-1.5"
                 >
-                  <X className="h-3.5 w-3.5" /> Cancel
+                  <X className="h-3.5 w-3.5" /> {t("common.cancel")}
                 </Button>
               </div>
             )}
@@ -299,7 +307,14 @@ const PRICING_META: Record<string, { icon: React.ElementType; label: string; col
 // ─── Base Fare Editor ─────────────────────────────────────────────────────────
 
 function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
-  const meta = PRICING_META[type];
+  const { t } = useTranslation();
+  const LOCAL_PRICING_META: Record<string, { icon: React.ElementType; label: string; color: string; bg: string; desc: string }> = {
+    car:      { icon: Car,         label: t("pricing.carPricingLabel"),      color: "text-blue-600",   bg: "bg-blue-500/10",   desc: t("pricing.carPricingDesc") },
+    bike:     { icon: Bike,        label: t("pricing.bikePricingLabel"),  color: "text-green-600",  bg: "bg-green-500/10",  desc: t("pricing.bikePricingDesc") },
+    delivery: { icon: PackageOpen, label: t("pricing.deliveryPricingLabel"), color: "text-violet-600", bg: "bg-violet-500/10", desc: t("pricing.deliveryPricingDesc") },
+  };
+
+  const meta = LOCAL_PRICING_META[type];
   const Icon = meta.icon;
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -328,11 +343,11 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
     mutationFn: (values: Record<string, number>) =>
       adminFetch(`/admin/rides/pricing/${type}`, { method: "PATCH", body: JSON.stringify(values) }),
     onSuccess: () => {
-      toast({ title: "Pricing updated" });
+      toast({ title: t("pricing.pricingUpdated") });
       queryClient.invalidateQueries({ queryKey: ["admin-rides-pricing"] });
       setEditing(false);
     },
-    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("pricing.updateFailed"), description: err.message, variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -343,17 +358,17 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
       minimumFare:   parseFloat(form.minimumFare),
     };
     if (Object.values(values).some(isNaN)) {
-      toast({ title: "Invalid values", description: "All fields must be valid numbers.", variant: "destructive" });
+      toast({ title: t("pricing.invalidValues"), description: t("pricing.allFieldsValid"), variant: "destructive" });
       return;
     }
     updateMutation.mutate(values);
   };
 
   const fields: { key: keyof PricingForm; label: string; hint: string }[] = [
-    { key: "baseFare",      label: "Base Fare ($)",       hint: "Flat fee at the start of every ride" },
-    { key: "perKmRate",     label: "Per Km Rate ($)",     hint: "Amount charged per kilometer" },
-    { key: "perMinuteRate", label: "Per Minute Rate ($)", hint: "Amount charged per minute of duration" },
-    { key: "minimumFare",   label: "Minimum Fare ($)",    hint: "Minimum charge regardless of distance" },
+    { key: "baseFare",      label: t("pricing.baseFareEGP"),       hint: t("pricing.baseFareHint") },
+    { key: "perKmRate",     label: t("pricing.perKmEGP"),     hint: t("pricing.perKmHint") },
+    { key: "perMinuteRate", label: t("pricing.perMinuteEGP"), hint: t("pricing.perMinuteHint") },
+    { key: "minimumFare",   label: t("pricing.minimumFareEGP"),    hint: t("pricing.minimumFareHint") },
   ];
 
   return (
@@ -361,16 +376,16 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <DollarSign className="h-4 w-4" /> Base Fare Configuration
+            <DollarSign className="h-4 w-4" /> {t("pricing.baseFareConfig")}
           </CardTitle>
           {isLoading ? null : pricing ? (
             <div className="flex items-center gap-2">
               <Badge variant="outline" className={pricing.isActive ? "text-green-600 border-green-300" : "text-red-500 border-red-300"}>
-                {pricing.isActive ? "Active" : "Inactive"}
+                {pricing.isActive ? t("common.active") : t("common.inactive")}
               </Badge>
               {!editing && (
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)} className="gap-1.5">
-                  <Pencil className="h-3.5 w-3.5" /> Edit
+                  <Pencil className="h-3.5 w-3.5" /> {t("common.edit")}
                 </Button>
               )}
             </div>
@@ -378,7 +393,7 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
         </div>
         {pricing && (
           <CardDescription className="flex items-center gap-1 text-xs">
-            <Clock className="h-3 w-3" /> Last updated: {new Date(pricing.updatedAt).toLocaleString()}
+            <Clock className="h-3 w-3" /> {t("pricing.lastUpdated")} {new Date(pricing.updatedAt).toLocaleString()}
           </CardDescription>
         )}
       </CardHeader>
@@ -386,7 +401,7 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)
         ) : !pricing ? (
-          <p className="text-muted-foreground text-sm">No pricing configuration found for {type}.</p>
+          <p className="text-muted-foreground text-sm">{t("pricing.noPricingFound", { type })}</p>
         ) : (
           <>
             {fields.map((field, i) => (
@@ -406,7 +421,7 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
                     />
                   ) : (
                     <span className="text-lg font-bold w-28 text-end">
-                      ${parseFloat(form[field.key] || "0").toFixed(2)}
+                      EGP {parseFloat(form[field.key] || "0").toFixed(2)}
                     </span>
                   )}
                 </div>
@@ -416,10 +431,10 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
               <div className="flex items-center gap-2 pt-2">
                 <Button onClick={handleSave} disabled={updateMutation.isPending} className="gap-1.5">
                   <Check className="h-3.5 w-3.5" />
-                  {updateMutation.isPending ? "Saving…" : "Save Changes"}
+                  {updateMutation.isPending ? t("common.saving") : t("common.saveChanges")}
                 </Button>
                 <Button variant="ghost" onClick={() => { setEditing(false); if (pricing) setForm({ baseFare: String(pricing.baseFare), perKmRate: String(pricing.perKmRate), perMinuteRate: String(pricing.perMinuteRate), minimumFare: String(pricing.minimumFare) }); }} className="gap-1.5">
-                  <X className="h-3.5 w-3.5" /> Cancel
+                  <X className="h-3.5 w-3.5" /> {t("common.cancel")}
                 </Button>
               </div>
             )}
@@ -435,6 +450,7 @@ function PricingEditor({ type }: { type: "car" | "bike" | "delivery" }) {
 type ZonePricingRowForm = { baseFare: string; perKmRate: string; minimumFare: string; isActive: boolean };
 
 function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -464,21 +480,21 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
   const updateMutation = useMutation({
     mutationFn: ({ id, values }: { id: number; values: Record<string, unknown> }) =>
       adminFetch(`/admin/zone-pricing/${id}`, { method: "PATCH", body: JSON.stringify(values) }),
-    onSuccess: () => { toast({ title: "Zone pricing updated" }); invalidate(); setEditingId(null); },
-    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: t("pricing.zoneUpdated") }); invalidate(); setEditingId(null); },
+    onError: (err: Error) => toast({ title: t("pricing.updateFailed"), description: err.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/zone-pricing/${id}`, { method: "DELETE" }),
-    onSuccess: () => { toast({ title: "Zone pricing removed" }); invalidate(); },
-    onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: t("pricing.zoneRemoved") }); invalidate(); },
+    onError: (err: Error) => toast({ title: t("pricing.deleteFailed"), description: err.message, variant: "destructive" }),
   });
 
   const addMutation = useMutation({
     mutationFn: (values: Record<string, unknown>) =>
       adminFetch("/admin/zone-pricing", { method: "POST", body: JSON.stringify(values) }),
-    onSuccess: () => { toast({ title: "Zone pricing added" }); invalidate(); setAddOpen(false); setAddForm({ zoneId: "", baseFare: "", perKmRate: "", minimumFare: "" }); },
-    onError: (err: Error) => toast({ title: "Add failed", description: err.message, variant: "destructive" }),
+    onSuccess: () => { toast({ title: t("pricing.zoneAdded") }); invalidate(); setAddOpen(false); setAddForm({ zoneId: "", baseFare: "", perKmRate: "", minimumFare: "" }); },
+    onError: (err: Error) => toast({ title: t("pricing.addFailed"), description: err.message, variant: "destructive" }),
   });
 
   const startEdit = (row: ZonePricing) => {
@@ -494,7 +510,7 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
       isActive:    editForm.isActive,
     };
     if (isNaN(values.baseFare) || isNaN(values.perKmRate) || isNaN(values.minimumFare)) {
-      toast({ title: "Invalid values", variant: "destructive" }); return;
+      toast({ title: t("pricing.invalidValues"), variant: "destructive" }); return;
     }
     updateMutation.mutate({ id, values });
   };
@@ -508,7 +524,7 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
       minimumFare: parseFloat(addForm.minimumFare),
     };
     if (!values.zoneId || isNaN(values.baseFare) || isNaN(values.perKmRate) || isNaN(values.minimumFare)) {
-      toast({ title: "Fill in all fields with valid numbers", variant: "destructive" }); return;
+      toast({ title: t("pricing.fillAllFields"), variant: "destructive" }); return;
     }
     addMutation.mutate(values);
   };
@@ -520,14 +536,14 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="text-base flex items-center gap-2">
-                <MapPin className="h-4 w-4" /> Zone-Based Pricing
+                <MapPin className="h-4 w-4" /> {t("pricing.zonePricing")}
               </CardTitle>
               <CardDescription className="text-xs mt-1">
-                Override base fare rates for specific service zones
+                {t("pricing.zonePricingDesc")}
               </CardDescription>
             </div>
             <Button size="sm" onClick={() => setAddOpen(true)} className="gap-1.5" disabled={availableZones.length === 0}>
-              <Plus className="h-3.5 w-3.5" /> Add Zone Price
+              <Plus className="h-3.5 w-3.5" /> {t("pricing.addZonePrice")}
             </Button>
           </div>
         </CardHeader>
@@ -537,19 +553,19 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
           ) : rows.length === 0 ? (
             <div className="py-10 text-center text-muted-foreground text-sm">
               <MapPin className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              No zone-specific pricing configured.{" "}
-              {zones.length === 0 ? "Create zones first to set zone pricing." : "Add an entry to override rates per zone."}
+              {t("pricing.noZonePricing")}{" "}
+              {zones.length === 0 ? t("pricing.noZonesFirst") : t("pricing.addZoneEntry")}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/30">
-                    <th className="text-start px-4 py-2.5 text-xs font-semibold text-muted-foreground">Zone</th>
-                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">Base Fare</th>
-                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">Per Km</th>
-                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">Min Fare</th>
-                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground">Status</th>
+                    <th className="text-start px-4 py-2.5 text-xs font-semibold text-muted-foreground">{t("pricing.zone")}</th>
+                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">{t("pricing.baseFareEGP")}</th>
+                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">{t("pricing.perKmEGP")}</th>
+                    <th className="text-end px-3 py-2.5 text-xs font-semibold text-muted-foreground">{t("pricing.minimumFareEGP")}</th>
+                    <th className="text-center px-3 py-2.5 text-xs font-semibold text-muted-foreground">{t("common.status")}</th>
                     <th className="px-4 py-2.5" />
                   </tr>
                 </thead>
@@ -570,7 +586,7 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
                             <td className="px-4 py-2">
                               <div className="flex items-center gap-1">
                                 <Button size="sm" variant="default" className="h-7 px-2 gap-1 text-xs" onClick={() => saveEdit(row.id)} disabled={updateMutation.isPending}>
-                                  <Check className="h-3 w-3" /> Save
+                                  <Check className="h-3 w-3" /> {t("common.save")}
                                 </Button>
                                 <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setEditingId(null)}>
                                   <X className="h-3 w-3" />
@@ -580,12 +596,12 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
                           </>
                         ) : (
                           <>
-                            <td className="px-3 py-3 text-end font-mono">${row.baseFare.toFixed(2)}</td>
-                            <td className="px-3 py-3 text-end font-mono">${row.perKmRate.toFixed(2)}</td>
-                            <td className="px-3 py-3 text-end font-mono">${row.minimumFare.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-end font-mono">EGP {row.baseFare.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-end font-mono">EGP {row.perKmRate.toFixed(2)}</td>
+                            <td className="px-3 py-3 text-end font-mono">EGP {row.minimumFare.toFixed(2)}</td>
                             <td className="px-3 py-3 text-center">
                               <Badge variant="outline" className={row.isActive ? "text-green-600 border-green-200 text-xs" : "text-muted-foreground text-xs"}>
-                                {row.isActive ? "Active" : "Inactive"}
+                                {row.isActive ? t("common.active") : t("common.inactive")}
                               </Badge>
                             </td>
                             <td className="px-4 py-3">
@@ -613,27 +629,27 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Zone Price</DialogTitle>
+            <DialogTitle>{t("pricing.addZonePrice")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Zone</Label>
+              <Label>{t("pricing.zone")}</Label>
               <select
                 value={addForm.zoneId}
                 onChange={(e) => setAddForm((p) => ({ ...p, zoneId: e.target.value }))}
                 className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
               >
-                <option value="">Select a zone…</option>
+                <option value="">{t("common.loading")}</option>
                 {availableZones.map((z) => (
                   <option key={z.id} value={z.id}>{z.name}</option>
                 ))}
               </select>
-              {availableZones.length === 0 && <p className="text-xs text-muted-foreground">All zones already have a price entry.</p>}
+              {availableZones.length === 0 && <p className="text-xs text-muted-foreground">{t("pricing.allZonesPriceSet") || "All zones already have a price entry."}</p>}
             </div>
             {[
-              { key: "baseFare" as const,    label: "Base Fare ($)" },
-              { key: "perKmRate" as const,   label: "Per Km Rate ($)" },
-              { key: "minimumFare" as const, label: "Minimum Fare ($)" },
+              { key: "baseFare" as const,    label: t("pricing.baseFareEGP") },
+              { key: "perKmRate" as const,   label: t("pricing.perKmEGP") },
+              { key: "minimumFare" as const, label: t("pricing.minimumFareEGP") },
             ].map(({ key, label }) => (
               <div key={key} className="space-y-1.5">
                 <Label>{label}</Label>
@@ -646,9 +662,9 @@ function ZonePricingTable({ type }: { type: "car" | "bike" | "delivery" }) {
             ))}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>{t("common.cancel")}</Button>
             <Button onClick={handleAdd} disabled={addMutation.isPending}>
-              {addMutation.isPending ? "Adding…" : "Add Price"}
+              {addMutation.isPending ? t("common.saving") : t("pricing.addZonePrice")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -698,6 +714,7 @@ function PricingView({ type }: { type: "car" | "bike" | "delivery" }) {
 // ─── Surge Pricing ────────────────────────────────────────────────────────────
 
 function SurgePricingView() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -723,12 +740,12 @@ function SurgePricingView() {
     mutationFn: (values: Partial<SurgeSettings>) =>
       adminFetch<SurgeSettings>("/admin/surge-settings", { method: "PATCH", body: JSON.stringify(values) }),
     onSuccess: (updated) => {
-      toast({ title: "Surge settings saved" });
+      toast({ title: t("pricing.surgeSaved") });
       queryClient.setQueryData(["surge-settings"], updated);
       setDraft(updated);
       setEditing(false);
     },
-    onError: (err: Error) => toast({ title: "Save failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("pricing.updateFailed"), description: err.message, variant: "destructive" }),
   });
 
   const toggleEnabled = () => {
@@ -762,8 +779,8 @@ function SurgePricingView() {
           <Zap className="h-6 w-6 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Surge Pricing</h1>
-          <p className="text-sm text-muted-foreground">Dynamic fare multipliers based on demand levels</p>
+          <h1 className="text-2xl font-bold">{t("pricing.surgeTitle")}</h1>
+          <p className="text-sm text-muted-foreground">{t("pricing.surgeDesc")}</p>
         </div>
       </div>
 
@@ -771,18 +788,18 @@ function SurgePricingView() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <Settings2 className="h-4 w-4" /> Surge Settings
+              <Settings2 className="h-4 w-4" /> {t("pricing.surgeTitle")}
             </CardTitle>
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2">
                 <Switch checked={data.isEnabled} onCheckedChange={toggleEnabled} disabled={mutation.isPending} />
                 <span className={`text-xs font-medium ${data.isEnabled ? "text-amber-600" : "text-muted-foreground"}`}>
-                  {data.isEnabled ? "Enabled" : "Disabled"}
+                  {data.isEnabled ? t("common.enabled") : t("common.disabled")}
                 </span>
               </div>
               {!editing && (
                 <Button variant="outline" size="sm" onClick={() => { setDraft(data); setEditing(true); }} className="gap-1.5">
-                  <Pencil className="h-3.5 w-3.5" /> Edit
+                  <Pencil className="h-3.5 w-3.5" /> {t("common.edit")}
                 </Button>
               )}
             </div>
@@ -794,9 +811,9 @@ function SurgePricingView() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <Label className="text-sm font-medium flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5 text-amber-500" /> Surge Multiplier
+                <TrendingUp className="h-3.5 w-3.5 text-amber-500" /> {t("pricing.multiplier")}
               </Label>
-              <p className="text-xs text-muted-foreground">Applied to base fare during surge periods</p>
+              <p className="text-xs text-muted-foreground">{t("pricing.surgeDesc")}</p>
               {editing ? (
                 <Input
                   type="number" step="0.1" min="1" max="5"
@@ -808,8 +825,8 @@ function SurgePricingView() {
               )}
             </div>
             <div className="space-y-1.5">
-              <Label className="text-sm font-medium">Maximum Multiplier Cap</Label>
-              <p className="text-xs text-muted-foreground">Fares will never exceed this multiplier</p>
+              <Label className="text-sm font-medium">{t("pricing.maxMultiplier")}</Label>
+              <p className="text-xs text-muted-foreground">{t("pricing.surgeDesc")}</p>
               {editing ? (
                 <Input
                   type="number" step="0.1" min="1" max="5"
@@ -826,12 +843,12 @@ function SurgePricingView() {
 
           <div className="space-y-3">
             <Label className="text-sm font-medium flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5 text-blue-500" /> Active Hours
+              <Clock className="h-3.5 w-3.5 text-blue-500" /> {t("common.time")}
             </Label>
-            <p className="text-xs text-muted-foreground">Surge pricing is applied automatically within this window</p>
+            <p className="text-xs text-muted-foreground">{t("pricing.surgeDesc")}</p>
             <div className="flex items-center gap-3">
               <div className="flex-1 space-y-1">
-                <Label className="text-xs text-muted-foreground">From</Label>
+                <Label className="text-xs text-muted-foreground">{t("common.from")}</Label>
                 {editing ? (
                   <Input type="time" value={draft.activeHoursStart} onChange={(e) => setDraft({ ...draft, activeHoursStart: e.target.value })} />
                 ) : (
@@ -840,7 +857,7 @@ function SurgePricingView() {
               </div>
               <span className="text-muted-foreground mt-4">→</span>
               <div className="flex-1 space-y-1">
-                <Label className="text-xs text-muted-foreground">To</Label>
+                <Label className="text-xs text-muted-foreground">{t("common.to")}</Label>
                 {editing ? (
                   <Input type="time" value={draft.activeHoursEnd} onChange={(e) => setDraft({ ...draft, activeHoursEnd: e.target.value })} />
                 ) : (
@@ -853,9 +870,9 @@ function SurgePricingView() {
           <Separator />
 
           <div className="space-y-2">
-            <Label className="text-sm font-medium">Demand Trigger Threshold</Label>
+            <Label className="text-sm font-medium">{t("pricing.triggerThreshold")}</Label>
             <p className="text-xs text-muted-foreground">
-              Surge activates when driver utilisation exceeds this percentage
+              {t("pricing.surgeDesc")}
             </p>
             {editing ? (
               <div className="flex items-center gap-2">
@@ -877,9 +894,9 @@ function SurgePricingView() {
               <Separator />
               <div className="space-y-3">
                 <Label className="text-sm font-medium flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5 text-rose-500" /> Active Zones
+                  <MapPin className="h-3.5 w-3.5 text-rose-500" /> {t("pricing.zone")}
                 </Label>
-                <p className="text-xs text-muted-foreground">Surge pricing only applies in selected zones (leave empty for all zones)</p>
+                <p className="text-xs text-muted-foreground">{t("pricing.surgeDesc")}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {zones.map((zone) => {
                     const active = display.activeZoneIds.includes(zone.id);
@@ -901,7 +918,7 @@ function SurgePricingView() {
                   })}
                 </div>
                 {display.activeZoneIds.length === 0 && (
-                  <p className="text-xs text-amber-600">No zones selected — surge applies platform-wide.</p>
+                  <p className="text-xs text-amber-600">{t("pricing.surgeDesc")}</p>
                 )}
               </div>
             </>
@@ -911,10 +928,10 @@ function SurgePricingView() {
             <div className="flex items-center gap-2 pt-2">
               <Button onClick={() => mutation.mutate(draft)} disabled={mutation.isPending} className="gap-1.5">
                 <Check className="h-3.5 w-3.5" />
-                {mutation.isPending ? "Saving…" : "Save Changes"}
+                {mutation.isPending ? t("common.saving") : t("common.saveChanges")}
               </Button>
               <Button variant="ghost" onClick={() => { setDraft(data); setEditing(false); }} className="gap-1.5">
-                <X className="h-3.5 w-3.5" /> Cancel
+                <X className="h-3.5 w-3.5" /> {t("common.cancel")}
               </Button>
             </div>
           )}
@@ -950,6 +967,7 @@ function SurgePricingView() {
 // ─── Root ────────────────────────────────────────────────────────────────────
 
 export default function Pricing() {
+  const { t } = useTranslation();
   const [, params] = useRoute("/pricing/:type");
   const type = params?.type ?? "car";
 

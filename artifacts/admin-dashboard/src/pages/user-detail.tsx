@@ -183,7 +183,7 @@ export default function UserDetail() {
     mutationFn: () => adminFetch(`/admin/users/${userId}/toggle-block`, { method: "PATCH" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-user", userId] });
-      toast({ title: user?.isBlocked ? "User unblocked" : "User blocked" });
+      toast({ title: user?.isBlocked ? t("userDetail.unblockSuccess", "User unblocked") : t("userDetail.blockSuccess", "User blocked") });
     },
   });
 
@@ -192,10 +192,10 @@ export default function UserDetail() {
       adminFetch(`/admin/users/${userId}`, { method: "PATCH", body: JSON.stringify(data) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-user", userId] });
-      toast({ title: "User updated" });
+      toast({ title: t("userDetail.updateSuccess", "User updated") });
       setEditOpen(false);
     },
-    onError: (err: Error) => toast({ title: "Update failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("userDetail.updateFailed", "Update failed"), description: err.message, variant: "destructive" }),
   });
 
   const addBalanceMutation = useMutation({
@@ -207,33 +207,33 @@ export default function UserDetail() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-user", userId] });
       queryClient.invalidateQueries({ queryKey: ["user-txns", userId] });
-      toast({ title: "Balance added" });
+      toast({ title: t("userDetail.balanceAdded", "Balance added") });
       setBalanceOpen(false);
       setBalanceAmount("");
       setBalanceNote("");
     },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("common.failed", "Failed"), description: err.message, variant: "destructive" }),
   });
 
   const sendMessageMutation = useMutation({
     mutationFn: ({ title, body }: { title: string; body: string }) =>
       adminFetch("/notifications", { method: "POST", body: JSON.stringify({ userId, title, body }) }),
     onSuccess: () => {
-      toast({ title: "Message sent" });
+      toast({ title: t("userDetail.messageSent", "Message sent") });
       setMessageOpen(false);
       setMsgTitle("");
       setMsgBody("");
     },
-    onError: (err: Error) => toast({ title: "Failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("common.failed", "Failed"), description: err.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => adminFetch(`/admin/users/${userId}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast({ title: "Account deleted" });
+      toast({ title: t("userDetail.accountDeleted", "Account deleted") });
       navigate("/users");
     },
-    onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("userDetail.deleteFailed", "Delete failed"), description: err.message, variant: "destructive" }),
   });
 
   // ─── Edit form ─────────────────────────────────────────────────────────────
@@ -302,7 +302,7 @@ export default function UserDetail() {
           variant={user.isBlocked ? "outline" : "destructive"}
           size="sm"
           onClick={() => {
-            if (confirm(user.isBlocked ? "Unblock this user?" : "Block this user?"))
+            if (confirm(user.isBlocked ? t("userDetail.unblockConfirm", "Unblock this user?") : t("userDetail.blockConfirm", "Block this user?")))
               toggleBlockMutation.mutate();
           }}
           disabled={toggleBlockMutation.isPending}
@@ -399,10 +399,10 @@ export default function UserDetail() {
                   <TableRow>
                     <TableHead>{t("tripDetail.colBookingId")}</TableHead>
                     <TableHead>{t("common.trip")}</TableHead>
-                    <TableHead>{t("tripDetail.colSeats")}</TableHead>
+                    <TableHead>{t("userDetail.colSeats")}</TableHead>
                     <TableHead>{t("common.status")}</TableHead>
-                    <TableHead>{t("tripDetail.colPayment")}</TableHead>
-                    <TableHead className="text-end">{t("tripDetail.colTotal")}</TableHead>
+                    <TableHead>{t("userDetail.colPayment")}</TableHead>
+                    <TableHead className="text-end">{t("userDetail.colTotal")}</TableHead>
                     <TableHead>{t("common.date")}</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -417,7 +417,7 @@ export default function UserDetail() {
                     bookingsData.data.map((b) => (
                       <TableRow key={b.id}>
                         <TableCell className="font-mono text-sm">#{b.id}</TableCell>
-                        <TableCell className="text-sm">Trip #{b.tripId}</TableCell>
+                        <TableCell className="text-sm">{t("common.trip")} #{b.tripId}</TableCell>
                         <TableCell className="text-sm">{b.seatCount}</TableCell>
                         <TableCell><BookingStatusBadge status={b.status} /></TableCell>
                         <TableCell><Badge variant="outline" className="capitalize text-[10px]">{b.paymentStatus}</Badge></TableCell>

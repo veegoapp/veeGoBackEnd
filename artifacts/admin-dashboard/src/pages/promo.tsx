@@ -128,7 +128,7 @@ export default function Promo() {
           render={({ field }) => (
             <FormItem>
               <FormLabel>{t("promo.code")}</FormLabel>
-              <FormControl><Input placeholder="SUMMER24" className="uppercase" {...field} /></FormControl>
+              <FormControl><Input placeholder={t("promo.codePlaceholder", "SUMMER24")} className="uppercase" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -283,7 +283,7 @@ export default function Promo() {
                 </TableCell>
               </TableRow>
             ) : (
-              data?.data.map((promo) => {
+              data?.data.map((promo: any) => {
                 const isExpired = promo.expiryDate && isPast(new Date(promo.expiryDate));
                 const isMaxedOut = promo.maxUsage && promo.usedCount >= promo.maxUsage;
                 const isUsable = promo.isActive && !isExpired && !isMaxedOut;
@@ -297,7 +297,7 @@ export default function Promo() {
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {promo.discountType === 'percentage' ? `${promo.discountValue}%` : `${promo.discountValue} EGP`}
+                      {promo.discountType === 'percentage' ? `${promo.discountValue}%` : `${promo.discountValue} ${t("common.egp", "EGP")}`}
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">

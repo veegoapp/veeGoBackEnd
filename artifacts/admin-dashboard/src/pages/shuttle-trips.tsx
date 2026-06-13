@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { adminFetch } from "@/lib/api";
@@ -39,21 +40,22 @@ interface ShuttleTrip {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const STATUS_META: Record<string, { label: string; cls: string }> = {
-  scheduled:       { label: "Open",            cls: "border-blue-200 bg-blue-50 text-blue-700" },
-  waiting_driver:  { label: "Active",          cls: "border-green-200 bg-green-50 text-green-700" },
-  driver_assigned: { label: "Driver Assigned", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
-  boarding:        { label: "Boarding",        cls: "border-purple-200 bg-purple-50 text-purple-700" },
-  active:          { label: "Active",          cls: "border-green-200 bg-green-50 text-green-700" },
-  completed:       { label: "Completed",       cls: "border-slate-200 bg-slate-50 text-slate-600" },
-  cancelled:       { label: "Cancelled",       cls: "border-red-200 bg-red-50 text-red-700" },
+const STATUS_META: Record<string, { key: string; cls: string }> = {
+  scheduled:       { key: "common.pending",    cls: "border-blue-200 bg-blue-50 text-blue-700" },
+  waiting_driver:  { key: "common.active",     cls: "border-green-200 bg-green-50 text-green-700" },
+  driver_assigned: { key: "trips.driverAssigned", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  boarding:        { key: "common.boarded",    cls: "border-purple-200 bg-purple-50 text-purple-700" },
+  active:          { key: "common.active",     cls: "border-green-200 bg-green-50 text-green-700" },
+  completed:       { key: "common.completed",  cls: "border-slate-200 bg-slate-50 text-slate-600" },
+  cancelled:       { key: "common.cancelled",  cls: "border-red-200 bg-red-50 text-red-700" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const m = STATUS_META[status] ?? { label: status, cls: "" };
+  const { t } = useTranslation();
+  const m = STATUS_META[status] ?? { key: status, cls: "" };
   return (
     <Badge variant="outline" className={`text-xs font-medium capitalize ${m.cls}`}>
-      {m.label}
+      {t(m.key)}
     </Badge>
   );
 }
@@ -74,6 +76,7 @@ function SeatBar({ booked, total }: { booked: number; total: number }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ShuttleTrips() {
+  const { t } = useTranslation();
   const [page, setPage]         = useState(1);
   const [status, setStatus]     = useState("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -131,10 +134,10 @@ export default function ShuttleTrips() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Bus className="h-6 w-6 text-primary" />
-            Shuttle Trips
+            {t("shuttleTrips.title")}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            All shuttle trips — route, driver, bus, passengers, and timing at a glance.
+            {t("shuttleTrips.subtitle")}
           </p>
         </div>
       </div>
@@ -142,15 +145,15 @@ export default function ShuttleTrips() {
       {/* KPI row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Open",      value: open,      cls: "text-blue-600",   bg: "bg-blue-50" },
-          { label: "Active",    value: active,    cls: "text-green-600",  bg: "bg-green-50" },
-          { label: "Completed", value: completed, cls: "text-slate-600",  bg: "bg-slate-50" },
-          { label: "Cancelled", value: cancelled, cls: "text-red-600",    bg: "bg-red-50" },
+          { label: t("common.pending"),      value: open,      cls: "text-blue-600",   bg: "bg-blue-50" },
+          { label: t("common.active"),    value: active,    cls: "text-green-600",  bg: "bg-green-50" },
+          { label: t("common.completed"), value: completed, cls: "text-slate-600",  bg: "bg-slate-50" },
+          { label: t("common.cancelled"), value: cancelled, cls: "text-red-600",    bg: "bg-red-50" },
         ].map((k) => (
           <Card key={k.label} className={`${k.bg} border-0 shadow-sm`}>
             <CardContent className="pt-4 pb-3 text-center">
               <p className={`text-2xl font-bold ${k.cls}`}>{k.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{k.label} (this page)</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{k.label} ({t("common.page")})</p>
             </CardContent>
           </Card>
         ))}
@@ -161,7 +164,7 @@ export default function ShuttleTrips() {
         <div className="relative">
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
-            placeholder="Search route, driver, plate…"
+            placeholder={t("common.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="ps-8 h-8 w-52 text-sm"
@@ -171,20 +174,20 @@ export default function ShuttleTrips() {
         <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
           <SelectTrigger className="h-8 w-40 text-sm">
             <Filter className="h-3.5 w-3.5 me-1.5 text-muted-foreground" />
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder={t("common.status")} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="scheduled">Open</SelectItem>
-            <SelectItem value="waiting_driver">Active</SelectItem>
-            <SelectItem value="driver_assigned">Driver Assigned</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="all">{t("shuttleTrips.allStatuses")}</SelectItem>
+            <SelectItem value="scheduled">{t("common.pending")}</SelectItem>
+            <SelectItem value="waiting_driver">{t("common.active")}</SelectItem>
+            <SelectItem value="driver_assigned">{t("trips.driverAssigned")}</SelectItem>
+            <SelectItem value="completed">{t("common.completed")}</SelectItem>
+            <SelectItem value="cancelled">{t("common.cancelled")}</SelectItem>
           </SelectContent>
         </Select>
 
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">From</span>
+          <span className="text-xs text-muted-foreground">{t("common.from")}</span>
           <Input
             type="date"
             value={dateFrom}
@@ -193,7 +196,7 @@ export default function ShuttleTrips() {
           />
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">To</span>
+          <span className="text-xs text-muted-foreground">{t("common.to")}</span>
           <Input
             type="date"
             value={dateTo}
@@ -204,12 +207,12 @@ export default function ShuttleTrips() {
 
         {hasFilters && (
           <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs" onClick={resetFilters}>
-            <X className="h-3.5 w-3.5" /> Clear
+            <X className="h-3.5 w-3.5" /> {t("common.clear")}
           </Button>
         )}
 
         <span className="ms-auto text-xs text-muted-foreground">
-          {total.toLocaleString()} trip{total !== 1 ? "s" : ""} total
+          {t("common.total")}: {total.toLocaleString()}
         </span>
       </div>
 
@@ -218,14 +221,14 @@ export default function ShuttleTrips() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="w-14 text-xs">ID</TableHead>
-              <TableHead className="text-xs">Route</TableHead>
-              <TableHead className="text-xs">Departure</TableHead>
-              <TableHead className="text-xs">Status</TableHead>
-              <TableHead className="text-xs">Driver</TableHead>
-              <TableHead className="text-xs">Bus</TableHead>
-              <TableHead className="text-xs">Seats</TableHead>
-              <TableHead className="text-xs text-end">Price</TableHead>
+              <TableHead className="w-14 text-xs">{t("common.id")}</TableHead>
+              <TableHead className="text-xs">{t("shuttleTrips.colRoute")}</TableHead>
+              <TableHead className="text-xs">{t("shuttleTrips.colDeparture")}</TableHead>
+              <TableHead className="text-xs">{t("shuttleTrips.colStatus")}</TableHead>
+              <TableHead className="text-xs">{t("shuttleTrips.colDriver")}</TableHead>
+              <TableHead className="text-xs">{t("shuttleTrips.colBus")}</TableHead>
+              <TableHead className="text-xs">{t("shuttleTrips.colSeats")}</TableHead>
+              <TableHead className="text-xs text-end">{t("common.price")}</TableHead>
               <TableHead className="w-12" />
             </TableRow>
           </TableHeader>
@@ -242,8 +245,8 @@ export default function ShuttleTrips() {
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-16 text-muted-foreground">
                   <Bus className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                  <p className="text-sm font-medium">No trips found</p>
-                  {hasFilters && <p className="text-xs mt-1">Try adjusting the filters</p>}
+                  <p className="text-sm font-medium">{t("shuttleTrips.noTrips")}</p>
+                  {hasFilters && <p className="text-xs mt-1">{t("bookings.clearFiltersHint")}</p>}
                 </TableCell>
               </TableRow>
             ) : (
@@ -257,7 +260,7 @@ export default function ShuttleTrips() {
                   <TableCell>
                     <div className="flex flex-col gap-0.5">
                       <span className="text-sm font-medium leading-tight">
-                        {trip.route?.name ?? `Route #${trip.route?.id ?? "—"}`}
+                        {trip.route?.name ?? `${t("common.route")} #${trip.route?.id ?? "—"}`}
                       </span>
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <MapPin className="h-2.5 w-2.5 shrink-0" />
@@ -299,7 +302,7 @@ export default function ShuttleTrips() {
                         </Link>
                       </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                      <span className="text-xs text-muted-foreground italic">{t("common.unknown")}</span>
                     )}
                   </TableCell>
 
@@ -318,7 +321,7 @@ export default function ShuttleTrips() {
                     <div className="flex flex-col gap-1">
                       <SeatBar booked={trip.bookedSeats} total={trip.totalSeats} />
                       <span className="text-[10px] text-muted-foreground">
-                        {trip.availableSeats} available
+                        {trip.availableSeats} {t("common.available")}
                       </span>
                     </div>
                   </TableCell>
@@ -353,7 +356,7 @@ export default function ShuttleTrips() {
             </PaginationItem>
             <PaginationItem>
               <span className="px-4 text-sm text-muted-foreground">
-                Page {page} of {pages}
+                {t("common.page")} {page} {t("common.of")} {pages}
               </span>
             </PaginationItem>
             <PaginationItem>

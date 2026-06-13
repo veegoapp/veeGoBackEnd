@@ -262,7 +262,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             { title: t("nav.vehicles"), href: "/vehicles/shuttle", icon: Bus },
             { title: t("nav.schedules"), href: "/schedules", icon: CalendarClock },
             { title: t("nav.shuttleTrips"), href: "/shuttle-trips", icon: Navigation },
-            { title: t("nav.offences", "Offences"), href: "/shuttle/offences", icon: Shield },
+            { title: t("nav.offences"), href: "/shuttle/offences", icon: Shield },
           ],
         },
         {
@@ -296,15 +296,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         { title: t("nav.wallets"),      href: "/finance/wallet",            icon: Wallet },
         { title: t("nav.payouts"),      href: "/finance/payouts",           icon: ArrowUpRight },
         { title: t("nav.commission"),   href: "/finance/commission",        icon: Percent },
-        { title: t("nav.commissionExemptions", "Exemptions"), href: "/finance/commission-exemptions", icon: CalendarRange },
-        { title: t("nav.bonusTargets", "Bonus Targets"),   href: "/finance/bonus-targets",     icon: Trophy },
-        { title: t("nav.noShowDebits", "No-Show Debits"),  href: "/finance/shuttle-cash-debts", icon: DollarSign },
+        { title: t("nav.commissionExemptions"), href: "/finance/commission-exemptions", icon: CalendarRange },
+        { title: t("nav.bonusTargets"),   href: "/finance/bonus-targets",     icon: Trophy },
+        { title: t("nav.noShowDebits"),  href: "/finance/shuttle-cash-debts", icon: DollarSign },
       ],
     },
     {
-      label: t("nav.groupSecurity", "Security"),
+      label: t("nav.groupSecurity"),
       items: [
-        { title: t("nav.fraudAlerts", "Fraud Alerts"), href: "/security/fraud-alerts", icon: ShieldAlert },
+        { title: t("nav.fraudAlerts"), href: "/security/fraud-alerts", icon: ShieldAlert },
       ],
     },
     {
@@ -351,16 +351,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Logo / Header */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-slate-100 dark:border-slate-800 min-h-[56px]">
           {!collapsed && (
-            <img src={logoUrl} alt="logo" className="h-8 w-auto object-contain" />
+            <div className="flex items-center gap-2">
+              <img src={logoUrl} alt="logo" className="h-8 w-auto object-contain" />
+              <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-white truncate">
+                {t("layout.adminPortal")}
+              </span>
+            </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setCollapsed((c) => !c)}
-            className={cn("h-7 w-7 shrink-0", collapsed && "mx-auto")}
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip delayDuration={0}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCollapsed((c) => !c)}
+                  className={cn("h-7 w-7 shrink-0", collapsed && "mx-auto")}
+                >
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-xs">
+                {t("layout.toggleSidebar")}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Nav */}
@@ -379,7 +393,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </AvatarFallback>
             </Avatar>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium truncate">{(user as any).name ?? "Admin"}</p>
+              <p className="text-xs font-medium truncate">{(user as any).name ?? t("common.admin")}</p>
               <p className="text-[10px] text-muted-foreground truncate">{(user as any).email ?? ""}</p>
             </div>
             <ThemeToggle />
@@ -388,6 +402,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className={collapsed ? "border-t border-slate-100 dark:border-slate-800 py-2 flex flex-col items-center gap-1.5" : "px-2 pb-2"}>
           {collapsed && <ThemeToggle />}
           <DbHealthIndicator collapsed={collapsed} />
+          {!collapsed && (
+            <p className="text-[9px] text-center text-slate-400 mt-1 uppercase tracking-widest font-medium">
+              {t("layout.version")} 1.4.2
+            </p>
+          )}
         </div>
       </aside>
 

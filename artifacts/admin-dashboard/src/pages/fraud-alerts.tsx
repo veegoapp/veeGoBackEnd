@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminFetch } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -38,6 +39,7 @@ type AlertsResponse = {
 };
 
 export default function FraudAlerts() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -74,15 +76,15 @@ export default function FraudAlerts() {
     socket.on("admin:duplicate_driver_alert", () => {
       setLiveCount((c) => c + 1);
       toast({
-        title: "New Duplicate Driver Alert",
-        description: "A new fraud flag has been raised. Review the Fraud Alerts page.",
+        title: t("fraudAlerts.newDuplicateAlert"),
+        description: t("fraudAlerts.newFraudFlag"),
         variant: "destructive",
       });
       queryClient.invalidateQueries({ queryKey: ["duplicate-alerts"] });
       queryClient.invalidateQueries({ queryKey: ["duplicate-alerts-unresolved-count"] });
     });
     return () => { socket.disconnect(); };
-  }, []);
+  }, [t]);
 
   const resolveMutation = useMutation({
     mutationFn: ({ id, notes }: { id: number; notes: string }) =>
@@ -91,14 +93,14 @@ export default function FraudAlerts() {
         body: JSON.stringify({ notes }),
       }),
     onSuccess: () => {
-      toast({ title: "Alert resolved" });
+      toast({ title: t("fraudAlerts.alertResolved") });
       setResolveTarget(null);
       setNotes("");
       queryClient.invalidateQueries({ queryKey: ["duplicate-alerts"] });
       queryClient.invalidateQueries({ queryKey: ["duplicate-alerts-unresolved-count"] });
     },
     onError: (err: Error) =>
-      toast({ title: "Failed to resolve", description: err.message, variant: "destructive" }),
+      toast({ title: t("fraudAlerts.failedToResolve"), description: err.message, variant: "destructive" }),
   });
 
   const alerts = data?.data ?? [];
@@ -115,28 +117,28 @@ export default function FraudAlerts() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-              Fraud &amp; Security Alerts
+              {t("fraudAlerts.title")}
               {(unresolvedCount + liveCount) > 0 && (
                 <Badge variant="destructive" className="text-xs">
-                  {unresolvedCount + liveCount} unresolved
+                  {t("fraudAlerts.unresolvedCount", { count: unresolvedCount + liveCount })}
                 </Badge>
               )}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Duplicate national ID registrations flagged for admin review
+              {t("fraudAlerts.subtitle")}
             </p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-1.5">
-          <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          <RefreshCw className="h-3.5 w-3.5" /> {t("common.refresh")}
         </Button>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Unresolved Flags",  value: unresolvedCount, color: "text-red-600",   bg: "bg-red-50 dark:bg-red-950",    icon: AlertTriangle },
-          { label: "Showing on Page",   value: alerts.length,   color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950", icon: Clock },
-          { label: "Resolved (all time)", value: total - unresolvedCount >= 0 ? "—" : 0, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950", icon: CheckCircle2 },
+          { label: t("fraudAlerts.unresolvedFlags"),  value: unresolvedCount, color: "text-red-600",   bg: "bg-red-50 dark:bg-red-950",    icon: AlertTriangle },
+          { label: t("fraudAlerts.showingOnPage"),   value: alerts.length,   color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950", icon: Clock },
+          { label: t("fraudAlerts.resolvedAllTime"), value: total - unresolvedCount >= 0 ? "—" : 0, color: "text-green-600", bg: "bg-green-50 dark:bg-green-950", icon: CheckCircle2 },
         ].map(({ label, value, color, bg, icon: Icon }) => (
           <Card key={label}>
             <CardContent className="pt-4 pb-3 flex items-center gap-3">
@@ -153,19 +155,19 @@ export default function FraudAlerts() {
       </div>
 
       <div className="flex items-center gap-3 bg-card p-4 rounded-xl border border-border">
-        <span className="text-sm font-medium">Status Filter:</span>
+        <span className="text-sm font-medium">{t("fraudAlerts.statusFilter")}</span>
         <Select value={resolvedFilter} onValueChange={(v: any) => { setResolvedFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[160px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="false">Unresolved</SelectItem>
-            <SelectItem value="true">Resolved</SelectItem>
-            <SelectItem value="all">All Alerts</SelectItem>
+            <SelectItem value="false">{t("fraudAlerts.unresolved")}</SelectItem>
+            <SelectItem value="true">{t("fraudAlerts.resolved")}</SelectItem>
+            <SelectItem value="all">{t("fraudAlerts.allAlerts")}</SelectItem>
           </SelectContent>
         </Select>
         {data && (
-          <p className="ms-auto text-sm text-muted-foreground">{total} total alerts</p>
+          <p className="ms-auto text-sm text-muted-foreground">{t("fraudAlerts.totalAlerts", { count: total })}</p>
         )}
       </div>
 
@@ -173,13 +175,13 @@ export default function FraudAlerts() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-16">Alert ID</TableHead>
-              <TableHead>New Driver</TableHead>
-              <TableHead>Existing Driver</TableHead>
-              <TableHead>Match Type</TableHead>
-              <TableHead>Flagged At</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-end">Action</TableHead>
+              <TableHead className="w-16">{t("fraudAlerts.colAlertId")}</TableHead>
+              <TableHead>{t("fraudAlerts.colNewDriver")}</TableHead>
+              <TableHead>{t("fraudAlerts.colExistingDriver")}</TableHead>
+              <TableHead>{t("fraudAlerts.colMatchType")}</TableHead>
+              <TableHead>{t("fraudAlerts.colFlaggedAt")}</TableHead>
+              <TableHead>{t("fraudAlerts.colStatus")}</TableHead>
+              <TableHead className="text-end">{t("fraudAlerts.colAction")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -195,7 +197,7 @@ export default function FraudAlerts() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-14 text-muted-foreground">
                   <ShieldAlert className="h-8 w-8 mx-auto mb-3 opacity-30" />
-                  <p>No {resolvedFilter === "false" ? "unresolved" : ""} alerts found</p>
+                  <p>{t("fraudAlerts.noAlerts")}</p>
                 </TableCell>
               </TableRow>
             ) : (
@@ -222,7 +224,7 @@ export default function FraudAlerts() {
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="text-xs border-orange-200 text-orange-700 bg-orange-50 dark:bg-orange-950">
-                      {alert.matchType === "national_id" ? "National ID" : alert.matchType}
+                      {alert.matchType === "national_id" ? t("fraudAlerts.nationalId") : alert.matchType}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -231,11 +233,11 @@ export default function FraudAlerts() {
                   <TableCell>
                     {alert.resolvedAt ? (
                       <Badge variant="outline" className="text-xs text-green-600 border-green-200 bg-green-50 dark:bg-green-950 gap-1">
-                        <CheckCircle2 className="h-2.5 w-2.5" /> Resolved
+                        <CheckCircle2 className="h-2.5 w-2.5" /> {t("fraudAlerts.resolved")}
                       </Badge>
                     ) : (
                       <Badge variant="destructive" className="text-xs gap-1">
-                        <AlertTriangle className="h-2.5 w-2.5" /> Open
+                        <AlertTriangle className="h-2.5 w-2.5" /> {t("common.open")}
                       </Badge>
                     )}
                   </TableCell>
@@ -247,7 +249,7 @@ export default function FraudAlerts() {
                         className="text-xs h-7"
                         onClick={() => { setResolveTarget(alert); setNotes(""); }}
                       >
-                        Resolve
+                        {t("fraudAlerts.resolve")}
                       </Button>
                     )}
                     {alert.resolvedAt && alert.notes && (
@@ -273,7 +275,7 @@ export default function FraudAlerts() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              Page {page} of {totalPages}
+              {t("common.page")} {page} {t("common.of")} {totalPages}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext
@@ -290,17 +292,17 @@ export default function FraudAlerts() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
-              Resolve Alert #{resolveTarget?.id}
+              {t("fraudAlerts.resolveTitle", { id: resolveTarget?.id })}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm space-y-1">
-              <p><span className="text-muted-foreground">New Driver:</span> {resolveTarget?.newDriver?.name ?? `#${resolveTarget?.newDriverId}`}</p>
-              <p><span className="text-muted-foreground">Existing Driver:</span> {resolveTarget?.existingDriver?.name ?? `#${resolveTarget?.existingDriverId}`}</p>
-              <p><span className="text-muted-foreground">Match Type:</span> {resolveTarget?.matchType}</p>
+              <p><span className="text-muted-foreground">{t("fraudAlerts.newDriverLabel")}</span> {resolveTarget?.newDriver?.name ?? `#${resolveTarget?.newDriverId}`}</p>
+              <p><span className="text-muted-foreground">{t("fraudAlerts.existingDriverLabel")}</span> {resolveTarget?.existingDriver?.name ?? `#${resolveTarget?.existingDriverId}`}</p>
+              <p><span className="text-muted-foreground">{t("fraudAlerts.matchTypeLabel")}</span> {resolveTarget?.matchType}</p>
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Audit Notes <span className="text-muted-foreground text-xs">(optional)</span></label>
+              <label className="text-sm font-medium">{t("fraudAlerts.auditNotes")} <span className="text-muted-foreground text-xs">{t("fraudAlerts.optional")}</span></label>
               <Textarea
                 placeholder="e.g. Verified same person — duplicate blocked. OR Investigated — different individuals, false flag."
                 value={notes}
@@ -310,12 +312,12 @@ export default function FraudAlerts() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setResolveTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setResolveTarget(null)}>{t("common.cancel")}</Button>
             <Button
               disabled={resolveMutation.isPending}
               onClick={() => resolveTarget && resolveMutation.mutate({ id: resolveTarget.id, notes })}
             >
-              {resolveMutation.isPending ? "Resolving…" : "Mark as Resolved"}
+              {resolveMutation.isPending ? t("fraudAlerts.resolving") : t("fraudAlerts.markResolved")}
             </Button>
           </DialogFooter>
         </DialogContent>

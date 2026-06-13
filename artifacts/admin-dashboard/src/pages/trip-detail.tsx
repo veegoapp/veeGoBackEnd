@@ -81,14 +81,15 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  scheduled: "Open", waiting_driver: "Active", driver_assigned: "Driver Assigned",
-  boarding: "Boarding", active: "Active", completed: "Completed", cancelled: "Cancelled",
+  scheduled: "trips.scheduled", waiting_driver: "trips.enRoute", driver_assigned: "trips.driverAssigned",
+  boarding: "trips.boarding", active: "trips.enRoute", completed: "trips.completed", cancelled: "trips.cancelled",
 };
 
 function TripStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation();
   return (
     <Badge variant="outline" className={`capitalize text-xs ${STATUS_STYLES[status] ?? ""}`}>
-      {STATUS_LABELS[status] ?? status}
+      {t(STATUS_LABELS[status] ?? status)}
     </Badge>
   );
 }
@@ -166,22 +167,22 @@ export default function TripDetail() {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trip-detail", tripId] });
-      toast({ title: "Trip cancelled" });
+      toast({ title: t("tripDetail.tripCancelled") });
       setCancelOpen(false);
       setCancelReason("");
     },
-    onError: (err: Error) => toast({ title: "Cancel failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("tripDetail.cancelFailed"), description: err.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: () =>
       adminFetch(`/trips/${tripId}`, { method: "DELETE" }),
     onSuccess: () => {
-      toast({ title: "Trip deleted" });
+      toast({ title: t("trips.tripDeleted") });
       setDeleteOpen(false);
       window.location.href = "/trips";
     },
-    onError: (err: Error) => toast({ title: "Delete failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("trips.failedToDelete"), description: err.message, variant: "destructive" }),
   });
 
   const refundMutation = useMutation({
@@ -189,10 +190,10 @@ export default function TripDetail() {
       adminFetch(`/admin/bookings/${bookingId}/refund`, { method: "POST" }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trip-bookings", tripId] });
-      toast({ title: "Refund issued successfully" });
+      toast({ title: t("tripDetail.refundSuccess") });
       setRefundBookingId(null);
     },
-    onError: (err: Error) => toast({ title: "Refund failed", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("tripDetail.refundFailed"), description: err.message, variant: "destructive" }),
   });
 
   // ─── Loading / not found ──────────────────────────────────────────────────
@@ -232,12 +233,12 @@ export default function TripDetail() {
         </Button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold">Trip #{trip.id}</h1>
+            <h1 className="text-2xl font-bold">{t("common.trip")} #{trip.id}</h1>
             <TripStatusBadge status={trip.status} />
             {!trip.isActive && <Badge variant="secondary" className="text-[10px]">{t("tripDetail.inactive")}</Badge>}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {routeInfo?.name ?? `Route #${trip.routeId}`} · Created {new Date(trip.createdAt).toLocaleDateString([], { timeZone: 'Africa/Cairo', month: 'short', day: 'numeric', year: 'numeric' })}
+            {routeInfo?.name ?? `${t("common.route")} #${trip.routeId}`} · {t("tripDetail.createdDate", { date: new Date(trip.createdAt).toLocaleDateString([], { timeZone: 'Africa/Cairo', month: 'short', day: 'numeric', year: 'numeric' }) })}
           </p>
         </div>
         {canCancel && (
@@ -246,7 +247,7 @@ export default function TripDetail() {
           </Button>
         )}
         <Button variant="outline" size="sm" className="text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteOpen(true)}>
-          <Trash2 className="h-4 w-4 me-2" /> Delete Trip
+          <Trash2 className="h-4 w-4 me-2" /> {t("trips.deleteTrip")}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setNoteOpen(true)}>
           <MessageSquare className="h-4 w-4 me-2" /> {t("tripDetail.addNote")}
@@ -259,7 +260,7 @@ export default function TripDetail() {
           { label: t("tripDetail.seatsFilledLabel"), value: `${filledSeats}/${trip.totalSeats} (${fillPct}%)`, icon: Users, color: "bg-blue-500/10 text-blue-600" },
           { label: t("tripDetail.ticketPrice"), value: formatEGP(trip.price), icon: Ticket, color: "bg-green-500/10 text-green-600" },
           { label: t("tripDetail.revenue"), value: formatEGP(revenue), icon: Wallet, color: "bg-amber-500/10 text-amber-600" },
-          { label: t("tripDetail.duration"), value: `${duration} min`, icon: Clock, color: "bg-purple-500/10 text-purple-600" },
+          { label: t("tripDetail.duration"), value: t("tripDetail.durationValue", { minutes: duration }), icon: Clock, color: "bg-purple-500/10 text-purple-600" },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="pt-4 pb-3 flex items-center gap-3">
@@ -281,16 +282,16 @@ export default function TripDetail() {
           <CardContent>
             <InfoRow icon={Navigation} label={t("common.departure")} value={fmtUtcFull(trip.departureTime)} />
             <InfoRow icon={MapPin} label={t("common.arrival")} value={fmtUtcFull(trip.arrivalTime)} />
-            <InfoRow icon={Clock} label={t("tripDetail.duration")} value={`${duration} minutes`} />
+            <InfoRow icon={Clock} label={t("tripDetail.duration")} value={t("tripDetail.durationValueMinutes", { minutes: duration })} />
             <InfoRow icon={RefreshCw} label={t("tripDetail.recurring")} value={
-              trip.recurringType === "one_time" ? "One-time" :
-              trip.recurringType.charAt(0).toUpperCase() + trip.recurringType.slice(1).replace("_", " ")
+              trip.recurringType === "one_time" ? t("trips.oneTime") :
+              t(`trips.${trip.recurringType}`)
             } />
-            {trip.acceptedAt && <InfoRow icon={CheckCircle2} label="Accepted" value={fmtUtcShort(trip.acceptedAt)} />}
-            {trip.startedAt && <InfoRow icon={CheckCircle2} label="Started" value={fmtUtcShort(trip.startedAt)} />}
-            {trip.completedAt && <InfoRow icon={CheckCircle2} label="Completed" value={fmtUtcShort(trip.completedAt)} />}
-            {trip.cancelledAt && <InfoRow icon={XCircle} label="Cancelled" value={fmtUtcShort(trip.cancelledAt)} />}
-            {trip.cancelReason && <InfoRow icon={AlertCircle} label="Cancel Reason" value={trip.cancelReason} />}
+            {trip.acceptedAt && <InfoRow icon={CheckCircle2} label={t("tripDetail.accepted")} value={fmtUtcShort(trip.acceptedAt)} />}
+            {trip.startedAt && <InfoRow icon={CheckCircle2} label={t("tripDetail.started")} value={fmtUtcShort(trip.startedAt)} />}
+            {trip.completedAt && <InfoRow icon={CheckCircle2} label={t("tripDetail.completed")} value={fmtUtcShort(trip.completedAt)} />}
+            {trip.cancelledAt && <InfoRow icon={XCircle} label={t("tripDetail.cancelled")} value={fmtUtcShort(trip.cancelledAt)} />}
+            {trip.cancelReason && <InfoRow icon={AlertCircle} label={t("tripDetail.cancelReason")} value={trip.cancelReason} />}
           </CardContent>
         </Card>
 
@@ -300,16 +301,16 @@ export default function TripDetail() {
           <CardContent>
             <InfoRow icon={MapPin} label={t("tripDetail.route")} value={
               <Link href={`/routes/${trip.routeId}`} className="text-primary hover:underline">
-                {routeInfo?.name ?? `Route #${trip.routeId}`}
+                {routeInfo?.name ?? `${t("common.route")} #${trip.routeId}`}
               </Link>
             } />
             {routeInfo?.originName && <InfoRow icon={Navigation} label={t("tripDetail.origin")} value={routeInfo.originName} />}
             {routeInfo?.destinationName && <InfoRow icon={MapPin} label={t("tripDetail.destination")} value={routeInfo.destinationName} />}
-            {routeInfo?.distanceKm && <InfoRow icon={Route} label={t("tripDetail.distance")} value={`${routeInfo.distanceKm} km`} />}
+            {routeInfo?.distanceKm && <InfoRow icon={Route} label={t("tripDetail.distance")} value={t("tripDetail.distanceValue", { km: routeInfo.distanceKm })} />}
             <InfoRow icon={Bus} label={t("tripDetail.bus")} value={
-              busInfo ? `${busInfo.model} · ${busInfo.plateNumber}` : `Bus #${trip.busId}`
+              busInfo ? `${busInfo.model} · ${busInfo.plateNumber}` : `${t("common.bus")} #${trip.busId}`
             } />
-            <InfoRow icon={Users} label={t("tripDetail.capacity")} value={busInfo ? `${busInfo.capacity} seats` : `${trip.totalSeats} seats`} />
+            <InfoRow icon={Users} label={t("tripDetail.capacity")} value={busInfo ? t("buses.seatsCount", { count: busInfo.capacity }) : t("buses.seatsCount", { count: trip.totalSeats })} />
           </CardContent>
         </Card>
 
@@ -340,8 +341,8 @@ export default function TripDetail() {
             <InfoRow icon={Users} label={t("tripDetail.seatFill")} value={
               <div className="space-y-1.5">
                 <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>{filledSeats} {t("tripDetail.booked")}</span>
-                  <span>{trip.availableSeats} {t("tripDetail.seatsAvailable")}</span>
+                  <span>{t("tripDetail.bookedCount", { count: filledSeats })}</span>
+                  <span>{t("tripDetail.seatsAvailableCount", { count: trip.availableSeats })}</span>
                 </div>
                 <div className="h-2 rounded-full bg-muted overflow-hidden">
                   <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${fillPct}%` }} />
@@ -395,7 +396,7 @@ export default function TripDetail() {
                           {b.user.name}
                         </Link>
                       ) : (
-                        <span className="text-sm text-muted-foreground">User #{b.userId}</span>
+                        <span className="text-sm text-muted-foreground">{t("common.passenger")} #{b.userId}</span>
                       )}
                     </TableCell>
                     <TableCell className="text-sm">{b.seatCount}</TableCell>
@@ -435,7 +436,7 @@ export default function TripDetail() {
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><Ban className="h-5 w-5" />{t("tripDetail.cancelTrip")} #{trip.id}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              This will cancel the trip for <strong>{filledSeats}</strong> booked passengers.
+              {t("tripDetail.cancelConfirmDescWithCount", { count: filledSeats })}
             </p>
             <div>
               <label className="text-sm font-medium mb-1.5 block">{t("tripDetail.cancelReason")}</label>
@@ -464,7 +465,7 @@ export default function TripDetail() {
         <DialogContent>
           <DialogHeader><DialogTitle>{t("tripDetail.refundBooking")} #{refundBookingId}</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">
-            This will issue a wallet refund to the passenger for booking #{refundBookingId}.
+            {t("tripDetail.refundConfirmDesc", { id: refundBookingId })}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRefundBookingId(null)}>{t("common.cancel")}</Button>

@@ -65,63 +65,63 @@ export default function Staff() {
 
   const { data: staffData, isLoading: staffLoading } = useQuery({
     queryKey: ["staff"],
-    queryFn: () => adminFetch("/admin/staff"),
+    queryFn: () => adminFetch<{ data: any[] }>("/admin/staff"),
   });
 
   const { data: rolesData, isLoading: rolesLoading } = useQuery({
     queryKey: ["roles"],
-    queryFn: () => adminFetch("/admin/roles"),
+    queryFn: () => adminFetch<{ data: any[] }>("/admin/roles"),
   });
 
   const createStaffMut = useMutation({
     mutationFn: (body: any) => adminFetch("/admin/staff", { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setStaffModal({ open: false, editing: null }); toast({ title: t("staff.memberCreated", "Staff member created") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setStaffModal({ open: false, editing: null }); toast({ title: t("staff.memberCreated") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateStaffMut = useMutation({
     mutationFn: ({ id, body }: { id: number; body: any }) => adminFetch(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setStaffModal({ open: false, editing: null }); toast({ title: t("staff.memberUpdated", "Staff member updated") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setStaffModal({ open: false, editing: null }); toast({ title: t("staff.memberUpdated") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const createRoleMut = useMutation({
     mutationFn: (body: any) => adminFetch("/admin/roles", { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); setRoleModal({ open: false, editing: null }); toast({ title: t("staff.roleCreated", "Role created") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); setRoleModal({ open: false, editing: null }); toast({ title: t("staff.roleCreated") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateRoleMut = useMutation({
     mutationFn: ({ id, body }: { id: number; body: any }) => adminFetch(`/admin/roles/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); setRoleModal({ open: false, editing: null }); toast({ title: t("staff.roleUpdated", "Role updated") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles"] }); setRoleModal({ open: false, editing: null }); toast({ title: t("staff.roleUpdated") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteRoleMut = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/roles/${id}`, { method: "DELETE" }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles", "staff"] }); setDeleteRoleId(null); toast({ title: t("staff.roleDeleted", "Role deleted") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["roles", "staff"] }); setDeleteRoleId(null); toast({ title: t("staff.roleDeleted") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const toggleBlockMut = useMutation({
     mutationFn: ({ id, isBlocked }: { id: number; isBlocked: boolean }) =>
       adminFetch(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify({ isBlocked }) }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); toast({ title: t("staff.statusUpdated", "Status updated") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); toast({ title: t("staff.statusUpdated") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteStaffMut = useMutation({
     mutationFn: (id: number) => adminFetch(`/admin/staff/${id}`, { method: "DELETE" }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setDeleteStaffId(null); toast({ title: t("staff.memberDeleted", "Staff member deleted") }); },
-    onError: (e: any) => toast({ title: t("common.error", "Error"), description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["staff"] }); setDeleteStaffId(null); toast({ title: t("staff.memberDeleted") }); },
+    onError: (e: any) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   if (!isSuperAdmin) {
     return (
       <div className="p-8 flex flex-col items-center justify-center min-h-[60vh] text-center">
         <Shield className="h-12 w-12 text-muted-foreground mb-4" />
-        <h2 className="text-xl font-semibold">{t("staff.accessRestricted", "Access Restricted")}</h2>
-        <p className="text-muted-foreground text-sm mt-2">{t("staff.superAdminOnly", "Only super admins can manage staff and permissions.")}</p>
+        <h2 className="text-xl font-semibold">{t("staff.accessRestricted")}</h2>
+        <p className="text-muted-foreground text-sm mt-2">{t("staff.superAdminOnly")}</p>
       </div>
     );
   }
@@ -136,17 +136,17 @@ export default function Staff() {
       <Tabs defaultValue="staff">
         <TabsList>
           <TabsTrigger value="staff">
-            <UsersRound className="h-4 w-4 me-2" />{t("staff.staffUsers", "Staff Users")}
+            <UsersRound className="h-4 w-4 me-2" />{t("staff.staffUsers")}
           </TabsTrigger>
           <TabsTrigger value="roles">
-            <Key className="h-4 w-4 me-2" />{t("staff.rolesPermissions", "Roles & Permissions")}
+            <Key className="h-4 w-4 me-2" />{t("staff.rolesPermissions")}
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="staff" className="space-y-4 mt-4">
           <div className="flex justify-end">
             <Button onClick={() => setStaffModal({ open: true, editing: null })}>
-              <Plus className="h-4 w-4 me-2" /> {t("staff.addStaffMember", "Add Staff Member")}
+              <Plus className="h-4 w-4 me-2" /> {t("staff.addStaffMember")}
             </Button>
           </div>
 
@@ -158,7 +158,7 @@ export default function Staff() {
                   <TableHead>{t("common.email")}</TableHead>
                   <TableHead>{t("users.role")}</TableHead>
                   <TableHead>{t("common.status")}</TableHead>
-                  <TableHead>{t("staff.joined", "Joined")}</TableHead>
+                  <TableHead>{t("staff.joined")}</TableHead>
                   <TableHead className="text-end">{t("common.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
@@ -174,7 +174,7 @@ export default function Staff() {
                 ) : staffData?.data?.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                      {t("staff.noStaff", "No staff members yet.")}
+                      {t("staff.noStaff")}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -186,12 +186,12 @@ export default function Staff() {
                         {member.staffRole ? (
                           <Badge variant="secondary">{member.staffRole.name}</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-primary border-primary/40">{t("staff.superAdmin", "Super Admin")}</Badge>
+                          <Badge variant="outline" className="text-primary border-primary/40">{t("staff.superAdmin")}</Badge>
                         )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={member.isBlocked ? "destructive" : "outline"}>
-                          {member.isBlocked ? t("staff.deactivated", "Deactivated") : t("common.active")}
+                          {member.isBlocked ? t("staff.deactivated") : t("common.active")}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
@@ -205,7 +205,7 @@ export default function Staff() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <div className="flex items-center gap-1 ms-1" title={member.isBlocked ? t("staff.activate", "Activate") : t("staff.deactivate", "Deactivate")}>
+                          <div className="flex items-center gap-1 ms-1" title={member.isBlocked ? t("staff.activate") : t("staff.deactivate")}>
                             <Switch
                               checked={!member.isBlocked}
                               onCheckedChange={(checked) => toggleBlockMut.mutate({ id: member.id, isBlocked: !checked })}
@@ -231,7 +231,7 @@ export default function Staff() {
         <TabsContent value="roles" className="space-y-4 mt-4">
           <div className="flex justify-end">
             <Button onClick={() => setRoleModal({ open: true, editing: null })}>
-              <Plus className="h-4 w-4 me-2" /> {t("staff.createRole", "Create Role")}
+              <Plus className="h-4 w-4 me-2" /> {t("staff.createRole")}
             </Button>
           </div>
 
@@ -245,7 +245,7 @@ export default function Staff() {
               ))
             ) : rolesData?.data?.length === 0 ? (
               <div className="rounded-xl border border-border bg-card p-8 text-center text-muted-foreground">
-                {t("staff.noRoles", "No roles created yet. Create a role to assign to staff members.")}
+                {t("staff.noRoles")}
               </div>
             ) : (
               rolesData?.data?.map((role: any) => (
@@ -254,7 +254,7 @@ export default function Staff() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold">{role.name}</h3>
-                        <Badge variant="outline">{role.permissions?.length ?? 0} {t("staff.permissions", "permissions")}</Badge>
+                        <Badge variant="outline">{role.permissions?.length ?? 0} {t("staff.permissions")}</Badge>
                       </div>
                       {role.description && (
                         <p className="text-sm text-muted-foreground mt-1">{role.description}</p>
@@ -264,7 +264,7 @@ export default function Staff() {
                           <Badge key={p} variant="secondary" className="text-xs">{p.replace(/_/g, " ")}</Badge>
                         ))}
                         {role.permissions?.length > 8 && (
-                          <Badge variant="secondary" className="text-xs">+{role.permissions.length - 8} {t("common.more", "more")}</Badge>
+                          <Badge variant="secondary" className="text-xs">+{role.permissions.length - 8} {t("common.more")}</Badge>
                         )}
                       </div>
                     </div>
@@ -322,15 +322,15 @@ export default function Staff() {
       <Dialog open={deleteStaffId !== null} onOpenChange={(o) => !o && setDeleteStaffId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("staff.deleteStaffMember", "Delete Staff Member")}</DialogTitle>
+            <DialogTitle>{t("staff.deleteStaffMember")}</DialogTitle>
             <DialogDescription>
-              {t("staff.deleteStaffDesc", "This will permanently remove this staff member's account. This action cannot be undone.")}
+              {t("staff.deleteStaffDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteStaffId(null)}>{t("common.cancel")}</Button>
             <Button variant="destructive" onClick={() => deleteStaffId && deleteStaffMut.mutate(deleteStaffId)} disabled={deleteStaffMut.isPending}>
-              {t("staff.deleteStaffMember", "Delete Staff Member")}
+              {t("staff.deleteStaffMember")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -339,15 +339,15 @@ export default function Staff() {
       <Dialog open={deleteRoleId !== null} onOpenChange={(o) => !o && setDeleteRoleId(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t("staff.deleteRole", "Delete Role")}</DialogTitle>
+            <DialogTitle>{t("staff.deleteRole")}</DialogTitle>
             <DialogDescription>
-              {t("staff.deleteRoleDesc", "This will remove the role and unassign it from all staff members. They will lose access restrictions.")}
+              {t("staff.deleteRoleDesc")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteRoleId(null)}>{t("common.cancel")}</Button>
             <Button variant="destructive" onClick={() => deleteRoleId && deleteRoleMut.mutate(deleteRoleId)} disabled={deleteRoleMut.isPending}>
-              {t("staff.deleteRole", "Delete Role")}
+              {t("staff.deleteRole")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -402,15 +402,15 @@ function StaffModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{editing ? t("staff.editStaffMember", "Edit Staff Member") : t("staff.addStaffMember", "Add Staff Member")}</DialogTitle>
+          <DialogTitle>{editing ? t("staff.editStaffMember") : t("staff.addStaffMember")}</DialogTitle>
           <DialogDescription>
-            {editing ? t("staff.editStaffDesc", "Update the staff member's details and role assignment.") : t("staff.addStaffDesc", "Create a new admin staff account with role-based access.")}
+            {editing ? t("staff.editStaffDesc") : t("staff.addStaffDesc")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>{t("staff.fullName", "Full Name")}</Label>
+              <Label>{t("staff.fullName")}</Label>
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} required />
             </div>
             <div className="space-y-1.5">
@@ -423,24 +423,24 @@ function StaffModal({
             <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} required />
           </div>
           <div className="space-y-1.5">
-            <Label>{editing ? t("staff.newPasswordOptional", "New Password (leave blank to keep current)") : t("auth.password")}</Label>
+            <Label>{editing ? t("staff.newPasswordOptional") : t("auth.password")}</Label>
             <Input
               type="password"
               value={form.password}
               onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
               required={!editing}
               minLength={8}
-              placeholder={t("staff.minChars", "Min 8 characters")}
+              placeholder={t("staff.minChars")}
             />
           </div>
           <div className="space-y-1.5">
             <Label>{t("users.role")}</Label>
             <Select value={form.staffRoleId} onValueChange={(v) => setForm((f) => ({ ...f, staffRoleId: v }))}>
               <SelectTrigger>
-                <SelectValue placeholder={t("staff.selectRole", "Select a role...")} />
+                <SelectValue placeholder={t("staff.selectRole")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">{t("staff.superAdminFull", "Super Admin (Full Access)")}</SelectItem>
+                <SelectItem value="none">{t("staff.superAdminFull")}</SelectItem>
                 {roles.map((r) => (
                   <SelectItem key={r.id} value={r.id.toString()}>{r.name}</SelectItem>
                 ))}
@@ -450,7 +450,7 @@ function StaffModal({
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? t("common.saving", "Saving...") : editing ? t("common.saveChanges") : t("staff.createStaffMember", "Create Staff Member")}
+              {isPending ? t("common.saving") : editing ? t("common.saveChanges") : t("staff.createStaffMember")}
             </Button>
           </DialogFooter>
         </form>
@@ -514,28 +514,27 @@ function RoleModal({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? t("staff.editRole", "Edit Role") : t("staff.createRole", "Create Role")}</DialogTitle>
-          <DialogDescription>{t("staff.roleDesc", "Define the role name and select which sections this role can access.")}</DialogDescription>
+          <DialogTitle>{editing ? t("staff.editRole") : t("staff.createRole")}</DialogTitle>
+          <DialogDescription>{t("staff.roleDesc")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>{t("staff.roleName", "Role Name")}</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder={t("staff.roleNamePlaceholder", "e.g. Operations Manager")} />
+              <Label>{t("staff.roleName")}</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder={t("staff.roleNamePlaceholder")} />
             </div>
             <div className="space-y-1.5">
-              <Label>{t("staff.descriptionOptional", "Description (optional)")}</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("staff.briefDescription", "Brief description")} />
+              <Label>{t("staff.descriptionOptional")}</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("staff.briefDescription")} />
             </div>
           </div>
 
           <div className="space-y-3">
-            <Label>{t("staff.permissions", "Permissions")}</Label>
+            <Label>{t("staff.permissions")}</Label>
             <div className="border border-border rounded-lg divide-y divide-border">
               {PERMISSION_GROUPS.map((group) => {
                 const groupPerms = ALL_PERMISSIONS.filter((p) => p.group === group);
                 const allSelected = groupPerms.every((p) => selectedPerms.has(p.key));
-                const someSelected = groupPerms.some((p) => selectedPerms.has(p.key));
                 return (
                   <div key={group} className="p-3">
                     <div className="flex items-center justify-between mb-2">
@@ -545,7 +544,7 @@ function RoleModal({
                         onClick={() => toggleGroup(group)}
                         className="text-xs text-primary hover:underline"
                       >
-                        {allSelected ? t("staff.deselectAll", "Deselect all") : t("staff.selectAll", "Select all")}
+                        {allSelected ? t("staff.deselectAll") : t("staff.selectAll")}
                       </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -572,13 +571,13 @@ function RoleModal({
                 );
               })}
             </div>
-            <p className="text-xs text-muted-foreground">{selectedPerms.size} {t("staff.of", "of")} {ALL_PERMISSIONS.length} {t("staff.permissionsSelected", "permissions selected")}</p>
+            <p className="text-xs text-muted-foreground">{selectedPerms.size} {t("staff.of")} {ALL_PERMISSIONS.length} {t("staff.permissionsSelected")}</p>
           </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? t("common.saving", "Saving...") : editing ? t("staff.saveRole", "Save Role") : t("staff.createRole", "Create Role")}
+              {isPending ? t("common.saving") : editing ? t("staff.saveRole") : t("staff.createRole")}
             </Button>
           </DialogFooter>
         </form>

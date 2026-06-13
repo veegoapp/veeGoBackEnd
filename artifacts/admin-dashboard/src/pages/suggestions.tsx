@@ -76,7 +76,7 @@ export default function Suggestions() {
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ["suggestions"] });
       setSelected(null);
-      toast({ title: vars.status === "approved" ? t("suggestions.suggestionApproved", "Suggestion approved") : t("suggestions.suggestionRejected", "Suggestion rejected") });
+      toast({ title: vars.status === "approved" ? t("suggestions.suggestionApproved") : t("suggestions.suggestionRejected") });
     },
   });
 
@@ -103,7 +103,7 @@ export default function Suggestions() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { key: "pending", label: t("suggestions.pendingReview", "Pending Review"), icon: Clock, cls: "text-amber-500" },
+          { key: "pending", label: t("suggestions.pendingReview"), icon: Clock, cls: "text-amber-500" },
           { key: "approved", label: t("suggestions.approved"), icon: CheckCircle2, cls: "text-green-500" },
           { key: "rejected", label: t("suggestions.rejected"), icon: XCircle, cls: "text-destructive" },
         ].map(({ key, label, icon: Icon, cls }) => (
@@ -135,7 +135,7 @@ export default function Suggestions() {
         <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
           <SelectTrigger className="w-[130px]"><SelectValue placeholder={t("common.status")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("suggestions.allStatus", "All Status")}</SelectItem>
+            <SelectItem value="all">{t("common.allStatuses")}</SelectItem>
             <SelectItem value="pending">{t("verification.pending")}</SelectItem>
             <SelectItem value="approved">{t("suggestions.approved")}</SelectItem>
             <SelectItem value="rejected">{t("suggestions.rejected")}</SelectItem>
@@ -143,19 +143,19 @@ export default function Suggestions() {
         </Select>
 
         <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-[140px]"><SelectValue placeholder={t("suggestions.type", "Type")} /></SelectTrigger>
+          <SelectTrigger className="w-[140px]"><SelectValue placeholder={t("common.type")} /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">{t("suggestions.allTypes", "All Types")}</SelectItem>
-            <SelectItem value="new_route">{t("suggestions.newRoute", "New Route")}</SelectItem>
-            <SelectItem value="new_station">{t("suggestions.newStation", "New Station")}</SelectItem>
-            <SelectItem value="route_edit">{t("suggestions.routeEdit", "Route Edit")}</SelectItem>
+            <SelectItem value="all">{t("support.allTypes")}</SelectItem>
+            <SelectItem value="new_route">{t("suggestions.newRoute")}</SelectItem>
+            <SelectItem value="new_station">{t("suggestions.newStation")}</SelectItem>
+            <SelectItem value="route_edit">{t("suggestions.routeEdit")}</SelectItem>
           </SelectContent>
         </Select>
 
         {(search || statusFilter !== "all" || typeFilter !== "all") && (
           <Button variant="ghost" size="sm" onClick={() => {
             setSearch(""); setSearchInput(""); setStatusFilter("all"); setTypeFilter("all"); setPage(1);
-          }}>{t("common.clear", "Clear")}</Button>
+          }}>{t("common.clear")}</Button>
         )}
       </div>
 
@@ -197,7 +197,7 @@ export default function Suggestions() {
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {s.user?.name || s.driver?.name || t("support.anonymous", "Anonymous")} · #{s.id} ·{" "}
+                    {s.user?.name || s.driver?.name || t("common.unknown")} · #{s.id} ·{" "}
                     {format(new Date(s.createdAt), "MMM d, yyyy")}
                   </p>
                   {(s.startLocation || s.endLocation) && (
@@ -224,7 +224,7 @@ export default function Suggestions() {
                 className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"} />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              {t("common.page", "Page")} {page} {t("common.of", "of")} {Math.ceil(data.total / data.limit)}
+              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / data.limit)}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext onClick={() => setPage(p => p + 1)}
@@ -253,7 +253,7 @@ export default function Suggestions() {
                 <span>·</span>
                 <span>{typeConfig[selected.type].label}</span>
                 <span>·</span>
-                <span>{selected.user?.name || selected.driver?.name || t("support.anonymous", "Anonymous")}</span>
+                <span>{selected.user?.name || selected.driver?.name || t("common.unknown")}</span>
                 <span>·</span>
                 <span>{format(new Date(selected.createdAt), "MMM d, yyyy")}</span>
               </div>
@@ -275,15 +275,15 @@ export default function Suggestions() {
 
               {selected.adminNotes && (
                 <div className="border rounded-lg p-3">
-                  <div className="text-xs text-muted-foreground mb-1 font-medium">{t("suggestions.previousAdminNotes", "Previous Admin Notes")}</div>
+                  <div className="text-xs text-muted-foreground mb-1 font-medium">{t("suggestions.previousAdminNotes")}</div>
                   <p className="text-sm">{selected.adminNotes}</p>
                 </div>
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">{t("suggestions.adminNotes", "Admin Notes")}</label>
+                <label className="text-sm font-medium">{t("suggestions.adminNotes")}</label>
                 <Textarea
-                  placeholder={t("suggestions.notesPlaceholder", "Add notes or reason for decision...")}
+                  placeholder={t("suggestions.notesPlaceholder")}
                   value={adminNotes}
                   onChange={(e) => setAdminNotes(e.target.value)}
                   rows={3}
@@ -297,13 +297,13 @@ export default function Suggestions() {
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate({ id: selected.id, status: "rejected", notes: adminNotes })}
                   >
-                    <XCircle className="h-4 w-4 me-2" /> {t("suggestions.reject", "Reject")}
+                    <XCircle className="h-4 w-4 me-2" /> {t("common.reject")}
                   </Button>
                   <Button
                     disabled={updateMutation.isPending}
                     onClick={() => updateMutation.mutate({ id: selected.id, status: "approved", notes: adminNotes })}
                   >
-                    <CheckCircle2 className="h-4 w-4 me-2" /> {t("suggestions.approve", "Approve")}
+                    <CheckCircle2 className="h-4 w-4 me-2" /> {t("common.approve")}
                   </Button>
                 </DialogFooter>
               )}
@@ -312,7 +312,7 @@ export default function Suggestions() {
                 <div className="flex justify-end">
                   <Button variant="outline"
                     onClick={() => updateMutation.mutate({ id: selected.id, status: "pending", notes: adminNotes })}>
-                    {t("suggestions.reopenPending", "Reopen as Pending")}
+                    {t("suggestions.reopenPending")}
                   </Button>
                 </div>
               )}

@@ -34,6 +34,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
+import { useTranslation } from "react-i18next";
 import { VehicleCatalogTab } from "@/components/VehicleCatalogTab";
 
 const busSchema = z.object({
@@ -69,6 +70,7 @@ function BusFormDialog({
   isLoading: boolean;
   title: string;
 }) {
+  const { t } = useTranslation();
   const form = useForm<BusFormValues>({
     resolver: zodResolver(busSchema),
     defaultValues: {
@@ -94,34 +96,34 @@ function BusFormDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField control={form.control} name="plateNumber" render={({ field }) => (
               <FormItem>
-                <FormLabel>Plate Number</FormLabel>
-                <FormControl><Input placeholder="e.g. ABC-1234" {...field} /></FormControl>
+                <FormLabel>{t("buses.plate")}</FormLabel>
+                <FormControl><Input placeholder={t("buses.platePlaceholder", "e.g. ABC-1234")} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="model" render={({ field }) => (
               <FormItem>
-                <FormLabel>Model</FormLabel>
-                <FormControl><Input placeholder="e.g. Hyundai H350" {...field} /></FormControl>
+                <FormLabel>{t("buses.model")}</FormLabel>
+                <FormControl><Input placeholder={t("buses.modelPlaceholder", "e.g. Hyundai H350")} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="capacity" render={({ field }) => (
               <FormItem>
-                <FormLabel>Seat Capacity</FormLabel>
+                <FormLabel>{t("buses.seatCapacity", "Seat Capacity")}</FormLabel>
                 <FormControl><Input type="number" min={1} max={100} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )} />
             <FormField control={form.control} name="isActive" render={({ field }) => (
               <FormItem className="flex items-center gap-3">
-                <FormLabel className="mt-0">Active</FormLabel>
+                <FormLabel className="mt-0">{t("common.active")}</FormLabel>
                 <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
               </FormItem>
             )} />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit" disabled={isLoading}>{isLoading ? "Saving..." : "Save"}</Button>
+              <Button type="button" variant="outline" onClick={onClose}>{t("common.cancel")}</Button>
+              <Button type="submit" disabled={isLoading}>{isLoading ? t("common.saving") : t("common.save")}</Button>
             </DialogFooter>
           </form>
         </Form>
@@ -133,6 +135,7 @@ function BusFormDialog({
 // ─── Registered Fleet Tab ─────────────────────────────────────────────────────
 
 function RegisteredFleetTab() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(1);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -154,9 +157,9 @@ function RegisteredFleetTab() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListBusesQueryKey() });
         setIsCreateOpen(false);
-        toast({ title: "Bus added successfully" });
+        toast({ title: t("buses.busAdded", "Bus added to fleet") });
       },
-      onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Failed to add bus", variant: "destructive" }),
+      onError: (e: any) => toast({ title: t("common.error"), description: e?.message ?? t("buses.addFailed", "Failed to add bus"), variant: "destructive" }),
     },
   });
 
@@ -165,9 +168,9 @@ function RegisteredFleetTab() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListBusesQueryKey() });
         setEditBus(null);
-        toast({ title: "Bus updated successfully" });
+        toast({ title: t("buses.busUpdated", "Bus updated") });
       },
-      onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Failed to update bus", variant: "destructive" }),
+      onError: (e: any) => toast({ title: t("common.error"), description: e?.message ?? t("buses.updateFailed", "Failed to update bus"), variant: "destructive" }),
     },
   });
 
@@ -176,9 +179,9 @@ function RegisteredFleetTab() {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListBusesQueryKey() });
         setDeleteId(null);
-        toast({ title: "Bus deleted" });
+        toast({ title: t("buses.busDeleted", "Bus deleted") });
       },
-      onError: (e: any) => toast({ title: "Error", description: e?.message ?? "Failed to delete bus", variant: "destructive" }),
+      onError: (e: any) => toast({ title: t("common.error"), description: e?.message ?? t("buses.deleteFailed", "Failed to delete bus"), variant: "destructive" }),
     },
   });
 
@@ -196,7 +199,7 @@ function RegisteredFleetTab() {
         <Card>
           <CardContent className="pt-5">
             <p className="text-2xl font-bold">{total}</p>
-            <p className="text-sm text-muted-foreground">Total Buses</p>
+            <p className="text-sm text-muted-foreground">{t("buses.totalBuses", "Total Buses")}</p>
           </CardContent>
         </Card>
         <Card>
@@ -204,7 +207,7 @@ function RegisteredFleetTab() {
             <p className="text-2xl font-bold text-green-600">
               {isLoading ? "—" : buses.filter((b) => b.isActive).length}
             </p>
-            <p className="text-sm text-muted-foreground">Active</p>
+            <p className="text-sm text-muted-foreground">{t("common.active")}</p>
           </CardContent>
         </Card>
         <Card>
@@ -212,7 +215,7 @@ function RegisteredFleetTab() {
             <p className="text-2xl font-bold text-slate-500">
               {isLoading ? "—" : buses.filter((b) => !b.isActive).length}
             </p>
-            <p className="text-sm text-muted-foreground">Inactive</p>
+            <p className="text-sm text-muted-foreground">{t("common.inactive")}</p>
           </CardContent>
         </Card>
       </div>
@@ -223,7 +226,7 @@ function RegisteredFleetTab() {
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               className="ps-8 w-56"
-              placeholder="Search by plate or model..."
+              placeholder={t("buses.searchPlaceholder", "Search by plate or model...")}
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
@@ -232,11 +235,11 @@ function RegisteredFleetTab() {
             />
           </div>
           {search && (
-            <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>Clear</Button>
+            <Button variant="ghost" onClick={() => { setSearch(""); setSearchInput(""); }}>{t("common.clear")}</Button>
           )}
         </div>
         <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="h-4 w-4 me-1.5" /> Add Bus
+          <Plus className="h-4 w-4 me-1.5" /> {t("buses.addBus")}
         </Button>
       </div>
 
@@ -245,12 +248,12 @@ function RegisteredFleetTab() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">#</TableHead>
-              <TableHead>Plate Number</TableHead>
-              <TableHead>Model</TableHead>
-              <TableHead className="text-center">Seat Capacity</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead>Added</TableHead>
-              <TableHead className="text-end">Actions</TableHead>
+              <TableHead>{t("buses.plate")}</TableHead>
+              <TableHead>{t("buses.model")}</TableHead>
+              <TableHead className="text-center">{t("buses.seatCapacity", "Seat Capacity")}</TableHead>
+              <TableHead className="text-center">{t("common.status")}</TableHead>
+              <TableHead>{t("buses.added", "Added")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -266,7 +269,7 @@ function RegisteredFleetTab() {
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                   <Bus className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                  No buses found
+                  {t("buses.noBuses")}
                 </TableCell>
               </TableRow>
             ) : (
@@ -277,13 +280,13 @@ function RegisteredFleetTab() {
                   <TableCell>{bus.model}</TableCell>
                   <TableCell className="text-center">
                     <span className="font-medium">{bus.capacity}</span>
-                    <span className="text-xs text-muted-foreground ms-1">seats</span>
+                    <span className="text-xs text-muted-foreground ms-1">{t("buses.seats")}</span>
                   </TableCell>
                   <TableCell className="text-center">
                     <Badge variant="outline" className={bus.isActive
                       ? "border-green-200 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300"
                       : "border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-900"}>
-                      {bus.isActive ? "Active" : "Inactive"}
+                      {bus.isActive ? t("common.active") : t("common.inactive")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
@@ -313,7 +316,7 @@ function RegisteredFleetTab() {
               <PaginationPrevious onClick={() => setPage((p) => Math.max(1, p - 1))} aria-disabled={page === 1} />
             </PaginationItem>
             <PaginationItem>
-              <span className="text-sm px-3 py-1 text-muted-foreground">Page {page} of {totalPages}</span>
+              <span className="text-sm px-3 py-1 text-muted-foreground">{t("common.page")} {page} {t("common.of")} {totalPages}</span>
             </PaginationItem>
             <PaginationItem>
               <PaginationNext onClick={() => setPage((p) => Math.min(totalPages, p + 1))} aria-disabled={page === totalPages} />
@@ -325,7 +328,7 @@ function RegisteredFleetTab() {
       <BusFormDialog
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Add New Bus"
+        title={t("buses.addBus")}
         isLoading={createMutation.isPending}
         onSubmit={(values) => createMutation.mutate({ data: values })}
       />
@@ -334,7 +337,7 @@ function RegisteredFleetTab() {
         <BusFormDialog
           open={!!editBus}
           onClose={() => setEditBus(null)}
-          title="Edit Bus"
+          title={t("buses.editBus", "Edit Bus")}
           defaultValues={{
             plateNumber: editBus.plateNumber,
             model: editBus.model,
@@ -349,18 +352,18 @@ function RegisteredFleetTab() {
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Bus?</AlertDialogTitle>
+            <AlertDialogTitle>{t("buses.deleteConfirmTitle", "Delete Bus?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove the bus from the system. This action cannot be undone.
+              {t("buses.deleteConfirmDesc", "This will permanently remove the bus from the system. This action cannot be undone.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })}
             >
-              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              {deleteMutation.isPending ? t("common.processing", "Deleting...") : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -381,6 +384,7 @@ interface ShuttleVehicleType {
 }
 
 function ShuttleVehicleTypesTab() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [typeDialog, setTypeDialog] = useState<{ open: boolean; item?: ShuttleVehicleType }>({ open: false });
@@ -411,9 +415,9 @@ function ShuttleVehicleTypesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shuttle-vehicle-types"] });
       setTypeDialog({ open: false });
-      toast({ title: "Vehicle type created" });
+      toast({ title: t("buses.vehicleTypeCreated", "Vehicle type created") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateMutation = useMutation({
@@ -422,9 +426,9 @@ function ShuttleVehicleTypesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shuttle-vehicle-types"] });
       setTypeDialog({ open: false });
-      toast({ title: "Vehicle type updated" });
+      toast({ title: t("buses.vehicleTypeUpdated", "Vehicle type updated") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -432,9 +436,9 @@ function ShuttleVehicleTypesTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shuttle-vehicle-types"] });
       setDeleteId(null);
-      toast({ title: "Vehicle type deleted" });
+      toast({ title: t("buses.vehicleTypeDeleted", "Vehicle type deleted") });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -453,11 +457,11 @@ function ShuttleVehicleTypesTab() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Layers className="h-4 w-4 text-muted-foreground" />
-          <h3 className="font-semibold text-sm">Shuttle Vehicle Types</h3>
+          <h3 className="font-semibold text-sm">{t("buses.shuttleVehicleTypes", "Shuttle Vehicle Types")}</h3>
           {!isLoading && <Badge variant="secondary" className="text-xs">{types.length}</Badge>}
         </div>
         <Button size="sm" className="gap-1.5" onClick={() => setTypeDialog({ open: true })}>
-          <Plus className="h-3.5 w-3.5" /> Add Type
+          <Plus className="h-3.5 w-3.5" /> {t("buses.addType", "Add Type")}
         </Button>
       </div>
 
@@ -466,11 +470,11 @@ function ShuttleVehicleTypesTab() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-10">#</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead className="text-center">Capacity</TableHead>
-              <TableHead className="text-center">Min Threshold</TableHead>
-              <TableHead className="text-center">Status</TableHead>
-              <TableHead className="text-end">Actions</TableHead>
+              <TableHead>{t("common.name")}</TableHead>
+              <TableHead className="text-center">{t("common.capacity")}</TableHead>
+              <TableHead className="text-center">{t("buses.minThreshold", "Min Threshold")}</TableHead>
+              <TableHead className="text-center">{t("common.status")}</TableHead>
+              <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -485,31 +489,31 @@ function ShuttleVehicleTypesTab() {
             ) : types.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
-                  No vehicle types defined yet. Add the first one.
+                  {t("buses.noVehicleTypes", "No vehicle types defined yet. Add the first one.")}
                 </TableCell>
               </TableRow>
             ) : (
-              types.map((t, idx) => (
-                <TableRow key={t.id}>
+              types.map((vt, idx) => (
+                <TableRow key={vt.id}>
                   <TableCell className="text-muted-foreground text-sm">{idx + 1}</TableCell>
-                  <TableCell className="font-medium">{t.name}</TableCell>
-                  <TableCell className="text-center">{t.capacity} seats</TableCell>
-                  <TableCell className="text-center">{t.minThreshold}</TableCell>
+                  <TableCell className="font-medium">{vt.name}</TableCell>
+                  <TableCell className="text-center">{vt.capacity} {t("buses.seats")}</TableCell>
+                  <TableCell className="text-center">{vt.minThreshold}</TableCell>
                   <TableCell className="text-center">
-                    <Badge variant="outline" className={t.isActive
+                    <Badge variant="outline" className={vt.isActive
                       ? "text-green-700 border-green-200 bg-green-50 dark:bg-green-950 text-xs"
                       : "text-slate-500 border-slate-200 bg-slate-50 dark:bg-slate-900 text-xs"}>
-                      {t.isActive ? "Active" : "Inactive"}
+                      {vt.isActive ? t("common.active") : t("common.inactive")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-end">
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7"
-                        onClick={() => setTypeDialog({ open: true, item: t })}>
+                        onClick={() => setTypeDialog({ open: true, item: vt })}>
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => setDeleteId(t.id)}>
+                        onClick={() => setDeleteId(vt.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -525,32 +529,32 @@ function ShuttleVehicleTypesTab() {
       <Dialog open={typeDialog.open} onOpenChange={(v) => !v && setTypeDialog({ open: false })}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{typeDialog.item ? "Edit Vehicle Type" : "Add Vehicle Type"}</DialogTitle>
+            <DialogTitle>{typeDialog.item ? t("buses.editVehicleType", "Edit Vehicle Type") : t("buses.addVehicleType", "Add Vehicle Type")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <label className="text-sm font-medium">Name</label>
-              <Input placeholder="e.g. Microbus, Minibus" value={name} onChange={(e) => setName(e.target.value)} />
+              <label className="text-sm font-medium">{t("common.name")}</label>
+              <Input placeholder={t("buses.vehicleTypeNamePlaceholder", "e.g. Microbus, Minibus")} value={name} onChange={(e) => setName(e.target.value)} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Capacity (seats)</label>
+                <label className="text-sm font-medium">{t("buses.capacitySeats", "Capacity (seats)")}</label>
                 <Input type="number" min={1} value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Min Threshold</label>
+                <label className="text-sm font-medium">{t("buses.minThreshold", "Min Threshold")}</label>
                 <Input type="number" min={0} value={minThreshold} onChange={(e) => setMinThreshold(Number(e.target.value))} />
               </div>
             </div>
             <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Active</label>
+              <label className="text-sm font-medium">{t("common.active")}</label>
               <Switch checked={isActive} onCheckedChange={setIsActive} />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTypeDialog({ open: false })}>Cancel</Button>
+            <Button variant="outline" onClick={() => setTypeDialog({ open: false })}>{t("common.cancel")}</Button>
             <Button disabled={!name.trim() || isSaving} onClick={handleSave}>
-              {isSaving ? "Saving…" : "Save"}
+              {isSaving ? t("common.saving") : t("common.save")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -559,18 +563,18 @@ function ShuttleVehicleTypesTab() {
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Vehicle Type?</AlertDialogTitle>
+            <AlertDialogTitle>{t("buses.deleteVehicleTypeConfirmTitle", "Delete Vehicle Type?")}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove this vehicle type. This cannot be undone.
+              {t("buses.deleteVehicleTypeConfirmDesc", "This will permanently remove this vehicle type. This cannot be undone.")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => deleteId !== null && deleteMutation.mutate(deleteId)}
             >
-              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+              {deleteMutation.isPending ? t("common.processing", "Deleting...") : t("common.delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -582,6 +586,7 @@ function ShuttleVehicleTypesTab() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Buses() {
+  const { t } = useTranslation();
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -589,8 +594,8 @@ export default function Buses() {
           <Bus className="h-5 w-5 text-amber-600" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold">Shuttle Vehicles</h1>
-          <p className="text-sm text-muted-foreground">Fleet and allowed catalog management for the Shuttle service</p>
+          <h1 className="text-xl font-semibold">{t("buses.shuttleVehicles", "Shuttle Vehicles")}</h1>
+          <p className="text-sm text-muted-foreground">{t("buses.shuttleVehiclesSubtitle", "Fleet and allowed catalog management for the Shuttle service")}</p>
         </div>
       </div>
 
@@ -598,15 +603,15 @@ export default function Buses() {
         <TabsList className="mb-2">
           <TabsTrigger value="fleet" className="gap-2">
             <List className="h-3.5 w-3.5" />
-            Registered Fleet
+            {t("buses.registeredFleet", "Registered Fleet")}
           </TabsTrigger>
           <TabsTrigger value="catalog" className="gap-2">
             <BookOpen className="h-3.5 w-3.5" />
-            Allowed Catalog
+            {t("buses.allowedCatalog", "Allowed Catalog")}
           </TabsTrigger>
           <TabsTrigger value="vehicle-types" className="gap-2">
             <Layers className="h-3.5 w-3.5" />
-            Vehicle Types
+            {t("buses.vehicleTypes", "Vehicle Types")}
           </TabsTrigger>
         </TabsList>
 

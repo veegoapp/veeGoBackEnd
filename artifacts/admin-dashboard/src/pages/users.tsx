@@ -53,13 +53,13 @@ export default function Customers() {
       });
     },
     onSuccess: () => {
-      toast({ title: t("users.walletAdjusted", "Wallet adjusted successfully") });
+      toast({ title: t("users.walletAdjusted") });
       setWalletDialog({ open: false });
       setWalletAmount("");
       setWalletReason("");
     },
     onError: (err: Error) => {
-      toast({ title: t("users.walletFailed", "Failed to adjust wallet"), description: err.message, variant: "destructive" });
+      toast({ title: t("users.walletFailed"), description: err.message, variant: "destructive" });
     },
   });
 
@@ -72,7 +72,7 @@ export default function Customers() {
   const handleToggleBlock = (id: number) => {
     toggleBlockMutation.mutate({ id }, {
       onSuccess: () => {
-        toast({ title: t("users.statusUpdated", "User status updated") });
+        toast({ title: t("users.statusUpdated") });
         queryClient.invalidateQueries({ queryKey: getListAdminUsersQueryKey() });
       }
     });
@@ -83,11 +83,11 @@ export default function Customers() {
     if (!walletDialog.open) return;
     const amt = parseFloat(walletAmount);
     if (isNaN(amt) || amt <= 0) {
-      toast({ title: t("users.validAmount", "Enter a valid positive amount"), variant: "destructive" });
+      toast({ title: t("users.validAmount"), variant: "destructive" });
       return;
     }
     const signedAmount = walletType === "debit" ? -amt : amt;
-    const description = walletReason || (walletType === "credit" ? "Manual credit by admin" : "Manual debit by admin");
+    const description = walletReason || (walletType === "credit" ? t("users.walletCreditManual", "Manual credit by admin") : t("users.walletDebitManual", "Manual debit by admin"));
     walletMutation.mutate({ userId: walletDialog.userId, amount: signedAmount, description });
   };
 
@@ -123,7 +123,7 @@ export default function Customers() {
               <TableHead>{t("users.title")}</TableHead>
               <TableHead>{t("staff.role")}</TableHead>
               <TableHead>{t("common.status")}</TableHead>
-              <TableHead>{t("users.joined", "Joined")}</TableHead>
+              <TableHead>{t("users.joined")}</TableHead>
               <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
           </TableHeader>
@@ -145,7 +145,7 @@ export default function Customers() {
                 </TableCell>
               </TableRow>
             ) : (
-              data?.data.map((user) => (
+              data?.data.map((user: any) => (
                 <TableRow
                   key={user.id}
                   className="cursor-pointer hover:bg-muted/40 transition-colors"
@@ -179,7 +179,7 @@ export default function Customers() {
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">{t("users.openMenu", "Open menu")}</span>
+                          <span className="sr-only">{t("common.openMenu", "Open menu")}</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -206,9 +206,9 @@ export default function Customers() {
                           className={user.isBlocked ? "text-green-600" : "text-destructive"}
                         >
                           {user.isBlocked ? (
-                            <><UserCheck className="me-2 h-4 w-4" /> {t("users.unblockUser", "Unblock User")}</>
+                            <><UserCheck className="me-2 h-4 w-4" /> {t("common.unblock")}</>
                           ) : (
-                            <><Ban className="me-2 h-4 w-4" /> {t("users.blockUser", "Block User")}</>
+                            <><Ban className="me-2 h-4 w-4" /> {t("common.block")}</>
                           )}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
@@ -231,7 +231,7 @@ export default function Customers() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              {t("common.page", "Page")} {page} {t("common.of", "of")} {Math.ceil(data.total / data.limit)}
+              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / data.limit)}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext 
@@ -255,19 +255,19 @@ export default function Customers() {
           </DialogHeader>
           <form onSubmit={handleWalletSubmit} className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>{t("common.type", "Type")}</Label>
+              <Label>{t("common.type")}</Label>
               <Select value={walletType} onValueChange={(v) => setWalletType(v as "credit" | "debit")}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="credit">{t("users.walletCredit", "Credit (add funds)")}</SelectItem>
-                  <SelectItem value="debit">{t("users.walletDebit", "Debit (remove funds)")}</SelectItem>
+                  <SelectItem value="credit">{t("users.walletCredit")}</SelectItem>
+                  <SelectItem value="debit">{t("users.walletDebit")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wallet-amount">{t("common.amount", "Amount")}</Label>
+              <Label htmlFor="wallet-amount">{t("common.amount")}</Label>
               <Input
                 id="wallet-amount"
                 type="number"
@@ -280,10 +280,10 @@ export default function Customers() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="wallet-reason">{t("users.walletReason", "Reason (optional)")}</Label>
+              <Label htmlFor="wallet-reason">{t("users.walletReason")}</Label>
               <Input
                 id="wallet-reason"
-                placeholder="e.g. Compensation for cancelled trip"
+                placeholder={t("users.walletReasonPlaceholder", "e.g. Compensation for cancelled trip")}
                 value={walletReason}
                 onChange={(e) => setWalletReason(e.target.value)}
               />
@@ -297,7 +297,7 @@ export default function Customers() {
                 disabled={walletMutation.isPending}
                 variant={walletType === "debit" ? "destructive" : "default"}
               >
-                {walletMutation.isPending ? t("common.processing", "Processing...") : walletType === "credit" ? t("users.walletCreditBtn", "Credit Wallet") : t("users.walletDebitBtn", "Debit Wallet")}
+                {walletMutation.isPending ? t("common.processing") : walletType === "credit" ? t("users.walletCreditBtn") : t("users.walletDebitBtn")}
               </Button>
             </DialogFooter>
           </form>

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { adminFetch } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,28 +13,6 @@ import {
   ArrowUpRight, Percent, DollarSign, Star, TrendingUp,
   CheckCircle2, Clock, Ban, ChevronDown, ChevronUp,
 } from "lucide-react";
-
-type DriverPayout = {
-  driver_id: number;
-  driver_name: string;
-  driver_phone: string;
-  service_type?: string;
-  rating: number;
-  total_trips: number;
-  gross_amount: number;
-  commission_amount: number;
-  driver_share: number;
-  payout_status: "paid" | "pending" | "no_earnings";
-  last_earning_date: string | null;
-};
-
-const SERVICE_TYPE_OPTIONS = [
-  { value: "all",      label: "All Services" },
-  { value: "car",      label: "Car" },
-  { value: "scooter",  label: "Scooter" },
-  { value: "delivery", label: "Delivery" },
-  { value: "shuttle",  label: "Shuttle" },
-];
 
 const statusIcon = (s: string) =>
   s === "paid"      ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
@@ -52,13 +31,36 @@ function SortIcon({ field, sortField, sortDir }: { field: string; sortField: str
     : <ChevronUp className="h-3 w-3 ms-1 inline" />;
 }
 
+type DriverPayout = {
+  driver_id: number;
+  driver_name: string;
+  driver_phone: string;
+  service_type?: string;
+  rating: number;
+  total_trips: number;
+  gross_amount: number;
+  commission_amount: number;
+  driver_share: number;
+  payout_status: "paid" | "pending" | "no_earnings";
+  last_earning_date: string | null;
+};
+
 export default function FinancePayouts() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [sortField, setSortField] = useState<keyof DriverPayout>("gross_amount");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterService, setFilterService] = useState<string>("all");
+
+  const SERVICE_TYPE_OPTIONS = [
+    { value: "all",      label: t("financePayouts.allServices") },
+    { value: "car",      label: t("nav.cars") },
+    { value: "scooter",  label: t("nav.motorcycles") },
+    { value: "delivery", label: t("nav.delivery") },
+    { value: "shuttle",  label: t("nav.shuttle") },
+  ];
 
   const params = new URLSearchParams();
   if (filterService !== "all") params.set("serviceType", filterService);
@@ -76,9 +78,9 @@ export default function FinancePayouts() {
       adminFetch<{ success: boolean; updated: number }>(`/admin/payouts/${driverId}/confirm`, { method: "PATCH" }),
     onSuccess: (result, driverId) => {
       queryClient.invalidateQueries({ queryKey: ["admin-payouts"] });
-      toast({ title: `Payment confirmed — ${result.updated} earning(s) marked as paid for Driver #${driverId}` });
+      toast({ title: t("financePayouts.paymentConfirmed", { count: result.updated, id: driverId }) });
     },
-    onError: (err: Error) => toast({ title: "Failed to confirm", description: err.message, variant: "destructive" }),
+    onError: (err: Error) => toast({ title: t("financePayouts.failedToConfirm"), description: err.message, variant: "destructive" }),
   });
 
   const rows = data?.data ?? [];
@@ -113,8 +115,8 @@ export default function FinancePayouts() {
           <ArrowUpRight className="h-6 w-6 text-green-600" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold">Driver Payouts</h1>
-          <p className="text-sm text-muted-foreground">Per-driver earnings breakdown with commission split and payout status</p>
+          <h1 className="text-2xl font-bold">{t("financePayouts.title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("financePayouts.subtitle")}</p>
         </div>
       </div>
 
@@ -122,10 +124,10 @@ export default function FinancePayouts() {
         {isLoading ? (
           Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)
         ) : [
-          { label: "Total Platform Revenue", value: `$${totalGross.toFixed(2)}`,       icon: DollarSign, color: "bg-primary/10 text-primary" },
-          { label: "Total Driver Earnings",  value: `$${totalDriverShare.toFixed(2)}`, icon: TrendingUp,  color: "bg-green-500/10 text-green-600" },
-          { label: "App Commission",         value: `$${totalCommission.toFixed(2)}`,  icon: Percent,     color: "bg-amber-500/10 text-amber-600" },
-          { label: "Pending Payouts",        value: pendingDrivers,                     icon: Clock,       color: "bg-orange-500/10 text-orange-600" },
+          { label: t("financePayouts.totalPlatformRevenue"), value: `$${totalGross.toFixed(2)}`,       icon: DollarSign, color: "bg-primary/10 text-primary" },
+          { label: t("financePayouts.totalDriverEarnings"),  value: `$${totalDriverShare.toFixed(2)}`, icon: TrendingUp,  color: "bg-green-500/10 text-green-600" },
+          { label: t("financePayouts.appCommission"),         value: `$${totalCommission.toFixed(2)}`,  icon: Percent,     color: "bg-amber-500/10 text-amber-600" },
+          { label: t("financePayouts.pendingPayouts"),        value: pendingDrivers,                     icon: Clock,       color: "bg-orange-500/10 text-orange-600" },
         ].map((s) => (
           <Card key={s.label}>
             <CardContent className="pt-5 flex items-center gap-3">
@@ -141,10 +143,10 @@ export default function FinancePayouts() {
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-3 flex-wrap gap-3">
-          <CardTitle className="text-base">Driver Earnings Table</CardTitle>
+          <CardTitle className="text-base">{t("financePayouts.driverEarningsTable")}</CardTitle>
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Service:</span>
+              <span className="text-xs text-muted-foreground">{t("financePayouts.serviceFilter")}</span>
               <Select value={filterService} onValueChange={setFilterService}>
                 <SelectTrigger className="h-8 w-36 text-xs">
                   <SelectValue />
@@ -157,7 +159,7 @@ export default function FinancePayouts() {
               </Select>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Status:</span>
+              <span className="text-xs text-muted-foreground">{t("financePayouts.statusFilter")}</span>
               {["all", "pending", "paid", "no_earnings"].map((s) => (
                 <button
                   key={s}
@@ -168,7 +170,7 @@ export default function FinancePayouts() {
                       : "border-border text-muted-foreground hover:bg-muted"
                   }`}
                 >
-                  {s === "no_earnings" ? "No Earnings" : s.charAt(0).toUpperCase() + s.slice(1)}
+                  {s === "no_earnings" ? t("financePayouts.noEarnings") : s === "all" ? t("common.all") : s === "pending" ? t("common.pending") : s === "paid" ? t("common.paid") : s.charAt(0).toUpperCase() + s.slice(1)}
                 </button>
               ))}
             </div>
@@ -180,35 +182,35 @@ export default function FinancePayouts() {
               {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
             </div>
           ) : sorted.length === 0 ? (
-            <div className="py-12 text-center text-muted-foreground text-sm">No drivers found</div>
+            <div className="py-12 text-center text-muted-foreground text-sm">{t("financePayouts.noDriversFound")}</div>
           ) : (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
-                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">Driver</th>
-                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">Service</th>
+                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">{t("financePayouts.colDriver")}</th>
+                      <th className="text-start px-4 py-2.5 font-medium text-muted-foreground text-xs">{t("financePayouts.colService")}</th>
                       <th
                         className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("total_trips")}
                       >
-                        Trips <SortIcon field="total_trips" sortField={String(sortField)} sortDir={sortDir} />
+                        {t("financePayouts.colTrips")} <SortIcon field="total_trips" sortField={String(sortField)} sortDir={sortDir} />
                       </th>
                       <th
                         className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("driver_share")}
                       >
-                        Total Balance <SortIcon field="driver_share" sortField={String(sortField)} sortDir={sortDir} />
+                        {t("financePayouts.colTotalBalance")} <SortIcon field="driver_share" sortField={String(sortField)} sortDir={sortDir} />
                       </th>
                       <th
                         className="text-end px-4 py-2.5 font-medium text-muted-foreground text-xs cursor-pointer hover:text-foreground"
                         onClick={() => toggleSort("commission_amount")}
                       >
-                        Commission <SortIcon field="commission_amount" sortField={String(sortField)} sortDir={sortDir} />
+                        {t("financePayouts.colCommission")} <SortIcon field="commission_amount" sortField={String(sortField)} sortDir={sortDir} />
                       </th>
-                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs">Status</th>
-                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs">Action</th>
+                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs">{t("financePayouts.colStatus")}</th>
+                      <th className="text-center px-4 py-2.5 font-medium text-muted-foreground text-xs">{t("financePayouts.colAction")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -225,7 +227,7 @@ export default function FinancePayouts() {
                                 <Star className="h-2.5 w-2.5 fill-amber-400 text-amber-400" />
                                 {(row.rating ?? 0).toFixed(1)}
                                 {row.last_earning_date && (
-                                  <span className="ms-1">· Last: {format(new Date(row.last_earning_date), "MMM d")}</span>
+                                  <span className="ms-1">· {t("financePayouts.lastDate")} {format(new Date(row.last_earning_date), "MMM d")}</span>
                                 )}
                               </div>
                             </div>
@@ -244,7 +246,7 @@ export default function FinancePayouts() {
                         <td className="px-4 py-3 text-center">
                           <Badge variant="outline" className={`text-xs gap-1 ${statusColor(row.payout_status)}`}>
                             {statusIcon(row.payout_status)}
-                            {row.payout_status === "no_earnings" ? "No Earnings" : row.payout_status}
+                            {row.payout_status === "no_earnings" ? t("financePayouts.noEarnings") : row.payout_status === "paid" ? t("common.paid") : row.payout_status === "pending" ? t("common.pending") : row.payout_status}
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-center">
@@ -255,7 +257,7 @@ export default function FinancePayouts() {
                               disabled={confirmMutation.isPending}
                               onClick={() => confirmMutation.mutate(row.driver_id)}
                             >
-                              <CheckCircle2 className="h-3 w-3 me-1" /> Confirm Payout
+                              <CheckCircle2 className="h-3 w-3 me-1" /> {t("financePayouts.confirmPayout")}
                             </Button>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
@@ -267,11 +269,11 @@ export default function FinancePayouts() {
                 </table>
               </div>
               <div className="px-4 py-3 border-t border-border bg-muted/20 flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
-                <span>{sorted.length} driver{sorted.length !== 1 ? "s" : ""}</span>
+                <span>{t("financePayouts.driversCount", { count: sorted.length })}</span>
                 <div className="flex gap-4 flex-wrap">
-                  <span>Gross: <strong className="text-foreground">${sorted.reduce((s, r) => s + r.gross_amount, 0).toFixed(2)}</strong></span>
-                  <span>Driver share: <strong className="text-green-600">${sorted.reduce((s, r) => s + r.driver_share, 0).toFixed(2)}</strong></span>
-                  <span>Commission: <strong className="text-amber-600">${sorted.reduce((s, r) => s + r.commission_amount, 0).toFixed(2)}</strong></span>
+                  <span>{t("financePayouts.gross")} <strong className="text-foreground">${sorted.reduce((s, r) => s + r.gross_amount, 0).toFixed(2)}</strong></span>
+                  <span>{t("financePayouts.driverShare")} <strong className="text-green-600">${sorted.reduce((s, r) => s + r.driver_share, 0).toFixed(2)}</strong></span>
+                  <span>{t("financePayouts.commissionTotal")} <strong className="text-amber-600">${sorted.reduce((s, r) => s + r.commission_amount, 0).toFixed(2)}</strong></span>
                 </div>
               </div>
             </>

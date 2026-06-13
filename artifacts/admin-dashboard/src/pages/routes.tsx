@@ -29,14 +29,14 @@ import { Label } from "@/components/ui/label";
 import { useTranslation } from "react-i18next";
 
 const routeSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "common.error"),
   nameAr: z.string().optional(),
-  fromLocation: z.string().min(1, "Origin is required"),
+  fromLocation: z.string().min(1, "common.error"),
   fromLocationAr: z.string().optional(),
-  toLocation: z.string().min(1, "Destination is required"),
+  toLocation: z.string().min(1, "common.error"),
   toLocationAr: z.string().optional(),
-  estimatedDuration: z.coerce.number().min(1, "Duration must be at least 1 minute"),
-  basePrice: z.coerce.number().min(0, "Price must be positive"),
+  estimatedDuration: z.coerce.number().min(1, "common.error"),
+  basePrice: z.coerce.number().min(0, "common.error"),
   isActive: z.boolean().default(true),
 });
 
@@ -217,8 +217,8 @@ export default function RoutesList() {
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("routes.routeName", "Route Name (English)")}</FormLabel>
-              <FormControl><Input placeholder="e.g. Nasr City → Smart Village #1" {...field} /></FormControl>
+              <FormLabel>{t("routes.routeName")}</FormLabel>
+              <FormControl><Input placeholder={t("routes.routeNamePlaceholder", "e.g. Nasr City → Smart Village #1")} {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -229,8 +229,8 @@ export default function RoutesList() {
           name="nameAr"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>{t("routes.routeNameAr", "Route Name (Arabic)")}</FormLabel>
-              <FormControl><Input placeholder="مثال: مدينة نصر ← سمارت فيلدج" dir="rtl" {...field} /></FormControl>
+              <FormLabel>{t("routes.routeNameAr")}</FormLabel>
+              <FormControl><Input placeholder={t("routes.routeNameArPlaceholder", "مثال: مدينة نصر ← سمارت فيلدج")} dir="rtl" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )}
@@ -242,8 +242,8 @@ export default function RoutesList() {
             name="fromLocation"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.from", "From (English)")}</FormLabel>
-                <FormControl><Input placeholder="e.g. Nasr City" {...field} /></FormControl>
+                <FormLabel>{t("routes.from")}</FormLabel>
+                <FormControl><Input placeholder={t("routes.fromPlaceholder", "e.g. Nasr City")} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -253,8 +253,8 @@ export default function RoutesList() {
             name="toLocation"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.to", "To (English)")}</FormLabel>
-                <FormControl><Input placeholder="e.g. Smart Village" {...field} /></FormControl>
+                <FormLabel>{t("routes.to")}</FormLabel>
+                <FormControl><Input placeholder={t("routes.toPlaceholder", "e.g. Smart Village")} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -267,8 +267,8 @@ export default function RoutesList() {
             name="fromLocationAr"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.fromAr", "From (Arabic)")}</FormLabel>
-                <FormControl><Input placeholder="مثال: مدينة نصر" dir="rtl" {...field} /></FormControl>
+                <FormLabel>{t("routes.fromAr")}</FormLabel>
+                <FormControl><Input placeholder={t("routes.fromArPlaceholder", "مثال: مدينة نصر")} dir="rtl" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -278,8 +278,8 @@ export default function RoutesList() {
             name="toLocationAr"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.toAr", "To (Arabic)")}</FormLabel>
-                <FormControl><Input placeholder="مثال: سمارت فيلدج" dir="rtl" {...field} /></FormControl>
+                <FormLabel>{t("routes.toAr")}</FormLabel>
+                <FormControl><Input placeholder={t("routes.toArPlaceholder", "مثال: سمارت فيلدج")} dir="rtl" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
             )}
@@ -292,7 +292,7 @@ export default function RoutesList() {
             name="estimatedDuration"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.durationMin", "Duration (minutes)")}</FormLabel>
+                <FormLabel>{t("routes.durationMin")}</FormLabel>
                 <FormControl><Input type="number" min={1} {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -303,7 +303,7 @@ export default function RoutesList() {
             name="basePrice"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>{t("routes.basePriceEGP", "Base Price (EGP)")}</FormLabel>
+                <FormLabel>{t("routes.basePriceEGP")}</FormLabel>
                 <FormControl><Input type="number" step="0.01" min={0} placeholder="0.00" {...field} /></FormControl>
                 <FormMessage />
               </FormItem>
@@ -316,9 +316,9 @@ export default function RoutesList() {
           render={({ field }) => (
             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
-                <FormLabel>{t("routes.activeStatus", "Active Status")}</FormLabel>
+                <FormLabel>{t("routes.activeStatus")}</FormLabel>
                 <FormDescription className="text-xs">
-                  {t("routes.inactiveHidden", "Inactive routes are hidden from passengers")}
+                  {t("routes.inactiveHidden")}
                 </FormDescription>
               </div>
               <FormControl>
@@ -342,7 +342,7 @@ export default function RoutesList() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">{t("routes.title")}</h1>
-          <p className="text-muted-foreground text-sm">{t("routes.managePricing", "Manage shuttle routes and pricing.")}</p>
+          <p className="text-muted-foreground text-sm">{t("routes.managePricing")}</p>
         </div>
 
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -353,8 +353,8 @@ export default function RoutesList() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[520px]">
             <DialogHeader>
-              <DialogTitle>{t("routes.createNewRoute", "Create New Route")}</DialogTitle>
-              <DialogDescription>{t("routes.createDesc", "Add a new shuttle route. Stations can be added after creation.")}</DialogDescription>
+              <DialogTitle>{t("routes.createNewRoute")}</DialogTitle>
+              <DialogDescription>{t("routes.createDesc")}</DialogDescription>
             </DialogHeader>
             <RouteForm
               form={createForm}
@@ -369,8 +369,8 @@ export default function RoutesList() {
       <Dialog open={!!editRoute} onOpenChange={(open) => !open && setEditRoute(null)}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
-            <DialogTitle>{t("routes.editRoute", "Edit Route")}</DialogTitle>
-            <DialogDescription>{t("routes.editDesc", "Update route details and pricing.")}</DialogDescription>
+            <DialogTitle>{t("routes.editRoute")}</DialogTitle>
+            <DialogDescription>{t("routes.editDesc")}</DialogDescription>
           </DialogHeader>
           <RouteForm
             form={editForm}
@@ -395,7 +395,7 @@ export default function RoutesList() {
           <Button type="submit" variant="secondary">{t("common.search")}</Button>
         </form>
         {data && (
-          <p className="ms-auto text-sm text-muted-foreground">{data.total} {t("routes.routesTotal", "routes total")}</p>
+          <p className="ms-auto text-sm text-muted-foreground">{t("routes.routesTotalCount", { count: data.total })}</p>
         )}
       </div>
 
@@ -404,11 +404,11 @@ export default function RoutesList() {
           <TableHeader>
             <TableRow>
               <TableHead>{t("routes.title")}</TableHead>
-              <TableHead>{t("routes.path", "Path")}</TableHead>
+              <TableHead>{t("routes.path")}</TableHead>
               <TableHead>{t("routes.duration")}</TableHead>
               <TableHead>{t("routes.basePrice")}</TableHead>
-              <TableHead>{t("routeDetail.totalStops", "Stations")}</TableHead>
-              <TableHead>{t("routes.activity", "Activity")}</TableHead>
+              <TableHead>{t("routeDetail.totalStops")}</TableHead>
+              <TableHead>{t("routes.activity")}</TableHead>
               <TableHead>{t("routes.active")}</TableHead>
               <TableHead className="text-end">{t("common.actions")}</TableHead>
             </TableRow>
@@ -433,7 +433,7 @@ export default function RoutesList() {
                 </TableCell>
               </TableRow>
             ) : (
-              data?.data.map((route) => (
+              data?.data.map((route: any) => (
                 <TableRow key={route.id}>
                   <TableCell>
                     <Link href={`/routes/${route.id}`} className="flex items-center gap-2 group">
@@ -464,7 +464,7 @@ export default function RoutesList() {
                   <TableCell>
                     <div className="flex items-center gap-1 text-sm">
                       <Clock className="h-3 w-3 text-muted-foreground" />
-                      <span>{route.estimatedDuration} {t("routes.min", "min")}</span>
+                      <span>{route.estimatedDuration} {t("routes.min")}</span>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -487,14 +487,14 @@ export default function RoutesList() {
                       checked={route.isActive}
                       disabled={togglingId === route.id}
                       onCheckedChange={() => handleToggleActive(route)}
-                      aria-label={route.isActive ? t("routes.deactivate", "Deactivate route") : t("routes.activate", "Activate route")}
+                      aria-label={route.isActive ? t("routes.deactivate") : t("routes.activate")}
                     />
                   </TableCell>
                   <TableCell className="text-end">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">{t("users.openMenu", "Open menu")}</span>
+                          <span className="sr-only">{t("users.openMenu")}</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -502,12 +502,12 @@ export default function RoutesList() {
                         <DropdownMenuItem asChild>
                           <Link href={`/routes/${route.id}`} className="flex w-full items-center cursor-pointer">
                             <RouteIcon className="me-2 h-4 w-4" />
-                            {t("routes.manageStations", "Manage Stations")}
+                            {t("routes.manageStations")}
                           </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleOpenEdit(route)}>
                           <Edit className="me-2 h-4 w-4" />
-                          {t("routes.editRoute", "Edit Route")}
+                          {t("routes.editRoute")}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem 
@@ -515,7 +515,7 @@ export default function RoutesList() {
                           className="text-destructive"
                         >
                           <Trash2 className="me-2 h-4 w-4" />
-                          {t("routes.deleteRoute", "Delete Route")}
+                          {t("routes.deleteRoute")}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -537,7 +537,7 @@ export default function RoutesList() {
               />
             </PaginationItem>
             <PaginationItem className="text-sm text-muted-foreground px-4">
-              {t("common.page", "Page")} {page} {t("common.of", "of")} {Math.ceil(data.total / data.limit)}
+              {t("common.page")} {page} {t("common.of")} {Math.ceil(data.total / data.limit)}
             </PaginationItem>
             <PaginationItem>
               <PaginationNext 
