@@ -1,0 +1,117 @@
+You are a Senior Backend Engineer performing a FULL SYSTEM VERIFICATION AUDIT.
+
+You will receive:
+1. The backend codebase (complete Shuttle/Passenger system backend).
+2. A detailed Passenger App Integration Report (generated from frontend audit).
+
+Your task is to perform a strict, evidence-based verification between backend implementation and frontend requirements.
+
+------------------------------------------------------------
+PHASE 1 — FULL BACKEND ANALYSIS (FIRST AND MANDATORY)
+------------------------------------------------------------
+
+Scan and analyze the entire backend codebase and produce a complete backend capability map:
+
+1. List ALL API endpoints (every route)
+2. List all controllers/services and their responsibilities
+3. List all DTOs / request / response schemas
+4. List all database models related to the system
+5. Identify business modules:
+   - Users / Authentication
+   - Shuttle / Trips / Routes / Schedules
+   - Reservations / Seats / Tickets
+   - Payments (if exists)
+   - Notifications (if exists)
+6. Identify:
+   - Active APIs
+   - Deprecated APIs
+   - Internal-only APIs
+   - Missing or incomplete implementations
+
+IMPORTANT:
+Backend is the source of truth. Do NOT use frontend assumptions.
+
+------------------------------------------------------------
+PHASE 2 — FRONTEND REPORT ANALYSIS
+------------------------------------------------------------
+
+Now analyze the attached Passenger App report in detail:
+- FULL_REACT_NATIVE_DETAILED_INTEGRATION_AUDIT.md
+
+------------------------------------------------------------
+PHASE 3 — CROSS SYSTEM VERIFICATION (CRITICAL)
+------------------------------------------------------------
+
+Compare backend vs frontend report and identify:
+
+1. CORRECT INTEGRATIONS
+- APIs correctly implemented in frontend and supported by backend
+
+2. FRONTEND MISSING FEATURES (BACKEND EXISTS BUT NOT USED)
+- Backend supports feature but frontend does NOT implement it
+
+3. BACKEND MISSING FEATURES (FRONTEND EXPECTS BUT BACKEND DOES NOT SUPPORT)
+- Frontend expects APIs that do not exist in backend
+
+4. BROKEN INTEGRATIONS
+- Wrong endpoints
+- Missing parameters
+- Schema mismatch
+- Authentication issues
+- Incorrect request/response handling
+
+5. DEPRECATED USAGE
+- Frontend using outdated backend APIs
+
+6. LOCALIZATION ISSUES
+- Missing Arabic/English fields in backend responses
+- Mismatch in localization structure
+
+7. DATA FLOW MISMATCHES
+- Backend response structure does not match frontend usage
+
+------------------------------------------------------------
+PHASE 4 — FINAL MASTER REPORT
+------------------------------------------------------------
+
+Generate a single production-grade Markdown report named:
+
+SHUTTLE_FULL_SYSTEM_VERIFICATION_REPORT.md
+
+The report must include:
+
+1. FULL BACKEND CAPABILITY MAP
+2. FRONTEND EXPECTED FEATURES (FROM REPORT)
+3. FULL MATCHED FEATURES (WORKING)
+4. FRONTEND MISSING FEATURES (HIGH PRIORITY)
+5. BACKEND MISSING FEATURES (CRITICAL)
+6. BROKEN INTEGRATIONS LIST
+7. DEPRECATED API USAGE
+8. DTO / SCHEMA MISMATCHES
+9. AUTHENTICATION / SECURITY ISSUES
+10. LOCALIZATION GAPS (AR / EN)
+11. FULL SYSTEM GAP TABLE (Backend vs Frontend)
+12. FINAL SYSTEM HEALTH SCORE (0–100)
+
+------------------------------------------------------------
+PHASE 5 — ACTION PLAN
+------------------------------------------------------------
+
+Provide a clear engineering action plan:
+
+- What must be ADDED to backend
+- What must be FIXED in backend
+- What must be REMOVED or deprecated
+- What must be UPDATED for compatibility
+- What frontend team must change (if needed)
+
+------------------------------------------------------------
+RULES:
+------------------------------------------------------------
+
+- Backend analysis MUST come first
+- Backend is the source of truth
+- All conclusions must be evidence-based
+- Do NOT modify code, only analyze
+- Be extremely detailed and strict
+- Assume this is for production release readiness
