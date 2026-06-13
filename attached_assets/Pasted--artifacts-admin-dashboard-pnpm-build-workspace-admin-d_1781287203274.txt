@@ -1,0 +1,26 @@
+~/.../artifacts/admin-dashboard$ pnpm build
+
+> @workspace/admin-dashboard@0.0.0 build /home/runner/workspace/artifacts/admin-dashboard
+> vite build --config vite.config.ts
+
+vite v7.3.3 building client environment for production...
+src/components/ui/label.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/select.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/dropdown-menu.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/tooltip.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/progress.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+src/components/ui/avatar.tsx (2:0): Error when using sourcemap for reporting an error: Can't resolve original location of error.
+✓ 2951 modules transformed.
+[plugin vite:reporter] 
+(!) /home/runner/workspace/artifacts/admin-dashboard/src/pages/staff.tsx is dynamically imported by /home/runner/workspace/artifacts/admin-dashboard/src/pages/settings.tsx but also statically imported by /home/runner/workspace/artifacts/admin-dashboard/src/App.tsx, dynamic import will not move module into another chunk.
+
+dist/public/index.html                     1.30 kB │ gzip:   0.53 kB
+dist/public/assets/index-CtVTusj_.css    224.09 kB │ gzip:  38.44 kB
+dist/public/assets/index-iF5ObgRS.js   3,364.10 kB │ gzip: 919.24 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 15.48s
+~/.../artifacts/admin-dashboard$ 

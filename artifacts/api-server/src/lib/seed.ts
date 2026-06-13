@@ -3,12 +3,20 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 
-const SUPER_ADMIN_EMAIL = "info.veegoapp@gmail.com";
-const SUPER_ADMIN_PASSWORD = "pass123";
-const SUPER_ADMIN_NAME = "Super Admin";
-const SUPER_ADMIN_PHONE = "+0000000000";
+const SUPER_ADMIN_EMAIL    = process.env.SUPER_ADMIN_EMAIL;
+const SUPER_ADMIN_PASSWORD = process.env.SUPER_ADMIN_PASSWORD;
+const SUPER_ADMIN_NAME     = process.env.SUPER_ADMIN_NAME  ?? "Super Admin";
+const SUPER_ADMIN_PHONE    = process.env.SUPER_ADMIN_PHONE ?? "+0000000000";
 
 export async function seedSuperAdmin(): Promise<void> {
+  if (!SUPER_ADMIN_EMAIL || !SUPER_ADMIN_PASSWORD) {
+    logger.warn(
+      "SUPER_ADMIN_EMAIL or SUPER_ADMIN_PASSWORD is not set — skipping super admin seed. " +
+      "Add them to your environment variables to create the initial admin account."
+    );
+    return;
+  }
+
   try {
     const [existing] = await db
       .select({ id: usersTable.id })

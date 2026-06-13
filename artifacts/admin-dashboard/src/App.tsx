@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, Suspense } from "react";
 import { useLanguage } from "./hooks/useLanguage";
 import { ThemeProvider } from "next-themes";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
@@ -7,50 +7,51 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/app-layout";
+import { Skeleton } from "@/components/ui/skeleton";
 
-import { setAuthTokenGetter } from "@/api/client"; // 🔥 مهم جدًا
+import { setAuthTokenGetter } from "@/api/client";
 
-import Login from "@/pages/login";
-import Dashboard from "@/pages/dashboard";
-import NotFound from "@/pages/not-found";
-import Users from "@/pages/users";
-import UserDetail from "@/pages/user-detail";
-import RoutesList from "@/pages/routes";
-import RouteDetail from "@/pages/route-detail";
-import Trips from "@/pages/trips";
-import Drivers from "@/pages/drivers";
-import Bookings from "@/pages/bookings";
-import Wallet from "@/pages/wallet";
-import Promo from "@/pages/promo";
-import Notifications from "@/pages/notifications";
-import Settings from "@/pages/settings";
-import LiveTracking from "@/pages/live-tracking";
-import Support from "@/pages/support";
-import DriverVerification from "@/pages/driver-verification";
-import Staff from "@/pages/staff";
-import Vehicles from "@/pages/vehicles";
-import Services from "@/pages/services";
-import ServiceZones from "@/pages/service-zones";
-import Pricing from "@/pages/pricing";
-import Zones from "@/pages/zones";
-import Payments from "@/pages/payments";
-import Reports from "@/pages/reports";
-import DriverDetail from "@/pages/driver-detail";
-import TripDetail from "@/pages/trip-detail";
-import AuditLogs from "@/pages/audit-logs";
-import Ratings from "@/pages/ratings";
-import ChatInbox from "@/pages/chat-inbox";
-import Schedules from "@/pages/schedules";
-import Buses from "@/pages/buses";
-import ShuttleTrips from "@/pages/shuttle-trips";
-import ShuttleTripDetail from "@/pages/shuttle-trip-detail";
-import ShuttleCashDebts from "@/pages/shuttle-cash-debts";
-import ShuttleOffences from "@/pages/shuttle-offences";
-import FinancePayouts from "@/pages/finance-payouts";
-import FinanceCommission from "@/pages/finance-commission";
-import FraudAlerts from "@/pages/fraud-alerts";
-import CommissionExemptions from "@/pages/commission-exemptions";
-import BonusTargets from "@/pages/bonus-targets";
+const Login = React.lazy(() => import("@/pages/login"));
+const Dashboard = React.lazy(() => import("@/pages/dashboard"));
+const NotFound = React.lazy(() => import("@/pages/not-found"));
+const Users = React.lazy(() => import("@/pages/users"));
+const UserDetail = React.lazy(() => import("@/pages/user-detail"));
+const RoutesList = React.lazy(() => import("@/pages/routes"));
+const RouteDetail = React.lazy(() => import("@/pages/route-detail"));
+const Trips = React.lazy(() => import("@/pages/trips"));
+const Drivers = React.lazy(() => import("@/pages/drivers"));
+const Bookings = React.lazy(() => import("@/pages/bookings"));
+const Wallet = React.lazy(() => import("@/pages/wallet"));
+const Promo = React.lazy(() => import("@/pages/promo"));
+const Notifications = React.lazy(() => import("@/pages/notifications"));
+const Settings = React.lazy(() => import("@/pages/settings"));
+const LiveTracking = React.lazy(() => import("@/pages/live-tracking"));
+const Support = React.lazy(() => import("@/pages/support"));
+const DriverVerification = React.lazy(() => import("@/pages/driver-verification"));
+const Staff = React.lazy(() => import("@/pages/staff"));
+const Vehicles = React.lazy(() => import("@/pages/vehicles"));
+const Services = React.lazy(() => import("@/pages/services"));
+const ServiceZones = React.lazy(() => import("@/pages/service-zones"));
+const Pricing = React.lazy(() => import("@/pages/pricing"));
+const Zones = React.lazy(() => import("@/pages/zones"));
+const Payments = React.lazy(() => import("@/pages/payments"));
+const Reports = React.lazy(() => import("@/pages/reports"));
+const DriverDetail = React.lazy(() => import("@/pages/driver-detail"));
+const TripDetail = React.lazy(() => import("@/pages/trip-detail"));
+const AuditLogs = React.lazy(() => import("@/pages/audit-logs"));
+const Ratings = React.lazy(() => import("@/pages/ratings"));
+const ChatInbox = React.lazy(() => import("@/pages/chat-inbox"));
+const Schedules = React.lazy(() => import("@/pages/schedules"));
+const Buses = React.lazy(() => import("@/pages/buses"));
+const ShuttleTrips = React.lazy(() => import("@/pages/shuttle-trips"));
+const ShuttleTripDetail = React.lazy(() => import("@/pages/shuttle-trip-detail"));
+const ShuttleCashDebts = React.lazy(() => import("@/pages/shuttle-cash-debts"));
+const ShuttleOffences = React.lazy(() => import("@/pages/shuttle-offences"));
+const FinancePayouts = React.lazy(() => import("@/pages/finance-payouts"));
+const FinanceCommission = React.lazy(() => import("@/pages/finance-commission"));
+const FraudAlerts = React.lazy(() => import("@/pages/fraud-alerts"));
+const CommissionExemptions = React.lazy(() => import("@/pages/commission-exemptions"));
+const BonusTargets = React.lazy(() => import("@/pages/bonus-targets"));
 
 const logoutRef = { current: () => {} };
 
@@ -93,12 +94,21 @@ function AuthSync() {
     logoutRef.current = () => logoutFn.current();
   }, []);
 
-  // 🔥 ده أهم سطر في المشروع كله
   useEffect(() => {
     setAuthTokenGetter(() => localStorage.getItem("accessToken"));
   }, []);
 
   return null;
+}
+
+function PageFallback() {
+  return (
+    <div className="p-6 space-y-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <Skeleton key={i} className="h-12 w-full" />
+      ))}
+    </div>
+  );
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -110,56 +120,58 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
 function Router() {
   return (
     <AppLayout>
-      <Switch>
-        <Route path="/login" component={Login} />
-        <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
-        <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
-        <Route path="/users" component={() => <ProtectedRoute component={Users} />} />
-        <Route path="/users/:id" component={() => <ProtectedRoute component={UserDetail} />} />
-        <Route path="/routes" component={() => <ProtectedRoute component={RoutesList} />} />
-        <Route path="/routes/:id" component={() => <ProtectedRoute component={RouteDetail} />} />
-        <Route path="/trips" component={() => <ProtectedRoute component={Trips} />} />
-        <Route path="/trips/:id" component={() => <ProtectedRoute component={TripDetail} />} />
-        <Route path="/drivers" component={() => <ProtectedRoute component={Drivers} />} />
-        <Route path="/drivers/:id" component={() => <ProtectedRoute component={DriverDetail} />} />
-        <Route path="/driver-verification" component={() => <ProtectedRoute component={DriverVerification} />} />
-        <Route path="/vehicles/:serviceType" component={() => <ProtectedRoute component={Vehicles} />} />
-        <Route path="/bookings" component={() => <ProtectedRoute component={Bookings} />} />
-        <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />
-        <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
-        <Route path="/promo" component={() => <ProtectedRoute component={Promo} />} />
-        <Route path="/pricing/:type" component={() => <ProtectedRoute component={Pricing} />} />
-        <Route path="/pricing" component={() => <ProtectedRoute component={Pricing} />} />
-        <Route path="/zones" component={() => <ProtectedRoute component={Zones} />} />
-        <Route path="/services" component={() => <ProtectedRoute component={Services} />} />
-        <Route path="/services/:type/zones" component={() => <ProtectedRoute component={ServiceZones} />} />
-        <Route path="/services/:type" component={() => <ProtectedRoute component={Services} />} />
-        <Route path="/live-tracking" component={() => <ProtectedRoute component={LiveTracking} />} />
-        <Route path="/support" component={() => <ProtectedRoute component={Support} />} />
-        <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
-        <Route path="/reports/:type" component={() => <ProtectedRoute component={Reports} />} />
-        <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
-        <Route path="/staff" component={() => <ProtectedRoute component={Staff} />} />
-        <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
-        <Route path="/audit-logs" component={() => <ProtectedRoute component={AuditLogs} />} />
-        <Route path="/ratings" component={() => <ProtectedRoute component={Ratings} />} />
-        <Route path="/chat-inbox" component={() => <ProtectedRoute component={ChatInbox} />} />
-        <Route path="/schedules" component={() => <ProtectedRoute component={Schedules} />} />
-        <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
-        <Route path="/vehicles/shuttle" component={() => <ProtectedRoute component={Buses} />} />
-        <Route path="/shuttle-trips" component={() => <ProtectedRoute component={ShuttleTrips} />} />
-        <Route path="/shuttle-trips/:id" component={() => <ProtectedRoute component={ShuttleTripDetail} />} />
-        <Route path="/shuttle/cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
-        <Route path="/shuttle/offences" component={() => <ProtectedRoute component={ShuttleOffences} />} />
-        <Route path="/finance/wallet" component={() => <ProtectedRoute component={Wallet} />} />
-        <Route path="/finance/payouts" component={() => <ProtectedRoute component={FinancePayouts} />} />
-        <Route path="/finance/commission" component={() => <ProtectedRoute component={FinanceCommission} />} />
-        <Route path="/finance/shuttle-cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
-        <Route path="/finance/commission-exemptions" component={() => <ProtectedRoute component={CommissionExemptions} />} />
-        <Route path="/finance/bonus-targets" component={() => <ProtectedRoute component={BonusTargets} />} />
-        <Route path="/security/fraud-alerts" component={() => <ProtectedRoute component={FraudAlerts} />} />
-        <Route component={NotFound} />
-      </Switch>
+      <Suspense fallback={<PageFallback />}>
+        <Switch>
+          <Route path="/login" component={Login} />
+          <Route path="/" component={() => <ProtectedRoute component={Dashboard} />} />
+          <Route path="/dashboard" component={() => <ProtectedRoute component={Dashboard} />} />
+          <Route path="/users" component={() => <ProtectedRoute component={Users} />} />
+          <Route path="/users/:id" component={() => <ProtectedRoute component={UserDetail} />} />
+          <Route path="/routes" component={() => <ProtectedRoute component={RoutesList} />} />
+          <Route path="/routes/:id" component={() => <ProtectedRoute component={RouteDetail} />} />
+          <Route path="/trips" component={() => <ProtectedRoute component={Trips} />} />
+          <Route path="/trips/:id" component={() => <ProtectedRoute component={TripDetail} />} />
+          <Route path="/drivers" component={() => <ProtectedRoute component={Drivers} />} />
+          <Route path="/drivers/:id" component={() => <ProtectedRoute component={DriverDetail} />} />
+          <Route path="/driver-verification" component={() => <ProtectedRoute component={DriverVerification} />} />
+          <Route path="/vehicles/:serviceType" component={() => <ProtectedRoute component={Vehicles} />} />
+          <Route path="/bookings" component={() => <ProtectedRoute component={Bookings} />} />
+          <Route path="/wallet" component={() => <ProtectedRoute component={Wallet} />} />
+          <Route path="/payments" component={() => <ProtectedRoute component={Payments} />} />
+          <Route path="/promo" component={() => <ProtectedRoute component={Promo} />} />
+          <Route path="/pricing/:type" component={() => <ProtectedRoute component={Pricing} />} />
+          <Route path="/pricing" component={() => <ProtectedRoute component={Pricing} />} />
+          <Route path="/zones" component={() => <ProtectedRoute component={Zones} />} />
+          <Route path="/services" component={() => <ProtectedRoute component={Services} />} />
+          <Route path="/services/:type/zones" component={() => <ProtectedRoute component={ServiceZones} />} />
+          <Route path="/services/:type" component={() => <ProtectedRoute component={Services} />} />
+          <Route path="/live-tracking" component={() => <ProtectedRoute component={LiveTracking} />} />
+          <Route path="/support" component={() => <ProtectedRoute component={Support} />} />
+          <Route path="/notifications" component={() => <ProtectedRoute component={Notifications} />} />
+          <Route path="/reports/:type" component={() => <ProtectedRoute component={Reports} />} />
+          <Route path="/reports" component={() => <ProtectedRoute component={Reports} />} />
+          <Route path="/staff" component={() => <ProtectedRoute component={Staff} />} />
+          <Route path="/settings" component={() => <ProtectedRoute component={Settings} />} />
+          <Route path="/audit-logs" component={() => <ProtectedRoute component={AuditLogs} />} />
+          <Route path="/ratings" component={() => <ProtectedRoute component={Ratings} />} />
+          <Route path="/chat-inbox" component={() => <ProtectedRoute component={ChatInbox} />} />
+          <Route path="/schedules" component={() => <ProtectedRoute component={Schedules} />} />
+          <Route path="/buses" component={() => <ProtectedRoute component={Buses} />} />
+          <Route path="/vehicles/shuttle" component={() => <ProtectedRoute component={Buses} />} />
+          <Route path="/shuttle-trips" component={() => <ProtectedRoute component={ShuttleTrips} />} />
+          <Route path="/shuttle-trips/:id" component={() => <ProtectedRoute component={ShuttleTripDetail} />} />
+          <Route path="/shuttle/cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
+          <Route path="/shuttle/offences" component={() => <ProtectedRoute component={ShuttleOffences} />} />
+          <Route path="/finance/wallet" component={() => <ProtectedRoute component={Wallet} />} />
+          <Route path="/finance/payouts" component={() => <ProtectedRoute component={FinancePayouts} />} />
+          <Route path="/finance/commission" component={() => <ProtectedRoute component={FinanceCommission} />} />
+          <Route path="/finance/shuttle-cash-debts" component={() => <ProtectedRoute component={ShuttleCashDebts} />} />
+          <Route path="/finance/commission-exemptions" component={() => <ProtectedRoute component={CommissionExemptions} />} />
+          <Route path="/finance/bonus-targets" component={() => <ProtectedRoute component={BonusTargets} />} />
+          <Route path="/security/fraud-alerts" component={() => <ProtectedRoute component={FraudAlerts} />} />
+          <Route component={NotFound} />
+        </Switch>
+      </Suspense>
     </AppLayout>
   );
 }

@@ -64,6 +64,8 @@ const DEVIATION_THROTTLE_MS  = 60_000;
 let io: SocketIOServer | null = null;
 
 export function initSocket(httpServer: HttpServer): SocketIOServer {
+  const isProduction = process.env.NODE_ENV === "production";
+
   const allowedOrigins: string[] = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -72,20 +74,31 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
     "http://localhost:5173",
     "http://localhost:8080",
   ];
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    allowedOrigins.push(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+
+  if (isProduction) {
+    const productionOrigin = process.env.ALLOWED_ORIGIN;
+    if (productionOrigin) {
+      allowedOrigins.length = 0;
+      allowedOrigins.push(productionOrigin);
+    }
+  } else {
+    if (process.env.REPLIT_DEV_DOMAIN) {
+      allowedOrigins.push(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+    }
   }
 
   io = new SocketIOServer(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        if (
-          !origin ||
-          allowedOrigins.some((o) => origin.startsWith(o)) ||
+        if (!origin) { callback(null, true); return; }
+        const allowed = allowedOrigins.some((o) => origin.startsWith(o));
+        if (allowed) {
+          callback(null, true);
+        } else if (!isProduction && (
           /^https:\/\/[^.]+\.replit\.dev(:\d+)?$/.test(origin) ||
           /^https:\/\/[^.]+\.kirk\.replit\.dev(:\d+)?$/.test(origin) ||
           /^https:\/\/[^.]+\.expo\.dev(:\d+)?$/.test(origin)
-        ) {
+        )) {
           callback(null, true);
         } else {
           callback(new Error(`Socket.IO CORS: origin not allowed — ${origin}`));
@@ -110,9 +123,27 @@ export function initSocket(httpServer: HttpServer): SocketIOServer {
         next(new Error("Authentication required"));
         return;
       }
+
       const payload = verifyAccessToken(token);
-      socket.data.userId = payload.userId;
-      socket.data.role = payload.role;
+
+      // تحقق إن المستخدم موجود ومش محظور في الداتا بيز
+      const [user] = await db
+        .select({ id: usersTable.id, role: usersTable.role, isBlocked: usersTable.isBlocked })
+        .from(usersTable)
+        .where(eq(usersTable.id, payload.userId));
+
+      if (!user) {
+        next(new Error("User not found"));
+        return;
+      }
+
+      if (user.isBlocked) {
+        next(new Error("Account is blocked"));
+        return;
+      }
+
+      socket.data.userId = user.id;
+      socket.data.role = user.role;
       next();
     } catch {
       next(new Error("Invalid token"));

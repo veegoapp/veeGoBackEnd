@@ -38,6 +38,7 @@ import shuttleVehicleTypesRouter from "./shuttleVehicleTypes";
 import vehicleCatalogRouter from "./vehicleCatalog";
 import bonusTargetsRouter from "./bonusTargets";
 import commissionExemptionsRouter from "./commissionExemptions";
+import paymobRouter from "./paymob";
 
 const router: IRouter = Router();
 
@@ -80,5 +81,6 @@ router.use(shuttleVehicleTypesRouter);
 router.use(vehicleCatalogRouter);
 router.use(bonusTargetsRouter);
 router.use(commissionExemptionsRouter);
+router.use(paymobRouter);
 
 export default router;

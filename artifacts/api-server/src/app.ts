@@ -3,15 +3,15 @@ import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
 import rateLimit from "express-rate-limit";
-import swaggerUi from "swagger-ui-express";
 import router from "./routes";
 import { logger } from "./lib/logger";
-import swaggerSpec from "./lib/swagger";
 import { traceMiddleware } from "./lib/trace";
 
 const app: Express = express();
 
 // ─── CORS whitelist ────────────────────────────────────────────────────────────
+const isProduction = process.env.NODE_ENV === "production";
+
 const allowedOrigins: string[] = [
   "http://localhost:3000",
   "http://localhost:3001",
@@ -20,19 +20,41 @@ const allowedOrigins: string[] = [
   "http://localhost:5173",
   "http://localhost:8080",
 ];
-if (process.env.REPLIT_DEV_DOMAIN) {
-  allowedOrigins.push(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+
+// في الـ Production: استخدم الدومين الحقيقي بتاعك بس
+if (isProduction) {
+  const productionOrigin = process.env.ALLOWED_ORIGIN;
+  if (productionOrigin) {
+    allowedOrigins.length = 0; // امسح الـ localhost كلها
+    allowedOrigins.push(productionOrigin);
+  } else {
+    logger.warn("ALLOWED_ORIGIN غير مضبوط في الـ Production — CORS هيبقى مقيد جداً");
+  }
+} else {
+  // في التطوير فقط: اسمح بـ Replit و Expo
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    allowedOrigins.push(`https://${process.env.REPLIT_DEV_DOMAIN}`);
+  }
 }
 
 const corsOptions: cors.CorsOptions = {
   origin: (origin, callback) => {
-    if (
-      !origin ||
-      allowedOrigins.some((o) => origin.startsWith(o)) ||
+    if (!origin) {
+      // طلبات من السيرفر نفسه (بدون origin) مسموح بيها دايماً
+      callback(null, true);
+      return;
+    }
+
+    const allowed = allowedOrigins.some((o) => origin.startsWith(o));
+
+    if (allowed) {
+      callback(null, true);
+    } else if (!isProduction && (
       /^https:\/\/[^.]+\.replit\.dev(:\d+)?$/.test(origin) ||
       /^https:\/\/[^.]+\.kirk\.replit\.dev(:\d+)?$/.test(origin) ||
       /^https:\/\/[^.]+\.expo\.dev(:\d+)?$/.test(origin)
-    ) {
+    )) {
+      // في التطوير بس: اسمح بـ Replit و Expo
       callback(null, true);
     } else {
       callback(new Error(`CORS: origin not allowed — ${origin}`));
@@ -89,30 +111,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(traceMiddleware);
 
 app.use("/api", router);
-
-// ─── Swagger docs ─────────────────────────────────────────────────────────────
-const serveSpec = (_req: Request, res: Response) => {
-  res.setHeader("Content-Type", "application/json");
-  res.setHeader("Content-Disposition", "attachment; filename=openapi.json");
-  res.send(swaggerSpec);
-};
-
-app.get("/api/docs/json", serveSpec);
-app.get("/api/swagger.json", serveSpec);
-app.get("/api/openapi.json", serveSpec);
-
-app.use(
-  "/api/docs",
-  (_req: Request, res: Response, next: NextFunction) => {
-    res.setHeader(
-      "Content-Security-Policy",
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;",
-    );
-    next();
-  },
-  swaggerUi.serve,
-  swaggerUi.setup(swaggerSpec, { customSiteTitle: "VeeGo API Docs" }),
-);
 
 // ─── 404 handler ──────────────────────────────────────────────────────────────
 app.use((_req: Request, res: Response) => {

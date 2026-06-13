@@ -1,12 +1,17 @@
 import jwt from "jsonwebtoken";
 
 if (!process.env.SESSION_SECRET) {
-  console.error("[jwt] FATAL: SESSION_SECRET environment variable is not set. Set it in Replit Secrets.");
+  console.error("[jwt] FATAL: SESSION_SECRET environment variable is not set.");
   process.exit(1);
 }
 
-const ACCESS_SECRET = process.env.SESSION_SECRET;
-const REFRESH_SECRET = process.env.SESSION_SECRET + "-refresh";
+if (!process.env.REFRESH_SECRET) {
+  console.error("[jwt] FATAL: REFRESH_SECRET environment variable is not set.");
+  process.exit(1);
+}
+
+const ACCESS_SECRET  = process.env.SESSION_SECRET;
+const REFRESH_SECRET = process.env.REFRESH_SECRET;
 
 export interface JwtPayload {
   userId: number;

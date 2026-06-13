@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,8 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { setStoredLanguage, applyDirection } from "@/lib/i18n";
 import i18n from "@/lib/i18n";
-
-const StaffPage = React.lazy(() => import("@/pages/staff"));
+import StaffPage from "@/pages/staff";
 
 const NOTIF_KEY = "veego_notif_prefs";
 type NotifPrefs = {
@@ -307,15 +306,7 @@ export default function Settings() {
       )}
 
       {/* Staff Tab */}
-      {activeTab === "staff" && (
-        <Suspense fallback={
-          <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
-          </div>
-        }>
-          <StaffPage />
-        </Suspense>
-      )}
+      {activeTab === "staff" && <StaffPage />}
 
       {activeTab === "system" && (
         <SystemEngineTab />

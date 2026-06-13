@@ -44,6 +44,20 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1400,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-query": ["@tanstack/react-query"],
+          "vendor-i18n": ["i18next", "react-i18next"],
+          "vendor-lucide": ["lucide-react"],
+          "vendor-maplibre": ["maplibre-gl"],
+          "vendor-leaflet": ["leaflet", "react-leaflet"],
+          "vendor-recharts": ["recharts"],
+          "vendor-xlsx": ["xlsx"],
+        },
+      },
+    },
   },
   server: {
     port,
