@@ -58,6 +58,32 @@ import { useTranslation } from "react-i18next";
 import { lookupStationAr } from "@/lib/station-translations";
 import { Wand2 } from "lucide-react";
 
+/**
+ * Convert a datetime-local string (browser local time) to a UTC ISO string
+ * before sending to the server. The server's new Date(str) treats bare strings
+ * as UTC, so without this conversion a Cairo admin entering "09:00" would store
+ * "09:00 UTC" = "12:00 Cairo" — 3 hours too late.
+ */
+function toUtcIso(localStr: string): string {
+  if (!localStr) return localStr;
+  return new Date(localStr).toISOString();
+}
+
+/**
+ * Convert a UTC ISO string (from the server) into the "YYYY-MM-DDTHH:MM" format
+ * the datetime-local input needs, expressed in the browser's local timezone.
+ * Without this, editing a trip would pre-fill the UTC time rather than local time.
+ */
+function utcToLocalDatetimeStr(utcStr: string | null | undefined): string {
+  if (!utcStr) return "";
+  const d = new Date(utcStr);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  );
+}
+
 const stationSchema = z.object({
   name: z.string().min(1, "Name is required"),
   nameAr: z.string().optional(),
@@ -611,7 +637,14 @@ function DirectionTab({
   };
 
   const onCreateTrip = (data: TripFormValues) => {
-    createMutation.mutate({ data: { ...data, routeId } as any }, {
+    createMutation.mutate({
+      data: {
+        ...data,
+        routeId,
+        departureTime: toUtcIso(data.departureTime),
+        arrivalTime:   toUtcIso(data.arrivalTime),
+      } as any,
+    }, {
       onSuccess: () => {
         toast({ title: t("trips.tripScheduled", "Trip scheduled successfully") });
         setIsCreateTripOpen(false);
@@ -897,7 +930,14 @@ function SchedulesTab({
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
 
   const onSubmitCreate = (data: TripFormValues) => {
-    createMutation.mutate({ data: { ...data, routeId } as any }, {
+    createMutation.mutate({
+      data: {
+        ...data,
+        routeId,
+        departureTime: toUtcIso(data.departureTime),
+        arrivalTime:   toUtcIso(data.arrivalTime),
+      } as any,
+    }, {
       onSuccess: () => { toast({ title: t("trips.tripScheduled", "Trip scheduled successfully") }); setIsCreateOpen(false); createForm.reset(tripDefaultValues); invalidate(); },
       onError: () => toast({ title: t("trips.scheduleFailed", "Failed to schedule trip"), variant: "destructive" }),
     });
@@ -905,7 +945,14 @@ function SchedulesTab({
 
   const onSubmitEdit = (data: TripFormValues) => {
     if (!editTrip) return;
-    updateMutation.mutate({ id: editTrip.id, data: data as any }, {
+    updateMutation.mutate({
+      id: editTrip.id,
+      data: {
+        ...data,
+        departureTime: toUtcIso(data.departureTime),
+        arrivalTime:   toUtcIso(data.arrivalTime),
+      } as any,
+    }, {
       onSuccess: () => { toast({ title: t("trips.tripUpdated", "Trip updated") }); setEditTrip(null); invalidate(); },
       onError: () => toast({ title: t("trips.updateFailed", "Failed to update trip"), variant: "destructive" }),
     });
@@ -917,7 +964,7 @@ function SchedulesTab({
   };
 
   const handleOpenEdit = (trip: any) => {
-    editForm.reset({ busId: trip.busId ?? 0, driverId: trip.driverId ?? 0, departureTime: trip.departureTime?.slice(0, 16) ?? "", arrivalTime: trip.arrivalTime?.slice(0, 16) ?? "", price: trip.price ?? 0, recurringType: trip.recurringType ?? "one_time", weekdays: trip.weekdays ?? "", isActive: trip.isActive ?? true });
+    editForm.reset({ busId: trip.busId ?? 0, driverId: trip.driverId ?? 0, departureTime: utcToLocalDatetimeStr(trip.departureTime), arrivalTime: utcToLocalDatetimeStr(trip.arrivalTime), price: trip.price ?? 0, recurringType: trip.recurringType ?? "one_time", weekdays: trip.weekdays ?? "", isActive: trip.isActive ?? true });
     setEditTrip(trip);
   };
 
@@ -1115,13 +1162,20 @@ function TripsTab({ trips, allDrivers, allBuses, route, queryClient, toast }: {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListTripsQueryKey() });
 
   const handleOpenEdit = (trip: any) => {
-    editForm.reset({ busId: trip.busId ?? 0, driverId: trip.driverId ?? 0, departureTime: trip.departureTime?.slice(0, 16) ?? "", arrivalTime: trip.arrivalTime?.slice(0, 16) ?? "", price: trip.price ?? 0, recurringType: trip.recurringType ?? "one_time", weekdays: trip.weekdays ?? "", isActive: trip.isActive ?? true });
+    editForm.reset({ busId: trip.busId ?? 0, driverId: trip.driverId ?? 0, departureTime: utcToLocalDatetimeStr(trip.departureTime), arrivalTime: utcToLocalDatetimeStr(trip.arrivalTime), price: trip.price ?? 0, recurringType: trip.recurringType ?? "one_time", weekdays: trip.weekdays ?? "", isActive: trip.isActive ?? true });
     setEditTrip(trip);
   };
 
   const onSubmitEdit = (data: TripFormValues) => {
     if (!editTrip) return;
-    updateMutation.mutate({ id: editTrip.id, data: data as any }, {
+    updateMutation.mutate({
+      id: editTrip.id,
+      data: {
+        ...data,
+        departureTime: toUtcIso(data.departureTime),
+        arrivalTime:   toUtcIso(data.arrivalTime),
+      } as any,
+    }, {
       onSuccess: () => { toast({ title: t("trips.tripUpdated", "Trip updated") }); setEditTrip(null); invalidate(); },
       onError: () => toast({ title: t("trips.updateFailed", "Failed to update trip"), variant: "destructive" }),
     });

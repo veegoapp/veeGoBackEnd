@@ -5,7 +5,7 @@ import {
   walletTransactionsTable, notificationsTable, driverEarningsTable, shuttleRatingsTable,
   shuttleOffencesTable, VEHICLE_CAPACITY, VEHICLE_MIN_THRESHOLD,
 } from "@workspace/db";
-import { eq, sql, and, inArray, asc, gte, desc } from "drizzle-orm";
+import { eq, sql, and, or, inArray, asc, gte, desc } from "drizzle-orm";
 import { authenticate, requireRole } from "../middlewares/auth";
 import { getIO } from "../socket";
 import { SOCKET_EVENTS, SOCKET_ROOMS } from "../lib/socket-events";
@@ -388,6 +388,8 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
   const [route] = await db.select().from(routesTable).where(eq(routesTable.id, routeId));
   if (!route) { res.status(404).json({ error: "Shuttle line not found" }); return; }
 
+  const now = new Date();
+
   const [stations, upcomingTrips] = await Promise.all([
     db.select().from(stationsTable)
       .where(eq(stationsTable.routeId, routeId))
@@ -406,7 +408,15 @@ router.get("/shuttle/lines/:id", async (req, res): Promise<void> => {
     }).from(tripsTable)
       .where(and(
         eq(tripsTable.routeId, routeId),
-        inArray(tripsTable.status, ["scheduled", "active", "waiting_driver"]),
+        // Show future scheduled trips + any currently in-progress trips regardless of
+        // departure time (they may have started in the past but are still active).
+        or(
+          and(
+            inArray(tripsTable.status, ["scheduled"]),
+            gte(tripsTable.departureTime, now),
+          ),
+          inArray(tripsTable.status, ["active", "waiting_driver", "driver_assigned", "boarding"]),
+        ),
       ))
       .orderBy(tripsTable.departureTime)
       .limit(20),
