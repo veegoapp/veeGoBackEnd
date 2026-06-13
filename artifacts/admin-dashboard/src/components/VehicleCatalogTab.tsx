@@ -580,17 +580,7 @@ function BrandsView({
     queryKey: ["vehicle-catalog-colors"],
     queryFn: () => adminFetch<{ data: VehicleColor[] }>("/admin/vehicle-catalog/colors"),
   });
-  const allColors = colorsQuery.data?.data ?? [];
-  const colors = React.useMemo(() => {
-    const seen = new Set<string>();
-    return allColors.filter((c) => {
-      const key = c.nameEn.trim().toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [allColors]);
-  const duplicateCount = allColors.length - colors.length;
+  const colors = colorsQuery.data?.data ?? [];
 
   const createBrand = useMutation({
     mutationFn: (data: object) => adminFetch("/admin/vehicle-catalog/brands", { method: "POST", body: JSON.stringify({ ...data, serviceType }) }),
@@ -719,16 +709,10 @@ function BrandsView({
       {/* ── Approved Colors ── */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <Palette className="h-4 w-4 text-muted-foreground" />
             <h3 className="font-semibold text-sm">Approved Colors</h3>
-            {!colorsQuery.isLoading && <Badge variant="secondary" className="text-xs">{colors.length} unique</Badge>}
-            {duplicateCount > 0 && (
-              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950 gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                {duplicateCount} duplicate{duplicateCount !== 1 ? "s" : ""} hidden
-              </Badge>
-            )}
+            {!colorsQuery.isLoading && <Badge variant="secondary" className="text-xs">{colors.length}</Badge>}
           </div>
           <Button size="sm" className="gap-1.5" onClick={() => setColorDialog({ open: true })}>
             <Plus className="h-3.5 w-3.5" /> Add Color
