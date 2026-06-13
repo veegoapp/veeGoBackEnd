@@ -493,6 +493,18 @@ router.patch("/driver/location", authenticate, requireRole("driver"), async (req
         },
       });
     }
+
+    // Emit shuttle:driver:location to all passengers subscribed to this trip room.
+    // Fires regardless of trip status — covers pre-departure, boarding, and active phases.
+    const io = getIO();
+    if (io) {
+      io.to(SOCKET_ROOMS.TRIP(tripId)).emit(SOCKET_EVENTS.SHUTTLE_DRIVER_LOCATION, {
+        tripId,
+        lat:     parsed.data.latitude,
+        lng:     parsed.data.longitude,
+        heading: parsed.data.heading ?? null,
+      });
+    }
   }
 
   res.json(fmtDriver(updated as Record<string, unknown>));

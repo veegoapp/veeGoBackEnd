@@ -84,12 +84,12 @@ router.get("/bookings", authenticate, requireRole("admin"), async (req, res): Pr
 
 router.post("/bookings", authenticate, async (req, res): Promise<void> => {
   const parsed = CreateBookingBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message, code: "INVALID_REQUEST" }); return; }
   const { tripId, seatCount, promoCode: promoCodeStr } = parsed.data;
 
   // Shuttle: each rider books exactly 1 seat
   if (seatCount !== 1) {
-    res.status(400).json({ error: "Shuttle bookings allow exactly 1 seat per booking." });
+    res.status(400).json({ error: "Shuttle bookings allow exactly 1 seat per booking.", code: "BOOKING_SEAT_COUNT_EXCEEDED" });
     return;
   }
 
@@ -102,13 +102,13 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     type TripRow = { id: number; status: string; available_seats: number; total_seats: number; vehicle_type: string; price: string };
     const tripRow = tripResult.rows[0] as TripRow | undefined;
 
-    if (!tripRow) return { error: "Trip not found", status: 404 };
+    if (!tripRow) return { error: "Trip not found", code: "TRIP_NOT_FOUND", status: 404 };
     const BOOKABLE_STATUSES = ["scheduled", "active", "waiting_driver"];
     if (!BOOKABLE_STATUSES.includes(tripRow.status)) {
-      return { error: "Trip is not available for booking", status: 400 };
+      return { error: "Trip is not available for booking", code: "TRIP_UNAVAILABLE", status: 400 };
     }
     if (tripRow.available_seats < seatCount) {
-      return { error: "This trip is fully booked.", status: 400 };
+      return { error: "This trip is fully booked.", code: "TRIP_FULLY_BOOKED", status: 400 };
     }
 
     // Derive capacity thresholds from vehicle type stored on the trip
@@ -121,7 +121,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       sql`SELECT id FROM bookings WHERE trip_id = ${tripId} AND user_id = ${req.user!.id} AND status NOT IN ('cancelled') LIMIT 1`
     );
     if (dupResult.rows.length > 0) {
-      return { error: "You already have an active booking for this trip", status: 409 };
+      return { error: "You already have an active booking for this trip", code: "BOOKING_DUPLICATE", status: 409 };
     }
 
     let totalPrice = parseFloat(tripRow.price) * seatCount;
@@ -131,13 +131,13 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       const [promo] = await tx.select().from(promoCodesTable).where(eq(promoCodesTable.code, promoCodeStr));
 
       if (!promo || !promo.isActive) {
-        return { error: "Promo code not found or inactive", status: 400 };
+        return { error: "Promo code not found or inactive", code: "PROMO_NOT_FOUND", status: 400 };
       }
       if (promo.expiryDate && new Date(promo.expiryDate) < new Date()) {
-        return { error: "Promo code has expired", status: 400 };
+        return { error: "Promo code has expired", code: "PROMO_EXPIRED", status: 400 };
       }
       if (promo.maxUsage !== null && promo.usedCount >= promo.maxUsage) {
-        return { error: "Promo code usage limit reached", status: 400 };
+        return { error: "Promo code usage limit reached", code: "PROMO_LIMIT_REACHED", status: 400 };
       }
       // Applicable service check
       const applicableService = (promo.applicableService as string | null) ?? "all";
@@ -158,7 +158,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
           .from(promoCodeUsagesTable)
           .where(and(eq(promoCodeUsagesTable.promoCodeId, promo.id), eq(promoCodeUsagesTable.userId, req.user!.id)));
         if (userUseCount >= promo.perUserLimit) {
-          return { error: "You have already used this promo code the maximum number of times", status: 400 };
+          return { error: "You have already used this promo code the maximum number of times", code: "PROMO_USER_LIMIT_REACHED", status: 400 };
         }
       }
 
@@ -173,7 +173,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
         .returning({ id: promoCodesTable.id });
 
       if (updatedPromo.length === 0) {
-        return { error: "Promo code usage limit reached", status: 400 };
+        return { error: "Promo code usage limit reached", code: "PROMO_LIMIT_REACHED", status: 400 };
       }
 
       // Record per-user usage
@@ -197,10 +197,11 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
     );
     type UserRow = { id: number; wallet_balance: string };
     const userRow = userResult.rows[0] as UserRow | undefined;
-    if (!userRow) return { error: "User not found", status: 404 };
+    if (!userRow) return { error: "User not found", code: "USER_NOT_FOUND", status: 404 };
     if (parseFloat(userRow.wallet_balance) < totalPrice) {
       return {
         error: `Insufficient wallet balance. Required: ${totalPrice.toFixed(2)} EGP, available: ${parseFloat(userRow.wallet_balance).toFixed(2)} EGP`,
+        code: "INSUFFICIENT_BALANCE",
         status: 400,
       };
     }
@@ -210,7 +211,7 @@ router.post("/bookings", authenticate, async (req, res): Promise<void> => {
       sql`UPDATE trips SET available_seats = available_seats - ${seatCount} WHERE id = ${tripId} AND available_seats >= ${seatCount} RETURNING available_seats`
     );
     if ((decrResult.rows as unknown[]).length === 0) {
-      return { error: "Seat reservation failed — seats may have just been taken", status: 409 };
+      return { error: "Seat reservation failed — seats may have just been taken", code: "TRIP_FULLY_BOOKED", status: 409 };
     }
 
     // Shuttle: booking status is PENDING (trip confirms when minRequired is met)

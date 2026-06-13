@@ -1,0 +1,54 @@
+The passenger app has several frontend features that are fully built but cannot function because the backend does not yet provide the required data or endpoints. Implement the following backend tasks so the frontend team can complete their integration.
+
+---
+
+**Task 1 — Ride Price Estimate Endpoint**
+The passenger app needs to show the user an estimated price before they confirm a ride booking.
+
+- Add `GET /rides/estimate`
+- Accept query params: `pickupLat`, `pickupLng`, `dropoffLat`, `dropoffLng`, `serviceType` (car/scooter)
+- Return: `{ estimatedPrice: number, currency: "EGP", distanceKm: number, durationMinutes: number }`
+- No auth required (or use Bearer — your choice, just document it)
+
+---
+
+**Task 2 — Waiting Charge Socket Events**
+When a driver arrives and the passenger is late, the app needs to show a live waiting cost meter. The frontend already has listeners ready for these events but the backend never emits them.
+
+Emit the following socket events on the ride's socket room:
+- `ride:waiting:charge:started` → `{ rideId, startedAt: ISO8601, ratePerMinute: number }`
+- `ride:waiting:charge:updated` → `{ rideId, elapsedMinutes: number, currentCharge: number }`
+- `ride:waiting:charge:capped` → `{ rideId, finalCharge: number, cappedAt: number }`
+
+Emit `started` when the driver marks arrival and waiting begins, `updated` every 30 seconds, `capped` when the maximum waiting charge is reached.
+
+---
+
+**Task 3 — Pre-Departure Driver Location (Shuttle)**
+Before a shuttle trip departs, the passenger app needs to show the driver's live location on the map so the passenger knows how far the bus is.
+
+The frontend listens for `shuttle:driver:location` but the backend never emits it before departure.
+
+- Emit `shuttle:driver:location` during the pre-departure phase (not only during the trip)
+- Payload must be exactly: `{ tripId, lat, lng, heading }`
+- Emit it whenever the driver app sends a location update, regardless of trip status
+
+---
+
+**Task 4 — Structured Error Codes**
+Currently the backend returns raw error messages like `"Seat count exceeds available capacity"`. The frontend displays these strings directly to users, which looks unprofessional and breaks Arabic UI.
+
+- For all error responses, return this structure:
+```json
+{ "message": "Human readable message", "code": "MACHINE_CODE" }
+```
+- Example codes: `SEAT_COUNT_EXCEEDED`, `RIDE_NOT_FOUND`, `PROMO_EXPIRED`, `INSUFFICIENT_BALANCE`
+- Start with the most common errors in: `/rides`, `/bookings`, `/promo`, `/wallet`
+- The frontend will map these codes to translated strings — just make sure the `code` field is always present on errors
+
+---
+
+After completing all tasks, provide a report listing:
+- Every file changed
+- Every new endpoint or socket event added
+- The exact request/response shape for each new endpoint

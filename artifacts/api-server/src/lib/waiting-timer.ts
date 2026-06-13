@@ -9,7 +9,7 @@ import { logger } from "./logger";
 
 const FREE_WINDOW_MINUTES = 3;
 const FREE_WINDOW_MS      = FREE_WINDOW_MINUTES * 60 * 1_000;
-const CHARGE_TICK_MS      = 60 * 1_000;
+const CHARGE_TICK_MS      = 30 * 1_000;
 
 const DEFAULT_RATE_PER_MINUTE = 2.00;
 const DEFAULT_MAX_CHARGE      = 20.00;
@@ -82,6 +82,8 @@ function emitCapReached(rideId: number, entry: WaitingEntry): void {
   if (io) {
     io.to(SOCKET_ROOMS.PASSENGER(entry.passengerId)).emit(SOCKET_EVENTS.WAITING_CHARGE_CAPPED, {
       rideId,
+      finalCharge:    entry.maxCharge,
+      cappedAt:       Date.now(),
       maxCharge:      entry.maxCharge,
       chargedMinutes: entry.chargedMinutes,
     });
@@ -148,6 +150,7 @@ export async function startWaitingTimer(
       if (io) {
         io.to(SOCKET_ROOMS.PASSENGER(passengerId)).emit(SOCKET_EVENTS.WAITING_CHARGE_STARTED, {
           rideId,
+          startedAt:         new Date().toISOString(),
           ratePerMinute:     e.ratePerMinute,
           freeWindowMinutes: FREE_WINDOW_MINUTES,
           maxCharge:         e.maxCharge,
@@ -180,6 +183,8 @@ export async function startWaitingTimer(
       if (ioInner) {
         ioInner.to(SOCKET_ROOMS.PASSENGER(passengerId)).emit(SOCKET_EVENTS.WAITING_CHARGE_UPDATED, {
           rideId,
+          elapsedMinutes: inner.chargedMinutes,
+          currentCharge:  runningTotal,
           chargedMinutes: inner.chargedMinutes,
           runningTotal,
           ratePerMinute:  inner.ratePerMinute,

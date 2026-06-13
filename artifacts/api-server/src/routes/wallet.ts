@@ -43,7 +43,7 @@ const WalletTopupBody = z.object({
 router.post("/wallet/topup", authenticate, async (req, res): Promise<void> => {
   const parsed = WalletTopupBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid amount" });
+    res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid amount", code: "INVALID_AMOUNT" });
     return;
   }
   const { amount } = parsed.data;
@@ -56,6 +56,7 @@ router.post("/wallet/topup", authenticate, async (req, res): Promise<void> => {
   if (amount > maxTopup) {
     res.status(400).json({
       error: `الحد الأقصى لعملية الشحن الواحدة هو ${maxTopup} جنيه / Maximum top-up per request is ${maxTopup} EGP`,
+      code: "TOPUP_LIMIT_EXCEEDED",
     });
     return;
   }
@@ -83,6 +84,7 @@ router.post("/wallet/topup", authenticate, async (req, res): Promise<void> => {
     const remaining = Math.max(0, dailyLimit - todayTotal);
     res.status(400).json({
       error: `تجاوزت الحد اليومي للشحن (${dailyLimit} جنيه). المتبقي اليوم: ${remaining} جنيه / Daily top-up limit exceeded (${dailyLimit} EGP). Remaining today: ${remaining} EGP`,
+      code: "DAILY_LIMIT_EXCEEDED",
     });
     return;
   }

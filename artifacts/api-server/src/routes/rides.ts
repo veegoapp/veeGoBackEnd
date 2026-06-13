@@ -278,7 +278,7 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
   try {
     const parsed = EstimateBody.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid data" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid data", code: "INVALID_REQUEST" });
       return;
     }
     const { vehicleType, pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude } = parsed.data;
@@ -387,7 +387,118 @@ router.post("/rides/estimate", authenticate, async (req, res): Promise<void> => 
       },
     });
   } catch {
-    res.status(500).json({ error: "Failed to calculate estimate" });
+    res.status(500).json({ error: "Failed to calculate estimate", code: "INTERNAL_ERROR" });
+  }
+});
+
+// ─── PASSENGER: ESTIMATE (GET alias — reads query params) ────────────────────
+// GET /rides/estimate?pickupLat=&pickupLng=&dropoffLat=&dropoffLng=&serviceType=
+// Returns: { estimatedPrice, currency, distanceKm, durationMinutes, ... }
+
+router.get("/rides/estimate", authenticate, async (req, res): Promise<void> => {
+  try {
+    const { pickupLat, pickupLng, dropoffLat, dropoffLng, serviceType } = req.query;
+
+    const pickupLatitude  = parseFloat(pickupLat  as string);
+    const pickupLongitude = parseFloat(pickupLng  as string);
+    const dropoffLatitude = parseFloat(dropoffLat as string);
+    const dropoffLongitude = parseFloat(dropoffLng as string);
+    const vehicleType     = serviceType as string;
+
+    if (
+      isNaN(pickupLatitude)  || isNaN(pickupLongitude) ||
+      isNaN(dropoffLatitude) || isNaN(dropoffLongitude)
+    ) {
+      res.status(400).json({
+        error: "pickupLat, pickupLng, dropoffLat, dropoffLng must be valid numbers",
+        code: "INVALID_REQUEST",
+      });
+      return;
+    }
+    if (!["car", "bike", "delivery", "scooter"].includes(vehicleType)) {
+      res.status(400).json({
+        error: "serviceType must be one of: car, bike, delivery, scooter",
+        code: "INVALID_REQUEST",
+      });
+      return;
+    }
+
+    const parsed = EstimateBody.safeParse({
+      vehicleType,
+      pickupLatitude,
+      pickupLongitude,
+      dropoffLatitude,
+      dropoffLongitude,
+    });
+    if (!parsed.success) {
+      res.status(400).json({
+        error: parsed.error.errors[0]?.message ?? "Invalid parameters",
+        code: "INVALID_REQUEST",
+      });
+      return;
+    }
+
+    const zonePricings = await db
+      .select({
+        baseFare:    zonePricingTable.baseFare,
+        perKmRate:   zonePricingTable.perKmRate,
+        minimumFare: zonePricingTable.minimumFare,
+        centerLat:   zonesTable.centerLat,
+        centerLng:   zonesTable.centerLng,
+        radiusKm:    zonesTable.radiusKm,
+        zoneName:    zonesTable.name,
+      })
+      .from(zonePricingTable)
+      .innerJoin(zonesTable, eq(zonePricingTable.zoneId, zonesTable.id))
+      .where(and(
+        eq(zonePricingTable.vehicleType, vehicleType),
+        eq(zonePricingTable.isActive, true),
+        eq(zonesTable.isActive, true),
+      ));
+
+    let activePricing: { baseFare: string; perKmRate: string; minimumFare: string } | null = null;
+    for (const zp of zonePricings) {
+      const distToCenter = haversineKm(pickupLatitude, pickupLongitude, zp.centerLat, zp.centerLng);
+      if (distToCenter <= zp.radiusKm) {
+        activePricing = { baseFare: zp.baseFare, perKmRate: zp.perKmRate, minimumFare: zp.minimumFare };
+        break;
+      }
+    }
+
+    if (!activePricing) {
+      const [globalPricing] = await db
+        .select()
+        .from(ridePricingTable)
+        .where(and(eq(ridePricingTable.vehicleType, vehicleType), eq(ridePricingTable.isActive, true)));
+      if (!globalPricing) {
+        res.status(404).json({ error: "Pricing not available for this service type", code: "PRICING_UNAVAILABLE" });
+        return;
+      }
+      activePricing = globalPricing;
+    }
+
+    const distanceKm = haversineKm(pickupLatitude, pickupLongitude, dropoffLatitude, dropoffLongitude);
+    const durationMinutes = Math.max(1, Math.round((distanceKm / 30) * 60));
+    let estimatedPrice = calcPrice(
+      parseFloat(activePricing.baseFare),
+      parseFloat(activePricing.perKmRate),
+      parseFloat(activePricing.minimumFare),
+      distanceKm,
+    );
+
+    const surge = getCurrentSurge(vehicleType);
+    if (surge.isActive) estimatedPrice = estimatedPrice * surge.multiplier;
+
+    res.json({
+      estimatedPrice:  parseFloat(estimatedPrice.toFixed(2)),
+      currency:        "EGP",
+      distanceKm:      parseFloat(distanceKm.toFixed(3)),
+      durationMinutes,
+      surgeActive:     surge.isActive,
+      surgeMultiplier: surge.isActive ? surge.multiplier : 1,
+    });
+  } catch {
+    res.status(500).json({ error: "Failed to calculate estimate", code: "INTERNAL_ERROR" });
   }
 });
 
@@ -416,7 +527,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
   try {
     const parsed = RequestRideBody.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid data" });
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid data", code: "INVALID_REQUEST" });
       return;
     }
     const {
@@ -468,6 +579,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
     if (activeRide) {
       res.status(409).json({
         error: "You already have an active ride request",
+        code: "RIDE_ALREADY_ACTIVE",
         activeRideId: activeRide.id,
         activeStatus: activeRide.status,
       });
@@ -499,7 +611,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
     ]);
 
     if (!user) {
-      res.status(404).json({ error: "User not found" });
+      res.status(404).json({ error: "User not found", code: "USER_NOT_FOUND" });
       return;
     }
 
@@ -521,7 +633,7 @@ router.post("/rides/request", authenticate, requireRole("user"), rideRequestLimi
         .from(ridePricingTable)
         .where(and(eq(ridePricingTable.vehicleType, vehicleType), eq(ridePricingTable.isActive, true)));
       if (!globalPricing) {
-        res.status(404).json({ error: "Pricing not available for this vehicle type" });
+        res.status(404).json({ error: "Pricing not available for this vehicle type", code: "PRICING_UNAVAILABLE" });
         return;
       }
       activePricing = globalPricing;

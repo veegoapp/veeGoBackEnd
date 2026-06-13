@@ -23,11 +23,11 @@ function formatPromo(p: Record<string, unknown>) {
 
 router.post("/promo/validate", authenticate, async (req, res): Promise<void> => {
   const parsed = ValidatePromoCodeBody.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message, code: "INVALID_REQUEST" }); return; }
   const [promo] = await db.select().from(promoCodesTable).where(eq(promoCodesTable.code, parsed.data.code));
-  if (!promo || !promo.isActive) { res.status(404).json({ error: "Promo code not found or inactive" }); return; }
-  if (promo.expiryDate && new Date(promo.expiryDate) < new Date()) { res.status(400).json({ error: "Promo code expired" }); return; }
-  if (promo.maxUsage && promo.usedCount >= promo.maxUsage) { res.status(400).json({ error: "Promo code usage limit reached" }); return; }
+  if (!promo || !promo.isActive) { res.status(404).json({ error: "Promo code not found or inactive", code: "PROMO_NOT_FOUND" }); return; }
+  if (promo.expiryDate && new Date(promo.expiryDate) < new Date()) { res.status(400).json({ error: "Promo code expired", code: "PROMO_EXPIRED" }); return; }
+  if (promo.maxUsage && promo.usedCount >= promo.maxUsage) { res.status(400).json({ error: "Promo code usage limit reached", code: "PROMO_LIMIT_REACHED" }); return; }
   res.json(formatPromo(promo as Record<string, unknown>));
 });
 
